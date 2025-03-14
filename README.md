@@ -7,9 +7,9 @@
 
 <br />
 
-[![PyPI](https://img.shields.io/pypi/v/csp-gateway.svg?style=flat)](https://pypi.python.org/pypi/csp-gateway)
-[![License](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Point72/csp-gateway/LICENSE)
 [![Build Status](https://github.com/Point72/csp-gateway/actions/workflows/build.yml/badge.svg)](https://github.com/Point72/csp-gateway/actions/workflows/build.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Point72/csp-gateway/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/csp-gateway.svg?style=flat)](https://pypi.python.org/pypi/csp-gateway)
 
 ## Overview
 
