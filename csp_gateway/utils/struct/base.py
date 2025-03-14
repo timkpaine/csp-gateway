@@ -11,7 +11,7 @@ from csp.impl.types.container_type_normalizer import ContainerTypeNormalizer
 from csp.impl.types.typing_utils import CspTypingUtils
 from numpy import ndarray
 from pyarrow import Array, Schema, Table
-from pydantic import BaseModel, TypeAdapter, create_model, model_validator
+from pydantic import BaseModel, create_model, model_validator
 from pydantic.fields import FieldInfo
 from pydantic_core import CoreConfig, core_schema
 
@@ -276,7 +276,6 @@ class PydanticizedCspStruct(StructMeta):
         # But expose this lookup as a readonly mapping proxy
         cls.lookup = MappingProxyType(cls._internal_mapping).get
         cls._include_in_lookup = True
-        cls._type_adapter = TypeAdapter(cls)
 
     def omit_from_lookup(cls, omit=True):
         cls._include_in_lookup = not omit
@@ -323,18 +322,14 @@ class GatewayStruct(PerspectiveUtilityMixin, Struct, metaclass=PydanticizedCspSt
     @classmethod
     def _validate_gateway_struct(cls, val):
         """Validate GatewayStruct after pydantic type validation.
-
         A validator attached to every GatewayStruct to allow for defining custom
         model-level after validators that run after pydantic type validation.
         If not defined on a child class, the parent's validator will be used.  If defined on a child class, the parent's validator will be ignored. Please call the parent's validator directly if you want to run both.
-
         Args:
             cls: The class this validator is attached to
             val: The value to validate
-
         Returns:
             The validated value, possibly modified
-
         """
         return val
 
@@ -348,10 +343,6 @@ class GatewayStruct(PerspectiveUtilityMixin, Struct, metaclass=PydanticizedCspSt
         return core_schema.no_info_after_validator_function(
             function=cls._validate_gateway_struct, schema=parent_schema, serialization=parent_schema.get("serialization")
         )
-
-    @classmethod
-    def get_type_adapter(cls) -> TypeAdapter:
-        return cls._type_adapter
 
     @classmethod
     def generate_id(cls) -> str:

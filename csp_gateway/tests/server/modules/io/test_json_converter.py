@@ -503,7 +503,7 @@ def test_encode_decode(by_key):
         my_list_data=csp.const([MyStruct(foo=1.0), MyStruct(foo=2.0)]),
         by_key=by_key,
     )
-    raw_custom_struct = MyCustomStruct.get_type_adapter().validate_python(dict(mystery_val=["A", "A"]))  # must be A for serialization
+    raw_custom_struct = MyCustomStruct.type_adapter().validate_python(dict(mystery_val=["A", "A"]))  # must be A for serialization
     setter_mystery = SetMysteryClassModule(custom_struct=csp.const(raw_custom_struct))
     channels = [
         MyFatPipeChannels.my_channel,
