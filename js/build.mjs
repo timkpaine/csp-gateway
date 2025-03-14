@@ -69,6 +69,41 @@ async function compile_css() {
   );
   add(
     builder1,
+    "perspective-viewer-monokai.css",
+    "@finos/perspective-viewer/dist/css/monokai.css",
+  );
+  add(
+    builder1,
+    "perspective-viewer-vaporwave.css",
+    "@finos/perspective-viewer/dist/css/vaporwave.css",
+  );
+  add(
+    builder1,
+    "perspective-viewer-dracula.css",
+    "@finos/perspective-viewer/dist/css/dracula.css",
+  );
+  add(
+    builder1,
+    "perspective-viewer-gruvbox.css",
+    "@finos/perspective-viewer/dist/css/gruvbox.css",
+  );
+  add(
+    builder1,
+    "perspective-viewer-gruvbox-dark.css",
+    "@finos/perspective-viewer/dist/css/gruvbox-dark.css",
+  );
+  add(
+    builder1,
+    "perspective-viewer-solarized.css",
+    "@finos/perspective-viewer/dist/css/solarized.css",
+  );
+  add(
+    builder1,
+    "perspective-viewer-solarized-dark.css",
+    "@finos/perspective-viewer/dist/css/solarized-dark.css",
+  );
+  add(
+    builder1,
     "react-modern-drawer.css",
     "react-modern-drawer/dist/index.css",
   );

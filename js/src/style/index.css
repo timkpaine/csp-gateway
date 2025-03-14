@@ -10,4 +10,10 @@
 
 @import "perspective-viewer-pro.css";
 @import "perspective-viewer-pro-dark.css";
+@import "perspective-viewer-monokai.css";
+@import "perspective-viewer-vaporwave.css";
+@import "perspective-viewer-solarized.css";
+@import "perspective-viewer-solarized-dark.css";
+@import "perspective-viewer-gruvbox.css";
+@import "perspective-viewer-gruvbox-dark.css";
 @import "react-modern-drawer.css";
