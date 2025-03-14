@@ -322,8 +322,20 @@ class GatewayStruct(PerspectiveUtilityMixin, Struct, metaclass=PydanticizedCspSt
 
     @classmethod
     def _validate_gateway_struct(cls, val):
-        # Custom entry point to inject model-level
-        # AFTER validation
+        """Validate GatewayStruct after pydantic type validation.
+
+        A validator attached to every GatewayStruct to allow for defining custom
+        model-level after validators that run after pydantic type validation.
+        If not defined on a child class, the parent's validator will be used.  If defined on a child class, the parent's validator will be ignored. Please call the parent's validator directly if you want to run both.
+
+        Args:
+            cls: The class this validator is attached to
+            val: The value to validate
+
+        Returns:
+            The validated value, possibly modified
+
+        """
         return val
 
     @staticmethod

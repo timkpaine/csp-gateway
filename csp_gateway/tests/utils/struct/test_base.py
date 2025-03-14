@@ -800,13 +800,24 @@ def test_validate_gateway_struct_inheritance():
             val.name = val.name.upper()
             return val
 
+    class ChildStructNoNewValidator(BaseStruct):
+        name: str
+
     adapter = TypeAdapter(ChildStruct)
+    adapter_no_new_validator = TypeAdapter(ChildStructNoNewValidator)
 
     # Test valid case with python dict
     struct = adapter.validate_python({"value": 42, "name": "test"})
 
     assert struct.value == 42
     assert struct.name == "TEST"
+    assert isinstance(struct.id, str)
+    assert isinstance(struct.timestamp, datetime)
+
+    struct = adapter_no_new_validator.validate_python({"value": 42, "name": "test"})
+
+    assert struct.value == 42
+    assert struct.name == "test"
     assert isinstance(struct.id, str)
     assert isinstance(struct.timestamp, datetime)
 
@@ -819,13 +830,26 @@ def test_validate_gateway_struct_inheritance():
     assert isinstance(struct.id, str)
     assert isinstance(struct.timestamp, datetime)
 
+    struct = adapter_no_new_validator.validate_json(json_data)
+
+    assert struct.value == 42
+    assert struct.name == "test"
+    assert isinstance(struct.id, str)
+    assert isinstance(struct.timestamp, datetime)
+
     # Test parent validation
     with pytest.raises(ValueError, match="value must be non-negative"):
         adapter.validate_python({"value": -1, "name": "test"})
 
+    with pytest.raises(ValueError, match="value must be non-negative"):
+        adapter_no_new_validator.validate_python({"value": -1, "name": "test"})
+
     # Test child validation
     with pytest.raises(ValueError, match="name cannot be empty"):
         adapter.validate_python({"value": 42, "name": ""})
+
+    # Fine since no custom validation
+    adapter_no_new_validator.validate_python({"value": 42, "name": ""})
 
 
 def test_type_adapter_matches_pydantic_model():
