@@ -12,17 +12,17 @@ def test_prepare_response():
     response = prepare_response(res=data, is_list_model=False, is_dict_basket=False, wrap_in_response=True)
     assert isinstance(response, starlette.responses.Response)
     response = prepare_response(res=data, is_list_model=False, is_dict_basket=False, wrap_in_response=False)
-    assert json.loads(response) == [json.loads(data.get_type_adapter().dump_json(data))]
+    assert json.loads(response) == [json.loads(data.type_adapter().dump_json(data))]
 
 
 def test_prepare_response_list():
     data = ExampleData()
     response = prepare_response(res=[data], is_list_model=False, is_dict_basket=False, wrap_in_response=False)
-    assert json.loads(response) == [json.loads(data.get_type_adapter().dump_json(data))]
+    assert json.loads(response) == [json.loads(data.type_adapter().dump_json(data))]
     response = prepare_response(res=[data], is_list_model=True, is_dict_basket=False, wrap_in_response=False)
-    assert json.loads(response) == [json.loads(data.get_type_adapter().dump_json(data))]
+    assert json.loads(response) == [json.loads(data.type_adapter().dump_json(data))]
     response = prepare_response(res=(data,), is_list_model=True, is_dict_basket=False, wrap_in_response=False)
-    assert json.loads(response) == [json.loads(data.get_type_adapter().dump_json(data))]
+    assert json.loads(response) == [json.loads(data.type_adapter().dump_json(data))]
 
 
 def test_prepare_response_dict():
@@ -31,4 +31,4 @@ def test_prepare_response_dict():
         prepare_response(res={"foo": data}, is_list_model=False, is_dict_basket=False, wrap_in_response=False)
 
     response = prepare_response(res={"foo": data}, is_list_model=False, is_dict_basket=True, wrap_in_response=False)
-    assert json.loads(response) == [json.loads(data.get_type_adapter().dump_json(data))]
+    assert json.loads(response) == [json.loads(data.type_adapter().dump_json(data))]
