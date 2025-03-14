@@ -3,6 +3,7 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Annotated, Any, Dict, List, Optional, Set, Tuple, Type, get_args, get_origin
 
+import csp
 from ccflow import ArrowSchema, ArrowTable, NDArray
 from csp import Struct
 from csp.impl.struct import StructMeta
@@ -12,6 +13,7 @@ from numpy import ndarray
 from pyarrow import Array, Schema, Table
 from pydantic import BaseModel, TypeAdapter, create_model, model_validator
 from pydantic.fields import FieldInfo
+from pydantic_core import CoreConfig, core_schema
 
 from ..id_generator import get_counter
 from .psp import PerspectiveUtilityMixin
@@ -317,6 +319,23 @@ class GatewayStruct(PerspectiveUtilityMixin, Struct, metaclass=PydanticizedCspSt
 
         # and defer to normal csp.struct construction
         super().__init__(**kwargs)
+
+    @classmethod
+    def _validate_gateway_struct(cls, val):
+        # Custom entry point to inject model-level
+        # AFTER validation
+        return val
+
+    @staticmethod
+    def _get_pydantic_core_schema(cls, source_type, handler):
+        # Get parent schema - note the cls parameter
+        parent_schema = csp.Struct._get_pydantic_core_schema(cls, source_type, handler)
+        core_config = CoreConfig(coerce_numbers_to_str=True)
+        # soooo hacky...
+        parent_schema["schema"]["config"] = core_config
+        return core_schema.no_info_after_validator_function(
+            function=cls._validate_gateway_struct, schema=parent_schema, serialization=parent_schema.get("serialization")
+        )
 
     @classmethod
     def get_type_adapter(cls) -> TypeAdapter:

@@ -1,3 +1,4 @@
+import decimal
 import time
 from datetime import date, datetime, timezone
 from typing import Annotated, Any, Dict, List, Union
@@ -7,7 +8,7 @@ import orjson
 import pytest
 from csp import Enum, Struct
 from csp.typing import Numpy1DArray
-from pydantic import BaseModel, BeforeValidator, Field, ValidationError, ValidatorFunctionWrapHandler, WrapValidator, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, TypeAdapter, ValidationError, ValidatorFunctionWrapHandler, WrapValidator, field_validator
 
 from csp_gateway import GatewayStruct
 
@@ -26,7 +27,7 @@ class SimpleOrder(GatewayStruct):
     _private: str
     symbol: str
     symbology: Symbology = Symbology.ID
-    price: float
+    price: Annotated[float, Field(gt=0)]  # Note: yes we know prices can be negative, this is a test
     quantity: int
     filled: float = 0  # Note that default is an int
     settlement_date: date
@@ -35,14 +36,16 @@ class SimpleOrder(GatewayStruct):
 
     @classmethod
     def __get_validator_dict__(cls):
+        # same as annotation
         return {"_validate_example": field_validator("price", mode="after")(nonnegative_check)}
 
 
 class SimpleOrderChild(SimpleOrder):
-    new_field: float
+    new_field: Annotated[float, Field(gt=0)]
 
     @classmethod
     def __get_validator_dict__(cls):
+        # same as annotation
         return {"_validate_example": field_validator("new_field", mode="after")(nonnegative_check)}
 
 
@@ -685,3 +688,209 @@ def test_annotated_nested_gateway_structs():
     )
     # Verify wrap validator processed valid data and modified description
     assert pyd_struct.csp().validated.middle.inner.value == 15
+
+
+def test_number_to_string_coercion_extended():
+    """Test various number types being coerced to strings in GatewayStruct"""
+
+    class StringFieldStruct(GatewayStruct):
+        int_field: str
+        float_field: str
+        scientific_field: str
+
+    adapter = TypeAdapter(StringFieldStruct)
+
+    # Test python dict validation
+    struct = adapter.validate_python({"int_field": 42, "float_field": 3.14, "scientific_field": 1.23e-4})
+
+    assert struct.int_field == "42"
+    assert isinstance(struct.int_field, str)
+
+    assert struct.float_field == "3.14"
+    assert isinstance(struct.float_field, str)
+
+    assert struct.scientific_field == "0.000123"
+    assert isinstance(struct.scientific_field, str)
+
+    # Test JSON validation
+    json_data = """
+    {
+        "int_field": 42,
+        "float_field": 3.14,
+        "scientific_field": 1.23e-4
+    }
+    """
+    struct = adapter.validate_json(json_data)
+
+    assert struct.int_field == "42"
+    assert struct.float_field == "3.14"
+    assert struct.scientific_field == "0.000123"
+
+    # Test with decimal
+    struct = adapter.validate_python({"float_field": (0.1 + 0.2), "scientific_field": decimal.Decimal("1.23e-4")})
+
+    assert not hasattr(struct, "int_field")
+    assert struct.float_field == "0.30000000000000004"  # floating point arithmetic lol
+    assert struct.scientific_field == "0.000123"
+
+
+def test_validate_gateway_struct():
+    """Test the _validate_gateway_struct classmethod validation"""
+
+    class ValidatedStruct(GatewayStruct):
+        value: int
+        name: str
+
+        @classmethod
+        def _validate_gateway_struct(cls, val):
+            if val.value < 0:
+                raise ValueError("value must be non-negative")
+            if not val.name:
+                raise ValueError("name cannot be empty")
+            # Modify the value
+            val.name = val.name.upper()
+            return val
+
+    adapter = TypeAdapter(ValidatedStruct)
+
+    # Test valid case with python dict
+    struct = adapter.validate_python({"value": 42, "name": "test"})
+
+    assert struct.value == 42
+    assert struct.name == "TEST"  # Name was uppercased by validation
+
+    # Test valid case with JSON
+    json_data = '{"value": 42, "name": "test"}'
+    struct = adapter.validate_json(json_data)
+
+    assert struct.value == 42
+    assert struct.name == "TEST"
+
+    # Test negative value
+    with pytest.raises(ValueError, match="value must be non-negative"):
+        adapter.validate_python({"value": -1, "name": "test"})
+
+    # Test empty name
+    with pytest.raises(ValueError, match="name cannot be empty"):
+        adapter.validate_python({"value": 42, "name": ""})
+
+
+def test_validate_gateway_struct_inheritance():
+    """Test that _validate_gateway_struct works with inheritance"""
+
+    class BaseStruct(GatewayStruct):
+        value: int
+
+        @classmethod
+        def _validate_gateway_struct(cls, val):
+            if val.value < 0:
+                raise ValueError("value must be non-negative")
+            return val
+
+    class ChildStruct(BaseStruct):
+        name: str
+
+        @classmethod
+        def _validate_gateway_struct(cls, val):
+            # First call parent validation
+            val = super()._validate_gateway_struct(val)
+            # Then do our own validation
+            if not val.name:
+                raise ValueError("name cannot be empty")
+            val.name = val.name.upper()
+            return val
+
+    adapter = TypeAdapter(ChildStruct)
+
+    # Test valid case with python dict
+    struct = adapter.validate_python({"value": 42, "name": "test"})
+
+    assert struct.value == 42
+    assert struct.name == "TEST"
+    assert isinstance(struct.id, str)
+    assert isinstance(struct.timestamp, datetime)
+
+    # Test valid case with JSON
+    json_data = '{"value": 42, "name": "test"}'
+    struct = adapter.validate_json(json_data)
+
+    assert struct.value == 42
+    assert struct.name == "TEST"
+    assert isinstance(struct.id, str)
+    assert isinstance(struct.timestamp, datetime)
+
+    # Test parent validation
+    with pytest.raises(ValueError, match="value must be non-negative"):
+        adapter.validate_python({"value": -1, "name": "test"})
+
+    # Test child validation
+    with pytest.raises(ValueError, match="name cannot be empty"):
+        adapter.validate_python({"value": 42, "name": ""})
+
+
+def test_type_adapter_matches_pydantic_model():
+    now = datetime.utcnow()
+
+    # Create test data
+    data = {"timestamp": now, "id": "123", "symbol": "foo", "quantity": 100, "settlement_date": now.date(), "price": 10.0, "algo_params": {"a": 1}}
+
+    # Create type adapter for both validation and serialization
+    ta = TypeAdapter(SimpleOrder)
+
+    # Test both approaches
+    model_version = SimpleOrder.__pydantic_model__.model_validate(data)
+    adapter_version = ta.validate_python(data)
+
+    # Verify they produce identical results
+    # Use dump_python for the adapter version since it's a CSP struct
+    assert model_version.model_dump() == ta.dump_python(adapter_version)
+
+    # Also verify JSON serialization matches
+    assert model_version.model_dump_json() == ta.dump_json(adapter_version).decode()
+
+    # Test validation errors match
+    bad_data = {**data, "price": -1.0}
+    with pytest.raises(ValidationError) as model_exc:
+        SimpleOrder.__pydantic_model__.model_validate(bad_data)
+
+    with pytest.raises(ValidationError) as adapter_exc:
+        ta.validate_python(bad_data)
+
+    assert model_exc.value.errors() == adapter_exc.value.errors()
+
+
+def test_type_adapter_inheritance_matches_pydantic_model():
+    now = datetime.utcnow()
+
+    # Create test data
+    data = {
+        "timestamp": now,
+        "id": "123",
+        "symbol": "foo",
+        "quantity": 100,
+        "settlement_date": now.date(),
+        "price": 10.0,
+        "new_field": 5.0,
+        "algo_params": {"a": 1},
+    }
+
+    # Create type adapter for both validation and serialization
+    ta = TypeAdapter(SimpleOrderChild)
+
+    # Test both approaches
+    model_version = SimpleOrderChild.__pydantic_model__.model_validate(data)
+    adapter_version = ta.validate_python(data)
+
+    # Verify they produce identical results using the type adapter's dump methods
+    assert model_version.model_dump() == ta.dump_python(adapter_version)
+    assert model_version.model_dump_json() == ta.dump_json(adapter_version).decode()
+
+    # Test validation errors match for both fields
+    bad_data = {**data, "price": -1.0, "new_field": -1.0}
+    with pytest.raises(ValidationError) as model_exc:
+        SimpleOrderChild.__pydantic_model__.model_validate(bad_data)
+
+    with pytest.raises(ValidationError) as adapter_exc:
+        ta.validate_python(bad_data)
+
+    assert model_exc.value.errors() == adapter_exc.value.errors()
