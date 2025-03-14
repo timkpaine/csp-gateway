@@ -24,7 +24,7 @@ def prepare_response(
         #  Else return an empty json
         res = []
 
-    json_res_bytes = b"[" + b",".join(r.get_type_adapter().dump_json(r) for r in res) + b"]"
+    json_res_bytes = b"[" + b",".join(r.type_adapter().dump_json(r) for r in res) + b"]"
     json_res = json_res_bytes.decode()
     # Prepare and return response
     if wrap_in_response:

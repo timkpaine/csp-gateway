@@ -304,7 +304,7 @@ class MountWebSocketRoutes(GatewayModule):
 
                 # do conversion in its own little try/except to avoid ambiguity
                 try:
-                    type_adapter = channel_type.get_type_adapter()
+                    type_adapter = channel_type.type_adapter()
                     datum = [type_adapter.validate_python(obj) for obj in msg_data]
                 except Exception:
                     log.error("Error during websocket data conversion", exc_info=True)
