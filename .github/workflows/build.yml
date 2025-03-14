@@ -87,7 +87,7 @@ jobs:
       uses: EnricoMi/publish-unit-test-result-action@v2
       with:
         files: '**/junit.xml'
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
 
     - name: Upload coverage
       uses: codecov/codecov-action@v5
