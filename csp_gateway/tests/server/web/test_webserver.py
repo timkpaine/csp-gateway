@@ -1,6 +1,7 @@
 import logging
 import os
 import os.path
+import pickle
 import time
 from platform import python_version
 from unittest import mock
@@ -725,3 +726,9 @@ def test_MountRestRoutes_validator(caplog):
 
     r = MountRestRoutes(mount_all=True)
     assert r.force_mount_all
+
+
+def test_MountPerspectiveTables_pickleable():
+    """Test that MountPerspectiveTables is pickleable"""
+    mpt = MountPerspectiveTables()
+    pickle.dumps(mpt)

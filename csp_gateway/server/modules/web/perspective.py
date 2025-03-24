@@ -127,8 +127,8 @@ class MountPerspectiveTables(GatewayModule):
         "such that it can also be used by other GatewayModules with custom table preparation logic.",
     )
 
-    _server: Server = PrivateAttr(default_factory=Server)
-    _client: Client = PrivateAttr(default_factory=None)
+    _server: Server = PrivateAttr(default=None)
+    _client: Client = PrivateAttr(default=None)
 
     _layouts: Dict[str, str] = PrivateAttr(default={})
     _schema_insts: Dict[str, Dict] = PrivateAttr(default_factory=dict)
@@ -216,6 +216,8 @@ class MountPerspectiveTables(GatewayModule):
     def connect(self, channels: GatewayChannels) -> None:
         if self.perspective_field:
             self._server = getattr(channels, self.perspective_field)
+        else:
+            self._server = Server()
         self._client = self._server.new_local_client()
         self._layouts = self.layouts.copy()
         if self.layouts_field:
