@@ -101,6 +101,12 @@ export default function App(props) {
 
 window.addEventListener("load", () => {
   const container = document.getElementById("gateway-root");
+
+  // handle regular-table in light dom
+  customElements.whenDefined("perspective-viewer-datagrid").then((datagrid) => {
+    datagrid.renderTarget = "light";
+  });
+
   if (container) {
     const root = createRoot(container);
     root.render(<App />);
