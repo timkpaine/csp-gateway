@@ -218,11 +218,6 @@ perspective-viewer.workspace-master-widget[theme="Pro Light"] {
   --plugin--background: #f2f4f6;
 }
 
-perspective-viewer.workspace-master-widget[theme="Pro Light"] regular-table td,
-perspective-viewer.workspace-master-widget[theme="Pro Light"] regular-table th {
-  border-color: #e0e4e9;
-}
-
 .p-Menu {
   font-family: "Roboto Mono";
   font-weight: 300;
