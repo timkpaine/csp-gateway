@@ -223,3 +223,7 @@ perspective-viewer.workspace-master-widget[theme="Pro Light"] {
   font-weight: 300;
   color: #161616;
 }
+
+perspective-viewer perspective-viewer-datagrid regular-table table td {
+  user-select: text;
+}
