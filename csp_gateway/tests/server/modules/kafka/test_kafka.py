@@ -86,6 +86,15 @@ def test_config_pydantic_validation():
         assert config.start_offset.name == offset_name
 
 
+def test_subscribe_with_csp_engine_timestamp_only_if_encoding_expected():
+    config = KafkaConfiguration(broker="dummy")
+    ReadWriteKafka(config=config, encoding_with_engine_timestamps=False, subscribe_with_csp_engine_timestamp=False)
+    ReadWriteKafka(config=config, encoding_with_engine_timestamps=True, subscribe_with_csp_engine_timestamp=False)
+    ReadWriteKafka(config=config, encoding_with_engine_timestamps=True, subscribe_with_csp_engine_timestamp=False)
+    with pytest.raises(ValidationError):
+        ReadWriteKafka(config=config, encoding_with_engine_timestamps=False, subscribe_with_csp_engine_timestamp=True)
+
+
 @mock.patch("csp.adapters.kafka.KafkaAdapterManager", autospec=True)
 @pytest.mark.parametrize("by_key", [True, False])
 def test_kafka_engine_replay_write(mock_object, by_key):
