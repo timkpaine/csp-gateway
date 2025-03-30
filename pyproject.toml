@@ -108,6 +108,11 @@ filename = "js/package.json"
 search = "{current_version}"
 replace = "{new_version}"
 
+[[tool.bumpversion.files]]
+filename = "examples/Client.ipynb"
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'
+
 [tool.check-manifest]
 ignore = [
     "Makefile",
