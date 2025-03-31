@@ -41,14 +41,6 @@ _PSP_ARROW_MAP = {
     date: pyarrow.string(),
     datetime: pyarrow.timestamp("us", tz="UTC"),
 }
-_PSP_TYPES_MAP = {
-    int: "integer",
-    float: "float",
-    bool: "boolean",
-    str: "string",
-    date: "date",
-    datetime: "datetime",
-}
 
 
 def psp_schema_to_arrow_schema(psp_schema):
@@ -191,13 +183,12 @@ class MountPerspectiveTables(GatewayModule):
                     edge,
                     field,
                 )
-
-            self._schema_insts[field] = {k: _PSP_TYPES_MAP.get(v, "string") for k, v in schema.items()}
+            self._schema_insts[field] = schema
             self._arrow_schema_insts[field] = psp_schema_to_arrow_schema(schema)
             self._arrow_schema_date_conversions[field] = set()
             # annoying workaround for pyarrow reading dates
             for k, v in self._schema_insts[field].items():
-                if v == "date":
+                if v is date:
                     self._arrow_schema_date_conversions[field].add(k)
 
     def get_schema_from_field(self, channels: GatewayChannels, field: str):
@@ -292,13 +283,12 @@ class MountPerspectiveTables(GatewayModule):
             such as the one provided as an example for the `csp-gateway` project.
             Depending on your server's configuration, this might be available at [`/`](/)
             """
-            ret = self._schema_insts.copy()
-            for table_name in self._client.get_hosted_table_names():
-                if table_name in ret:
-                    continue
-                # if the table is not in the schema, add it
-                ret[table_name] = self._client.open_table(table_name).schema()
-            return ret
+            all_tables = {table_name: None for table_name in self._client.get_hosted_table_names()}
+            for table_name in all_tables:
+                table = self._client.open_table(table_name)
+                schema = table.schema()
+                all_tables[table_name] = {col: schema[col] for col in table.columns()}
+            return all_tables
 
         # add route to fetch layouts
         @api_router.get(
