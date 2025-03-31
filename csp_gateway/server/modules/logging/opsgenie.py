@@ -291,7 +291,7 @@ class PublishOpsGenie(GatewayModule):
                     log.trace("Alert submission successful")
                 else:
                     log.error(
-                        "Alert submission is not ready in %s seconds %s:",
+                        "Alert submission is not ready in %s seconds",
                         self.ops_async_delay_sec,
                     )
             log.trace(
