@@ -9,11 +9,11 @@ importers:
   .:
     dependencies:
       '@finos/perspective':
-        specifier: 3.4.1
-        version: 3.4.1
+        specifier: 3.4.3
+        version: 3.4.3
       '@finos/perspective-viewer':
-        specifier: 3.4.1
-        version: 3.4.1
+        specifier: 3.4.3
+        version: 3.4.3
       '@finos/perspective-viewer-d3fc':
         specifier: 3.4.3
         version: 3.4.3(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)
@@ -332,17 +332,11 @@ packages:
   '@finos/perspective-viewer-datagrid@3.4.3':
     resolution: {integrity: sha512-bjx56+qPG1PFzh6xw336JYtSFpuFTrTzFVvBmPBU0kdKi2nm+TdwDJic1uEV49eC/sgGgB3Kv2OY2e4rzOCkFg==}
 
-  '@finos/perspective-viewer@3.4.1':
-    resolution: {integrity: sha512-nmnE8Gq7vGdiqrM5bh6ESqa28JKr6gYYmD43QiKLy8uxNmOFGwDtMhwz1IyFHZgeQmm18OrBPMBNzuS/aUZ+Vw==}
-
   '@finos/perspective-viewer@3.4.3':
     resolution: {integrity: sha512-I25kPLYAAs9CPKPq9SAtu7nW5SagpdXZvB60FhGwacJrNnkNjVzaMbIzAi7xk3NGJeBrTv6u6U+8bpU0te470A==}
 
   '@finos/perspective-workspace@3.4.3':
     resolution: {integrity: sha512-PYOIXEGfxqPyJeJNrt7kSXE3SbRQj7zpeFg9aP8BxlPcy9E48DLfA/ZJ6gPJkQE/SZ0s7dYRXWYs2DGN9Yg2Ng==}
-
-  '@finos/perspective@3.4.1':
-    resolution: {integrity: sha512-xPlQpF8xpe8deJUACmPumG7oHuNwwymJqAjyEFIztBLtq+ehtQDhu0ctS5ZU6XFJuG5U1mEoLD9Xmt18XLh64g==}
 
   '@finos/perspective@3.4.3':
     resolution: {integrity: sha512-FH0c9eSP8x/uiG042ud3aerYRg0jBL3PvfrTYl268xGXRjeN+d4vCmtjXg0WsUyJhLh+xtMFhLMW7/4MnayrJg==}
@@ -1598,18 +1592,6 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
-  ws@8.18.0:
-    resolution: {integrity: sha512-8VbfWfHLbbwu3+N6OKsOMpBdT4kXPDDB9cJk2bJ6mh9ucxdlnNvH1e+roYkKmN9Nxw2yjz7VzeO9oOz2zJ04Pw==}
-    engines: {node: '>=10.0.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: '>=5.0.2'
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
-
   ws@8.18.1:
     resolution: {integrity: sha512-RKW2aJZMXeMxVpnZ6bck+RswznaxmzdULiBr6KY7XkTnW8uvt0iT9H5DkHUChXrc+uurzwa0rVI16n/Xzjdz1w==}
     engines: {node: '>=10.0.0'}
@@ -1875,13 +1857,6 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@finos/perspective-viewer@3.4.1':
-    dependencies:
-      '@finos/perspective': 3.4.1
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
   '@finos/perspective-viewer@3.4.3':
     dependencies:
       '@finos/perspective': 3.4.3
@@ -1902,14 +1877,6 @@ snapshots:
       '@lumino/virtualdom': 2.0.3
       '@lumino/widgets': 2.7.0
       lodash: 4.17.21
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
-  '@finos/perspective@3.4.1':
-    dependencies:
-      stoppable: 1.1.0
-      ws: 8.18.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -3436,8 +3403,6 @@ snapshots:
     optional: true
 
   wrappy@1.0.2: {}
-
-  ws@8.18.0: {}
 
   ws@8.18.1: {}
 
