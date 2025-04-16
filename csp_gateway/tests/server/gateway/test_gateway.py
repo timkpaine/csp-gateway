@@ -8,12 +8,12 @@ from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
 import csp
 import numpy as np
 import pytest
+from ccflow import ModelRegistry
 from csp import Enum, ts
 from csp.typing import Numpy1DArray
 from omegaconf import OmegaConf
 from pydantic import Field, ValidationError
 
-import csp_gateway.server.config
 from csp_gateway import (
     Channels,
     ChannelSelection,
@@ -829,7 +829,9 @@ def test_dynamic_channels(explicit_channels, gateway_from_config):
             }
 
         config = OmegaConf.create(config)
-        gateway = csp_gateway.server.config.load(config)
+        registry = ModelRegistry.root()
+        registry.load_config(cfg=config, overwrite=True)
+        gateway = registry["gateway"]
 
     else:
         setter = MySetModuleDynamicChannels(

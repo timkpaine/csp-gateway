@@ -1,6 +1,6 @@
 # isort: skip_file
-import pydantic
 
+from .config import load_config, load_gateway
 from .gateway import *
 from .shared import *
 from .settings import Settings as GatewaySettings
