@@ -3,12 +3,22 @@ import itertools
 from datetime import date, datetime
 from enum import Enum as PyEnum
 from logging import getLogger
-from typing import Any, Callable, Dict, List, Optional, Tuple, get_args
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union, get_args
 
 import orjson
 from csp import Enum, Struct
 from csp.impl.enum import EnumMeta
 from numpy import ndarray
+
+__all__ = (
+    "CustomJsonifier",
+    "psp_flatten_dict",
+    "psp_flatten_list",
+    "psp_flatten",
+    "ExcludedColumns",
+    "psp_schema",
+    "PerspectiveUtilityMixin",
+)
 
 log = getLogger(__name__)
 
@@ -101,12 +111,25 @@ def psp_flatten(obj: Any) -> Any:
     return ret
 
 
-def psp_schema(cls) -> Dict[str, type]:
-    """Returns the perspective schema for a class"""
+ExcludedColumns = Union[Set[str], Dict[str, Union[bool, "ExcludedColumns"]]]
+
+
+def _is_excluded(field: str, excluded_columns: ExcludedColumns) -> Union[bool, ExcludedColumns]:
+    if isinstance(excluded_columns, set):
+        return field in excluded_columns
+
+    return excluded_columns.get(field, False)
+
+
+def psp_schema(cls, excluded_columns: Optional[ExcludedColumns] = None) -> Dict[str, type]:
+    """Returns the perspective schema for a class.
+
+    Args:
+        excluded_columns: Columns to exclude from the schema.
+    """
 
     # Pydantic doesn't support fields that start with underscore
     schema = {k: v for k, v in cls.metadata().items() if not k.startswith("_")}
-
     add = {}
     remove = []
 
@@ -123,6 +146,10 @@ def psp_schema(cls) -> Dict[str, type]:
                 # TODO deal with dropped
                 log.warning(f"Type is not actually a type: {field} {value}")
                 continue
+
+        is_excluded = excluded_columns and _is_excluded(field, excluded_columns)
+        if is_excluded:
+            remove.append(field)
 
         if issubclass(value, list) or issubclass(value, ndarray):
             try:
@@ -159,12 +186,26 @@ def psp_schema(cls) -> Dict[str, type]:
             and not issubclass(value, datetime)
             and not issubclass(value, date)
         ):
+            excluded_sub_fields = None
+            if is_excluded:
+                # no need to add field to remove, it has been added already
+                if isinstance(is_excluded, bool):
+                    if is_excluded:
+                        continue
+
+                else:
+                    excluded_sub_fields = is_excluded
+
+            else:
+                # remove it from the schema
+                remove.append(field)
+
             # if its a struct, flatten
             if issubclass(value, Struct):
                 if hasattr(value, "psp_schema"):
-                    struct_items = value.psp_schema().items()
+                    struct_items = value.psp_schema(excluded_sub_fields).items()
                 else:
-                    struct_items = psp_schema(value).items()
+                    struct_items = psp_schema(value, excluded_sub_fields).items()
 
                 # add subschema
                 for subkey, subvalue in struct_items:
@@ -172,8 +213,6 @@ def psp_schema(cls) -> Dict[str, type]:
             else:
                 # TODO deal with dropped
                 log.warning(f"Type {value} on has no perspective conversion, ignoring in perspective tables: {cls.__name__}.{field}")
-            # remove it from the schema
-            remove.append(field)
 
     # remove all that need to be removed
     for to_remove in remove:
@@ -206,5 +245,10 @@ class PerspectiveUtilityMixin:
         return flat_obj
 
     @classmethod
-    def psp_schema(cls) -> Dict[str, type]:
-        return psp_schema(cls)
+    def psp_schema(cls, excluded_columns: Optional[ExcludedColumns] = None) -> Dict[str, type]:
+        """Return the perspective schema.
+
+        Args:
+            excluded_columns: Columns to exclude from the schema.
+        """
+        return psp_schema(cls, excluded_columns)

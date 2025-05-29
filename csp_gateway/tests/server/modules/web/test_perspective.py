@@ -216,6 +216,23 @@ def test_recursive_perspective_flattening():
     ]
 
 
+def test_exclude_columns_schema():
+    res = MyTestStruct.psp_schema()
+    assert set(res.keys()) == {"z", "sub.y", "sub.x", "sub.z", "id", "timestamp", "sub.id", "sub.timestamp"}
+
+    res = MyTestStruct.psp_schema({"z"})
+    assert set(res.keys()) == {"sub.y", "sub.x", "sub.z", "id", "timestamp", "sub.id", "sub.timestamp"}
+
+    res = MyTestStruct.psp_schema({"sub"})
+    assert set(res.keys()) == {"z", "id", "timestamp"}
+
+    res = MyTestStruct.psp_schema({"sub": {"x"}})
+    assert set(res.keys()) == {"z", "sub.y", "sub.z", "id", "timestamp", "sub.id", "sub.timestamp"}
+
+    res = MyTestStruct.psp_schema({"sub": {"x"}, "z": True})
+    assert set(res.keys()) == {"sub.y", "sub.z", "id", "timestamp", "sub.id", "sub.timestamp"}
+
+
 def test_pyarrow_conversion():
     now = datetime.utcnow()
     now_date = now.date()
@@ -328,3 +345,59 @@ def test_MountPerspectiveTables(use_external_perspective):
     assert table_len(GWC.dict_enum_channel) == 10
     assert table_len(GWC.limit_channel) == 5
     assert table_len(GWC.index_channel) == 1
+
+
+@pytest.mark.parametrize("exclude_columns", [True, False])
+def test_MountPerspectiveTables_exclude_columns(exclude_columns):
+    if exclude_columns:
+        excluded_table_columns = {"test_channel": {"z"}, "list_channel": {"sub": {"y"}}, "dict_channel": {"sub": {"y": True, "x": True}}}
+    else:
+        excluded_table_columns = {}
+
+    module = MountPerspectiveTables(
+        excluded_table_columns=excluded_table_columns,
+        update_interval=timedelta(seconds=0.5),
+    )
+
+    h = GatewayTestHarness(
+        test_channels=[GWC.test_channel, GWC.list_channel, GWC.dict_channel, GWC.exclude_channel],
+        test_dynamic_keys={"dict_channel": ["test_key"]},
+    )
+
+    now = datetime.utcnow().replace(tzinfo=timezone.utc)
+
+    # List with 1 element
+    o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
+
+    h.send(GWC.test_channel, o)
+    h.send(GWC.list_channel, [o])
+    h.send(GWC.dict_channel, {"test_key": o})
+    h.send(GWC.exclude_channel, o)
+
+    h.delay(2 * module.update_interval)  # So that the buffer is flushed
+    channels = GWC()
+    gateway = Gateway(modules=[h, module], channels=channels)
+    csp.run(gateway.graph, starttime=datetime(2023, 1, 1), endtime=timedelta(5))
+
+    def table_columns(name):
+        return set(module._server.new_local_client().open_table(name).columns())
+
+    def table_len(name):
+        return len(module._server.new_local_client().open_table(name).view().to_json())
+
+    if exclude_columns:
+        assert table_columns(GWC.test_channel) == {"sub.y", "sub.x", "sub.z", "id", "timestamp", "sub.id", "sub.timestamp"}
+        assert table_columns(GWC.list_channel) == {"z", "sub.x", "sub.z", "id", "timestamp", "sub.id", "sub.timestamp"}
+        assert table_columns(GWC.dict_channel) == {"z", "sub.z", "id", "timestamp", "sub.id", "sub.timestamp"}
+
+    else:
+        assert table_columns(GWC.test_channel) == {"z", "sub.y", "sub.x", "sub.z", "id", "timestamp", "sub.id", "sub.timestamp"}
+        assert table_columns(GWC.list_channel) == {"z", "sub.y", "sub.x", "sub.z", "id", "timestamp", "sub.id", "sub.timestamp"}
+        assert table_columns(GWC.dict_channel) == {"z", "sub.y", "sub.x", "sub.z", "id", "timestamp", "sub.id", "sub.timestamp"}
+
+    assert table_columns(GWC.exclude_channel) == {"z", "sub.y", "sub.x", "sub.z", "id", "timestamp", "sub.id", "sub.timestamp"}
+
+    assert table_len(GWC.test_channel) == 1
+    assert table_len(GWC.list_channel) == 1
+    assert table_len(GWC.dict_channel) == 1
+    assert table_len(GWC.exclude_channel) == 1

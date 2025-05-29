@@ -3,7 +3,13 @@ import threading
 from datetime import date, datetime, timedelta
 from io import BytesIO
 from logging import getLogger
-from typing import Dict, Optional, Set, TypeVar
+from typing import (
+    Dict,
+    Optional,
+    Set,
+    TypeVar,
+    Union,  # noqa: F401 used in ExcludedColumns as a string.
+)
 
 import csp
 import orjson
@@ -16,6 +22,7 @@ from perspective import Client, Server, Table
 from perspective.handlers.starlette import PerspectiveStarletteHandler
 from pydantic import Field, PrivateAttr
 from starlette.websockets import WebSocketDisconnect
+from typing_extensions import TypeAliasType
 
 from csp_gateway.server import ChannelSelection, GatewayChannels, GatewayModule
 from csp_gateway.server.web import GatewayWebApp, get_default_responses
@@ -75,7 +82,7 @@ def create_pyarrow_table(key_name, data, arrow_schema, date_conversion_set):
     b.seek(0)
     table = pyarrow.json.read_json(
         b,
-        parse_options=pyarrow.json.ParseOptions(explicit_schema=arrow_schema),
+        parse_options=pyarrow.json.ParseOptions(explicit_schema=arrow_schema, unexpected_field_behavior="ignore"),
     )
     if date_conversion_set:
         table = pyarrow.Table.from_arrays(
@@ -106,6 +113,9 @@ def pull_data_thread(queue: PickleableQueue, table_insts, arrow_schema_insts, ar
             log.exception("Error processing perspective")
 
 
+ExcludedColumns = TypeAliasType("ExcludedColumns", "Union[Set[str], Dict[str, Union[bool, ExcludedColumns]]]")
+
+
 class MountPerspectiveTables(GatewayModule):
     requires: Optional[ChannelSelection] = []
 
@@ -126,6 +136,15 @@ class MountPerspectiveTables(GatewayModule):
         description="Optional field on the channels which has a dictionary of layouts to use, "
         "such that it can also be used by other GatewayModules with custom table preparation logic.",
     )
+    excluded_table_columns: Dict[str, ExcludedColumns] = Field(
+        default={},
+        description=(
+            "Dictionary from table name to columns (which are attributes on a GatewayStruct) to exclude from perspective. "
+            "The columns to exclude can be specified as either be a set of column names or as a dictionary. If specified "
+            "as a dictionary, the dictionary is a mapping from attribute name to sub-attributes to exclude. This is defined "
+            "recursively so it can be used to exclude fields that are structs of structs."
+        ),
+    )
 
     _server: Server = PrivateAttr(default=None)
     _client: Client = PrivateAttr(default=None)
@@ -140,6 +159,7 @@ class MountPerspectiveTables(GatewayModule):
     def _connect_all_tables(self, channels: GatewayChannels) -> None:
         for field in self.tables.select_from(channels):
             edge = channels.get_channel(field)
+            excluded_columns = self.excluded_table_columns.get(field, None)
             if isinstance(edge, dict):
                 if not edge:
                     raise ValueError(f"No keys defined for dict basket channel {field}.")
@@ -149,7 +169,7 @@ class MountPerspectiveTables(GatewayModule):
                     to_flatten.append(channels.get_channel(field, subfield))
 
                 # save perspective schema
-                schema = channels.get_channel(field, subfield).tstype.typ.psp_schema()
+                schema = channels.get_channel(field, subfield).tstype.typ.psp_schema(excluded_columns)
 
                 # save pyarrow schema
                 self.add_table(
@@ -167,10 +187,10 @@ class MountPerspectiveTables(GatewayModule):
             else:
                 ts_type = channels.get_channel(field).tstype.typ
                 if get_origin(ts_type) is list:
-                    schema = get_args(ts_type)[0].psp_schema()
+                    schema = get_args(ts_type)[0].psp_schema(excluded_columns)
                     edge = csp.unroll(channels.get_channel(field))
                 else:
-                    schema = ts_type.psp_schema()
+                    schema = ts_type.psp_schema(excluded_columns)
                     edge = channels.get_channel(field)
 
                 self.add_table(
@@ -208,7 +228,9 @@ class MountPerspectiveTables(GatewayModule):
 
         if not hasattr(struct_type, "psp_schema"):
             raise Exception(f"Type has no conversion to perspective: {struct_type}")
-        return struct_type.psp_schema()
+
+        excluded_columns = self.excluded_table_columns.get(field, None)
+        return struct_type.psp_schema(excluded_columns)
 
     def add_table(self, field: str, schema, limit: int = None, index: str = None):
         self._table_insts[field] = self._client.table(schema, limit, index, name=field)
