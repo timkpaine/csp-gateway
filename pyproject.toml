@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "csp-gateway"
 description = "CSP Gateway framework"
-version = "2.0.2"
+version = "2.1.0"
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [{name = "the csp gateway authors", email = "CSPOpenSource@point72.com"}]
@@ -89,7 +89,7 @@ csp-gateway-start = "csp_gateway.server.cli:main"
 csp_gateway_start = "csp_gateway.server.cli:main"
 
 [tool.bumpversion]
-current_version = "2.0.2"
+current_version = "2.1.0"
 commit = true
 tag = false
 commit_args = "-s"
