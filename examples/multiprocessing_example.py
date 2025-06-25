@@ -5,13 +5,14 @@ more expensive than the cost of pickling/unpickling the data and all the IPC stu
 TODO: Extend this for simulation mode - possibly by enforcing that each input must have an output.
 """
 
-import csp
 import logging
-import numpy as np
-from csp import ts
-from ccflow import Frequency
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, timedelta, timezone
 from multiprocessing import Process, Queue
+
+import csp
+import numpy as np
+from ccflow import Frequency
+from csp import ts
 from pydantic import Field
 
 from csp_gateway import Gateway, GatewayChannels, GatewayModule, GatewayStruct
