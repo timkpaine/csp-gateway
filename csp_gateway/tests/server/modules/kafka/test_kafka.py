@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, List, Union
 from unittest import mock
 
@@ -116,7 +116,7 @@ def test_kafka_engine_replay_write(mock_object, by_key):
         modules=[setter, kafka_engine_replay_write, AddChannelsToGraphOutput()],
         channels=MyGatewayChannels(),
     )
-    out = csp.run(gateway_writing.graph, starttime=datetime.utcnow(), endtime=timedelta(seconds=5))
+    out = csp.run(gateway_writing.graph, starttime=datetime.now(timezone.utc), endtime=timedelta(seconds=5))
     assert mock_publish.call_count == 1
     assert mock_subscribe.call_count == 0
 
@@ -167,7 +167,7 @@ def test_kafka_engine_replay_read_and_write_read(mock_object, read_write_mode):
         modules=[setter, kafka_engine_replay_write, setter],
         channels=MyGatewayChannels(),
     )
-    csp.run(gateway_writing.graph, starttime=datetime.utcnow(), endtime=timedelta(seconds=5))
+    csp.run(gateway_writing.graph, starttime=datetime.now(timezone.utc), endtime=timedelta(seconds=5))
     if read_write_mode is ReadWriteMode.READ_AND_WRITE:
         assert mock_publish.call_count == 1
     else:
@@ -208,7 +208,7 @@ def test_kafka_read_write_fails_with_dict_basket(mock_object):
     with pytest.raises((TypeError, AttributeError)):
         csp.run(
             gateway_writing.graph,
-            starttime=datetime.utcnow(),
+            starttime=datetime.now(timezone.utc),
             endtime=timedelta(seconds=5),
         )
 
@@ -257,7 +257,7 @@ def test_kafka_read_write_read(mock_object, encoding_with_engine_timestamps, cap
         modules=[setter, kafka_reader, setter],
         channels=MyGatewayChannelsWithNumpyStruct(),
     )
-    csp.run(gateway_writing.graph, starttime=datetime.utcnow(), endtime=timedelta(seconds=5))
+    csp.run(gateway_writing.graph, starttime=datetime.now(timezone.utc), endtime=timedelta(seconds=5))
     calls = mock_publish.call_args_list
     topic_and_call_args = defaultdict(lambda *a, **kw: defaultdict(int))
     for call in calls:
@@ -312,7 +312,7 @@ def test_kafka_read_write_write(mock_object):
         modules=[kafka_writer, AddChannelsToGraphOutput()],
         channels=MyGatewayChannelsWithNumpyStruct(),
     )
-    out = csp.run(gateway_writing.graph, starttime=datetime.utcnow(), endtime=timedelta(seconds=5))
+    out = csp.run(gateway_writing.graph, starttime=datetime.now(timezone.utc), endtime=timedelta(seconds=5))
     assert not mock_publish.call_args_list
     assert len(out[MyGatewayChannelsWithNumpyStruct.my_channel]) == 1
     assert out[MyGatewayChannelsWithNumpyStruct.my_channel][0][1].foo == 9.1
@@ -364,7 +364,7 @@ def test_kafka_read_write_write_overwrite_id_timestamp(mock_object, use_struct_i
         modules=[kafka_writer, AddChannelsToGraphOutput()],
         channels=MyGatewayChannelsWithNumpyStruct(),
     )
-    out = csp.run(gateway_writing.graph, starttime=datetime.utcnow(), endtime=timedelta(seconds=5))
+    out = csp.run(gateway_writing.graph, starttime=datetime.now(timezone.utc), endtime=timedelta(seconds=5))
     assert not mock_publish.call_args_list
     assert len(out[MyGatewayChannelsWithNumpyStruct.my_channel]) == 1
     assert out[MyGatewayChannelsWithNumpyStruct.my_channel][0][1].foo == 9.1
@@ -424,7 +424,7 @@ def test_kafka_read_write_filter_write(mock_object, my_flag):
         modules=[kafka_writer, AddChannelsToGraphOutput()],
         channels=MyGatewayChannelsWithNumpyStruct(),
     )
-    out = csp.run(gateway_writing.graph, starttime=datetime.utcnow(), endtime=timedelta(seconds=5))
+    out = csp.run(gateway_writing.graph, starttime=datetime.now(timezone.utc), endtime=timedelta(seconds=5))
     assert not mock_publish.call_args_list
     assert len(out[MyGatewayChannelsWithNumpyStruct.my_channel]) == 1
     assert out[MyGatewayChannelsWithNumpyStruct.my_channel][0][1].foo == 9.1
@@ -491,7 +491,7 @@ def test_kafka_read_write_filter_read(mock_object, encoding_with_engine_timestam
         modules=[setter, kafka_writer, setter],
         channels=MyGatewayChannelsWithNumpyStruct(),
     )
-    csp.run(gateway_writing.graph, starttime=datetime.utcnow(), endtime=timedelta(seconds=5))
+    csp.run(gateway_writing.graph, starttime=datetime.now(timezone.utc), endtime=timedelta(seconds=5))
     calls = mock_publish.call_args_list
     topic_and_call_args = defaultdict(lambda *a, **kw: defaultdict(int))
     for call in calls:
