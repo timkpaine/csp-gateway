@@ -49,7 +49,7 @@ def test_recursive_perspective_schema():
 
 
 def test_recursive_perspective_flattening():
-    now = datetime.utcnow().replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
 
     # List with 1 element
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
@@ -234,7 +234,7 @@ def test_exclude_columns_schema():
 
 
 def test_pyarrow_conversion():
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     now_date = now.date()
     schema = MyPyArrowStruct.psp_schema()
     arrow_schema = psp_schema_to_arrow_schema(schema)
@@ -293,7 +293,7 @@ def test_MountPerspectiveTables(use_external_perspective):
         test_dynamic_keys={"dict_channel": ["test_key"]},
     )
 
-    now = datetime.utcnow().replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
 
     # List with 1 element
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
@@ -364,7 +364,7 @@ def test_MountPerspectiveTables_exclude_columns(exclude_columns):
         test_dynamic_keys={"dict_channel": ["test_key"]},
     )
 
-    now = datetime.utcnow().replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
 
     # List with 1 element
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)

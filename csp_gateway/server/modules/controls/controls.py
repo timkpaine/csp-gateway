@@ -2,7 +2,7 @@ import getpass
 import resource
 import socket
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 
 import csp
 import psutil
@@ -60,7 +60,7 @@ class MountControls(GatewayModule):
                 stats["max_threads"] = hard_limit if hard_limit != resource.RLIM_INFINITY else "unlimited"
 
                 # Time information
-                stats["now"] = datetime.utcnow()
+                stats["now"] = datetime.now(timezone.utc)
                 stats["csp-now"] = csp.now()
 
                 stats["host"] = _HOSTNAME

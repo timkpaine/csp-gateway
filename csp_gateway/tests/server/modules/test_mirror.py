@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 
 import csp
@@ -65,7 +65,7 @@ def test_kafka_engine_replay_read_and_write_read(mock_object, read_write_mode):
         selection=kafka_engine_replay_write.selection,
     )
     gateway_writing = MyGateway(modules=[setter, mirror, setter], channels=MyGatewayChannels())
-    csp.run(gateway_writing.graph, starttime=datetime.utcnow(), endtime=timedelta(seconds=5))
+    csp.run(gateway_writing.graph, starttime=datetime.now(timezone.utc), endtime=timedelta(seconds=5))
     assert mock_publish.call_count == 0
 
 

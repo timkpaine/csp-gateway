@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any, Dict
 
@@ -68,7 +68,7 @@ class GatewayStruct(PerspectiveUtilityMixin, Struct, metaclass=PydanticizedCspSt
             # TODO consider postfixing with a _ for conflicts
             kwargs["id"] = str(self.__class__.id_generator.next())
         if "timestamp" not in kwargs:
-            kwargs["timestamp"] = datetime.utcnow()
+            kwargs["timestamp"] = datetime.now(timezone.utc)
 
         # And put into lookup
         # TODO make this nicer when we switch to pydantic as first class instead of csp struct

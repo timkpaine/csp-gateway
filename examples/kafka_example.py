@@ -1,7 +1,7 @@
 import csp
 import os
 
-from datetime import datetime, timedelta
+from datetime import datetime, UTC, timedelta
 
 from csp_gateway import (
     GatewayChannels,
@@ -99,7 +99,7 @@ if __name__ == "__main__":
 
     out = csp.run(
         gateway.graph,
-        starttime=datetime.utcnow(),
+        starttime=datetime.now(timezone.utc),
         endtime=timedelta(seconds=2),
         realtime=True,
     )

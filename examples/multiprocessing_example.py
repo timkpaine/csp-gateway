@@ -10,7 +10,7 @@ import logging
 import numpy as np
 from csp import ts
 from ccflow import Frequency
-from datetime import datetime, timedelta
+from datetime import datetime, UTC, timedelta
 from multiprocessing import Process, Queue
 from pydantic import Field
 
@@ -118,7 +118,7 @@ if __name__ == "__main__":
 
     out = csp.run(
         gateway.graph,
-        starttime=datetime.utcnow(),
+        starttime=datetime.now(timezone.utc),
         endtime=timedelta(seconds=10),
         realtime=True,
     )
