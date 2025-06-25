@@ -3,19 +3,20 @@ Panel and plotly for this example to work (they are not part of csp-gateways req
 server inside the gateway process. Another way you can do it is to subscribe to the data from the client. There are
 advantages/disadvantages to each approach."""
 
-import csp
 import logging
+from datetime import timedelta
+from queue import Queue
+from threading import Thread
+from typing import Any, Dict, Optional
+
+import csp
 import numpy as np
 import pandas as pd
 import panel as pn
 import plotly.graph_objects as go
-from csp import ts
 from ccflow import BaseModel
-from datetime import timedelta
+from csp import ts
 from pydantic import Field, PrivateAttr
-from queue import Queue
-from threading import Thread
-from typing import Any, Dict, Optional
 
 from csp_gateway import Gateway, GatewayChannels, GatewayModule, GatewayStruct
 

@@ -1,19 +1,16 @@
-import csp
 import os
+from datetime import datetime, timedelta, timezone
 
-from datetime import datetime, UTC, timedelta
+import csp
 
 from csp_gateway import (
-    GatewayChannels,
-    GatewayStruct,
-    ChannelSelection,
-    GatewayModule,
+    AddChannelsToGraphOutput,
     Gateway,
-    ReadWriteMode,
-    ReplayEngineKafka,
+    GatewayChannels,
+    GatewayModule,
+    GatewayStruct,
     KafkaConfiguration,
     ReadWriteKafka,
-    AddChannelsToGraphOutput,
 )
 
 
@@ -29,9 +26,7 @@ def create_kafka_config():
     ssl_ca_location = "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
 
     # NOTE: This will have to be set up by the user.
-    kerberos_keytab = (
-        f'/home/{user_lower}/.keytab/{user_principal.split("@")[0]}.keytab.rc4-hmac'
-    )
+    kerberos_keytab = f"/home/{user_lower}/.keytab/{user_principal.split('@')[0]}.keytab.rc4-hmac"
     return KafkaConfiguration(
         group_id=group_id,
         broker=broker,
@@ -73,16 +68,12 @@ if __name__ == "__main__":
     channels = [GWC.my_proclamation]
     kafka_write_module = ReadWriteKafka(
         config=create_kafka_config(),
-        publish_channel_to_topic_and_key={
-            GWC.my_proclamation: {"kafka_test": "kafka_read_write_example"}
-        },
+        publish_channel_to_topic_and_key={GWC.my_proclamation: {"kafka_test": "kafka_read_write_example"}},
         encoding_with_engine_timestamps=encoding_with_engine_timestamps,
     )
     kafka_read_module = ReadWriteKafka(
         config=create_kafka_config(),
-        subscribe_channel_to_topic_and_key={
-            GWC.my_proclamation: {"kafka_test": "kafka_read_write_example"}
-        },
+        subscribe_channel_to_topic_and_key={GWC.my_proclamation: {"kafka_test": "kafka_read_write_example"}},
         encoding_with_engine_timestamps=encoding_with_engine_timestamps,
     )
 

@@ -1,15 +1,15 @@
 import argparse
 import asyncio
-from csp_gateway import GatewayClient, AsyncGatewayClient, GatewayClientConfig
 
+from csp_gateway import AsyncGatewayClient, GatewayClient, GatewayClientConfig
 
 # Put your configuration here
 config = GatewayClientConfig(host="HOSTNAME", port=8000, authenticate=True, api_key="12345")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='WebSocket demo')
-    parser.add_argument('choice', choices=['sync', 'async'])
+    parser = argparse.ArgumentParser(prog="WebSocket demo")
+    parser.add_argument("choice", choices=["sync", "async"])
     args = parser.parse_args()
 
     if args.choice == "sync":

@@ -34,8 +34,8 @@ install:  ## install python library
 #########
 .PHONY: lint-py lint-js lint lints
 lint-py:  ## run python linter with ruff
-	python -m ruff check csp_gateway
-	python -m ruff format --check csp_gateway
+	python -m ruff check csp_gateway examples
+	python -m ruff format --check csp_gateway examples
 
 lint-js:  ## run js linter
 	cd js; pnpm lint
@@ -47,8 +47,8 @@ lints: lint
 
 .PHONY: fix-py fix-js fix format
 fix-py:  ## fix python formatting with ruff
-	python -m ruff check --fix csp_gateway
-	python -m ruff format csp_gateway
+	python -m ruff check --fix csp_gateway examples
+	python -m ruff format csp_gateway examples
 
 fix-js:  ## fix js formatting
 	cd js; pnpm fix
