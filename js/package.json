@@ -22,16 +22,16 @@
     "@finos/perspective-workspace": "3.6.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-icons": "^4.10.1",
-    "react-modern-drawer": "^1.2.2"
+    "react-icons": "^4.12.0",
+    "react-modern-drawer": "^1.4.0"
   },
   "devDependencies": {
     "@finos/perspective-esbuild-plugin": "3.2.1",
-    "@prospective.co/procss": "^0.1.16",
+    "@prospective.co/procss": "^0.1.17",
     "cpy": "^11.1.0",
-    "esbuild": "^0.25.1",
+    "esbuild": "^0.25.5",
     "npm-cli-login": "1.0.0",
     "npm-run-all": "^4.1.5",
-    "prettier": "^3.5.3"
+    "prettier": "^3.6.2"
   }
 }

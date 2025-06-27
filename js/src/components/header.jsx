@@ -87,8 +87,15 @@ export function Header(props) {
           onClick={async () => {
             const workspace = document.getElementById("workspace");
             const modifiedConfig = await workspace.save();
+            let modifiedConfigString = JSON.stringify(modifiedConfig);
+            // Avoid using perspective internal names
+            modifiedConfigString = modifiedConfigString.replace(
+              /PERSPECTIVE_GENERATED_/g,
+              "CSP_GATEWAY_GENERATED_",
+            );
+
             const link = document.createElement("a");
-            link.href = `data:application/json;base64,${btoa(JSON.stringify(modifiedConfig))}`;
+            link.href = `data:application/json;base64,${btoa(modifiedConfigString)}`;
             link.download = "layout.json";
             document.body.appendChild(link);
             link.click();
