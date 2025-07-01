@@ -1,6 +1,7 @@
 import asyncio
 import threading
 from datetime import date, datetime, timedelta
+from importlib.metadata import version
 from io import BytesIO
 from logging import getLogger
 from typing import (
@@ -328,7 +329,6 @@ class MountPerspectiveTables(GatewayModule):
 
     def run_perspective(self):
         """Launch the perspective threads"""
-        psp_process_thread = threading.Thread(target=perspective_thread, args=(self._client,), daemon=True)
         psp_load_thread = threading.Thread(
             target=pull_data_thread,
             args=(
@@ -339,5 +339,8 @@ class MountPerspectiveTables(GatewayModule):
             ),
             daemon=True,
         )
-        psp_process_thread.start()
         psp_load_thread.start()
+
+        if version("perspective-python") < "3.7.0":
+            psp_process_thread = threading.Thread(target=perspective_thread, args=(self._client,), daemon=True)
+            psp_process_thread.start()
