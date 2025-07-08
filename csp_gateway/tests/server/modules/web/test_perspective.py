@@ -1,5 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import csp
 import polars as pl
@@ -29,6 +29,26 @@ class MyTestStruct(GatewayStruct):
     ncsp_sub: object
 
 
+class MyTestOptionalSubStruct(GatewayStruct):
+    sub_a: Optional[int]
+
+
+class MyTestOptionalStruct(GatewayStruct):
+    i: int
+    i_o: Optional[int]
+    ob: object
+    ob_op: Optional[object]
+    l_i: [int]
+    lt_i: List[int]
+    lt_i_op: Optional[List[int]]
+    s: MyTestSubStruct
+    s_op: Optional[MyTestSubStruct]
+    e: MyTestEnum
+    e_op: Optional[MyTestEnum]
+    sub: MyTestOptionalSubStruct
+    sub_op: Optional[MyTestOptionalSubStruct]
+
+
 class MyPyArrowStruct(GatewayStruct):
     d: date
 
@@ -45,6 +65,36 @@ def test_recursive_perspective_schema():
         "sub.z": float,
         "sub.timestamp": datetime,
         "z": str,
+    }
+
+    schema = MyTestOptionalStruct.psp_schema()
+    assert isinstance(schema, dict)
+    assert schema == {
+        "id": str,
+        "timestamp": datetime,
+        "i": int,
+        "i_o": int,
+        "l_i": int,
+        "lt_i": int,
+        "lt_i_op": int,
+        "s.id": str,
+        "s.y": int,
+        "s.x": int,
+        "s.z": float,
+        "s.timestamp": datetime,
+        "s_op.id": str,
+        "s_op.y": int,
+        "s_op.x": int,
+        "s_op.z": float,
+        "s_op.timestamp": datetime,
+        "e": str,
+        "e_op": str,
+        "sub.id": str,
+        "sub.sub_a": int,
+        "sub.timestamp": datetime,
+        "sub_op.id": str,
+        "sub_op.sub_a": int,
+        "sub_op.timestamp": datetime,
     }
 
 
