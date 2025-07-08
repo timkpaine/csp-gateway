@@ -3,11 +3,12 @@ import itertools
 from datetime import date, datetime
 from enum import Enum as PyEnum
 from logging import getLogger
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union, get_args
+from typing import Any, Callable, Dict, GenericAlias, List, Optional, Set, Tuple, Union, _GenericAlias, get_args, get_origin
 
 import orjson
 from csp import Enum, Struct
 from csp.impl.enum import EnumMeta
+from csp.impl.types.container_type_normalizer import ContainerTypeNormalizer
 from numpy import ndarray
 
 __all__ = (
@@ -121,6 +122,23 @@ def _is_excluded(field: str, excluded_columns: ExcludedColumns) -> Union[bool, E
     return excluded_columns.get(field, False)
 
 
+def _is_optional(t: type) -> bool:
+    if not isinstance(t, (GenericAlias, _GenericAlias)):
+        return False
+    if get_origin(t) is not Union:
+        return False
+    args = list(get_args(t))
+    if len(args) != 2 or type(None) not in args:
+        return False
+    return True
+
+
+def _get_type_from_optional(t: type):
+    args = list(get_args(t))
+    args.remove(type(None))
+    return args[0]
+
+
 def psp_schema(cls, excluded_columns: Optional[ExcludedColumns] = None) -> Dict[str, type]:
     """Returns the perspective schema for a class.
 
@@ -129,13 +147,18 @@ def psp_schema(cls, excluded_columns: Optional[ExcludedColumns] = None) -> Dict[
     """
 
     # Pydantic doesn't support fields that start with underscore
-    schema = {k: v for k, v in cls.metadata().items() if not k.startswith("_")}
+    schema = {k: v for k, v in cls.metadata(typed=False).items() if not k.startswith("_")}
+    schema_annotated = {k: v for k, v in cls.metadata(typed=True).items() if not k.startswith("_")}
     add = {}
     remove = []
 
     for field, value in schema.items():
         # Make sure its a type so `issubclass`
         # calls don't fail
+        if _is_optional(schema_annotated[field]):
+            value = _get_type_from_optional(schema_annotated[field])
+            value = ContainerTypeNormalizer.normalized_type_to_actual_python_type(value)
+
         if not isinstance(value, type):
             # TODO other generics
             if isinstance(value, list):
@@ -217,6 +240,10 @@ def psp_schema(cls, excluded_columns: Optional[ExcludedColumns] = None) -> Dict[
     # remove all that need to be removed
     for to_remove in remove:
         schema.pop(to_remove)
+
+    for key in schema.keys():
+        if schema[key] is object and _is_optional(schema_annotated[key]):
+            schema[key] = _get_type_from_optional(schema_annotated[key])
 
     schema.update(add)
     return schema
