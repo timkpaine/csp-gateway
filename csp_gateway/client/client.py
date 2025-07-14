@@ -14,17 +14,23 @@ from json import JSONDecodeError
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple, Union, cast
 
-from aiohttp import ClientSession, WSMsgType
-from aiostream.stream import merge
-from ccflow import BaseModel
 from httpx import AsyncClient, Response, get as GET, post as POST
 from jsonref import replace_refs
 from nest_asyncio import apply as applyAsyncioNexting
-from orjson import loads
 from packaging import version
 from pydantic import Field, PrivateAttr, field_validator, model_validator
 
+try:
+    from ccflow import BaseModel
+except ImportError:
+    from pydantic import BaseModel
+try:
+    from orjson import loads
+except ImportError:
+    from json import loads
+
 if TYPE_CHECKING:
+    from aiohttp import ClientSession
     from pandas import DataFrame as PandasDataFrame
     from polars import DataFrame as PolarsDataFrame
 
@@ -499,6 +505,8 @@ class BaseGatewayClient(BaseModel):
         )
 
     async def _websocketData(self, ws):
+        from aiohttp import WSMsgType
+
         async for msg in ws:
             if msg.type == WSMsgType.TEXT:
                 yield ("out", loads(msg.data))
@@ -522,8 +530,19 @@ class BaseGatewayClient(BaseModel):
                     ),
                 )
 
+    def _aiohttp_session(self) -> "ClientSession":
+        try:
+            from aiohttp import ClientSession
+
+            return ClientSession()
+        except ImportError:
+            log.exception("Must have aiohttp installed to use WebSocket streaming")
+            raise
+
     async def _connectAsync(self):
-        session = ClientSession()
+        from aiostream.stream import merge
+
+        session = self._aiohttp_session()
 
         route = self._buildroutews("stream")
 

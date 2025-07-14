@@ -124,6 +124,7 @@ major:  ## bump a major version
 
 dist-py:  # build python dists
 	python -m build -w -s
+	CSP_GATEWAY_EXTRA=client python -m build -w -s
 
 dist-js:  # build js dists
 	cd js; pnpm pack
