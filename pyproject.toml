@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.3.1", "hatch-jupyter-builder"]
+requires = ["hatchling>=1.3.1", "hatch-jupyter-builder", "hatch-multi"]
 build-backend = "hatchling.build"
 
 [project]
@@ -32,6 +32,7 @@ develop = [
     "check-manifest",
     "hatchling",
     "hatch-jupyter-builder",
+    "hatch-multi",
     "mypy",
     "pytest",
     "pytest-aiohttp",
@@ -142,7 +143,7 @@ artifacts = ["csp_gateway/server/build/*"]
 [tool.hatch.build.targets.wheel.shared-data]
 
 [tool.hatch.build.targets.sdist]
-packages = ["csp_gateway", "js", "hatch_build.py"]
+packages = ["csp_gateway", "js"]
 exclude = ["/.github", "/.gitignore", "/conda-recipe", "/docs", "/examples"]
 
 [tool.hatch.build.targets.wheel]
@@ -150,7 +151,6 @@ packages = ["csp_gateway"]
 exclude = [
     "/.github",
     "/.gitignore",
-    "/hatch_build.py",
     "/docs",
     "/js",
     "/pyproject.toml",
@@ -170,7 +170,8 @@ skip-if-exists = [
 ]
 dependencies = ["hatch-jupyter-builder>=0.5.0"]
 
-[tool.hatch.metadata.hooks.custom]
+[tool.hatch.metadata.hooks.hatch-multi]
+primary = "server"
 
 [tool.hatch.build.hooks.jupyter-builder.build-kwargs]
 path = "js"
