@@ -3,7 +3,12 @@ from datetime import datetime
 from enum import Enum as PyEnum
 from typing import Literal, Optional, Union
 
-from csp.impl.enum import Enum as CspEnum, EnumMeta as CspEnumMeta
+try:
+    from csp.impl.enum import Enum as CspEnum, EnumMeta as CspEnumMeta
+except ImportError:
+    # If csp is not available, we can still use the basic types
+    CspEnum = PyEnum
+    CspEnumMeta = PyEnum
 from pydantic import BaseModel, Field
 
 log = logging.getLogger(__name__)
