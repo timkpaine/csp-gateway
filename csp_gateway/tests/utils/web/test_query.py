@@ -2,13 +2,8 @@ import json
 from datetime import datetime
 
 from csp_gateway.server.demo import ExampleData
-from csp_gateway.utils.web import (
-    Filter,
-    FilterCondition,
-    FilterWhere,
-    FilterWhereLambdaMap,
-    Query,
-)
+from csp_gateway.utils.web.filter import Filter, FilterCondition, FilterWhere, FilterWhereLambdaMap
+from csp_gateway.utils.web.query import Query
 
 DUMMY_STATE_DATA = [
     {

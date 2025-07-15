@@ -3,7 +3,7 @@ from typing import Any, Optional
 from fastapi import Depends, HTTPException, Query
 from pydantic import Json, ValidationError
 
-from .web import Query as QueryParamType
+from .web.query import Query as QueryParamType
 
 
 def json_param(param_name: str, model: Any, **query_kwargs):
