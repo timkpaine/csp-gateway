@@ -1,6 +1,4 @@
-import React, { useEffect, useState } from "react";
-import { createRoot } from "react-dom/client";
-
+import React, { useEffect, useRef, useState } from "react";
 import { getOpenApi } from "./common";
 import { Header, Footer, Settings, Workspace } from "./components";
 import {
@@ -98,17 +96,3 @@ export default function App(props) {
     </div>
   );
 }
-
-window.addEventListener("load", () => {
-  const container = document.getElementById("gateway-root");
-
-  // handle regular-table in light dom
-  customElements.whenDefined("perspective-viewer-datagrid").then((datagrid) => {
-    datagrid.renderTarget = "light";
-  });
-
-  if (container) {
-    const root = createRoot(container);
-    root.render(<App />);
-  }
-});

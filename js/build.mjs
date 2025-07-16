@@ -27,7 +27,7 @@ const BUILD = [
     define: {
       global: "window",
     },
-    entryPoints: ["src/index.jsx"],
+    entryPoints: ["src/main.jsx"],
     bundle: true,
     plugins: [],
     format: "esm",
