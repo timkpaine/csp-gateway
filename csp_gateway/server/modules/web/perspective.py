@@ -1,5 +1,4 @@
 import asyncio
-import threading
 from datetime import date, datetime, timedelta
 from importlib.metadata import version
 from io import BytesIO
@@ -27,7 +26,7 @@ from typing_extensions import TypeAliasType
 
 from csp_gateway.server import ChannelSelection, GatewayChannels, GatewayModule
 from csp_gateway.server.web import GatewayWebApp, get_default_responses
-from csp_gateway.utils import PickleableQueue, get_args, get_origin
+from csp_gateway.utils import PickleableQueue, get_args, get_origin, get_thread
 
 __all__ = (
     "psp_schema_to_arrow_schema",
@@ -329,7 +328,7 @@ class MountPerspectiveTables(GatewayModule):
 
     def run_perspective(self):
         """Launch the perspective threads"""
-        psp_load_thread = threading.Thread(
+        psp_load_thread = get_thread(
             target=pull_data_thread,
             args=(
                 self._queue,
@@ -337,10 +336,9 @@ class MountPerspectiveTables(GatewayModule):
                 self._arrow_schema_insts,
                 self._arrow_schema_date_conversions,
             ),
-            daemon=True,
         )
         psp_load_thread.start()
 
         if version("perspective-python") < "3.7.0":
-            psp_process_thread = threading.Thread(target=perspective_thread, args=(self._client,), daemon=True)
+            psp_process_thread = get_thread(target=perspective_thread, args=(self._client,))
             psp_process_thread.start()
