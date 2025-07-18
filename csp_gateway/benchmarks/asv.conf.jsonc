@@ -23,8 +23,8 @@
 
     // Customizable commands for installing and uninstalling the project.
     // See asv.conf.json documentation.
-    "install_command": ["in-dir={env_dir} python -mpip install {wheel_file}"],
-    "uninstall_command": ["return-code=any python -mpip uninstall -y {project}"],
+    "install_command": ["in-dir={env_dir} uv pip install {wheel_file}"],
+    "uninstall_command": ["return-code=any uv pip uninstall -y {project}"],
 
     // List of branches to benchmark. If not provided, defaults to "main"
     // (for git) or "default" (for mercurial).
