@@ -10,5 +10,6 @@ except ImportError:
 from .enums import *
 from .exceptions import *
 from .picklable_queue import PickleableQueue
+from .threads import get_thread
 from .web.filter import Filter, FilterCondition, FilterWhere, FilterWhereLambdaMap
 from .web.query import Query

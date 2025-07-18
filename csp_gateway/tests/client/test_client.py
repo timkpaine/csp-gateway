@@ -1,5 +1,4 @@
 import logging
-import threading
 
 import numpy
 import pandas
@@ -7,7 +6,9 @@ import polars
 import pytest
 from packaging import version
 
-from csp_gateway import GatewayClient, ResponseWrapper
+from csp_gateway import ClientConfig, GatewayClient, ResponseWrapper
+from csp_gateway.client.client import _host
+from csp_gateway.utils import get_thread
 
 #  Struct for response wrapper
 #  class MyTypeStruct(BaseModel):
@@ -135,7 +136,7 @@ def test_get_event_loop_off_thread(caplog):
             # This should not be hit
             logging.error(bad_log)
 
-    thread = threading.Thread(target=instantiate_in_thread)
+    thread = get_thread(target=instantiate_in_thread)
     thread.start()
     thread.join()
 
@@ -176,3 +177,23 @@ def test_response_wrapper():
 
         polars_df = lst_resp.as_polars_df()
         assert polars_df[:, 0].to_list() == lst
+
+
+def test_client_instantiation_convenenience():
+    client = GatewayClient()
+    assert client.config.host == "localhost"
+    assert client.config.port == 8000
+    assert client.config.protocol == "http"
+
+    client = GatewayClient(host="https://my.test.gateway", port=None)
+    assert client.config.host == "my.test.gateway"
+    assert client.config.port is None
+    assert client.config.protocol == "https"
+
+
+def test_host_parsing():
+    cfg = ClientConfig(host="localhost", port=8000, protocol="http")
+    assert _host(cfg) == "http://localhost:8000"
+
+    cfg = ClientConfig(host="https://my.host", port=None, protocol="http")
+    assert _host(cfg) == "https://my.host"

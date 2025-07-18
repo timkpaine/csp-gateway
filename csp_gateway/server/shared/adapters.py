@@ -1,7 +1,6 @@
 import logging
 import time
 from datetime import timedelta
-from threading import Thread
 from typing import Any, Callable, Optional
 
 import pandas as pd
@@ -9,6 +8,8 @@ import pyarrow as pa
 from csp import ts
 from csp.impl.pushadapter import PushInputAdapter
 from csp.impl.wiring import py_push_adapter_def
+
+from csp_gateway.utils import get_thread
 
 __all__ = (
     "sql_polling_adapter_def",
@@ -70,7 +71,7 @@ class PollingSQLAdapterImpl(PushInputAdapter):
         that push adapters will ALWAYS have a separate thread driving ticks into the csp engine thread
         """
         self._running = True
-        self._thread = Thread(target=self._run, daemon=True)
+        self._thread = get_thread(target=self._run)
         self._thread.start()
 
     def stop(self):
