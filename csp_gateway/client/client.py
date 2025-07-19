@@ -10,11 +10,12 @@ from asyncio import (
     set_event_loop,
     wrap_future,
 )
+from functools import lru_cache
 from json import JSONDecodeError
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple, Union, cast
 
-from httpx import AsyncClient, Response, get as GET, post as POST
+from httpx import AsyncClient as httpx_AsyncClient, Response, get as GET, post as POST
 from jsonref import replace_refs
 from nest_asyncio import apply as applyAsyncioNexting
 from packaging import version
@@ -40,6 +41,24 @@ from ..utils import (
     ServerRouteNotMountedException,
     ServerUnknownException,
     ServerUnprocessableException,
+    get_thread,
+)
+
+__all__ = (
+    "GatewayClientConfig",
+    "ResponseWrapper",
+    "ResponseType",
+    "BaseGatewayClient",
+    "SyncGatewayClientMixin",
+    "SyncGatewayClient",
+    "AsyncGatewayClientMixin",
+    "AsyncGatewayClient",
+    "Client",
+    "AsyncClient",
+    "ClientConfig",
+    "GatewayClient",
+    "GatewayClientConfiguration",
+    "ClientConfiguration",
 )
 
 log = logging.getLogger(__name__)
@@ -130,18 +149,54 @@ def _raiseIfNotMounted(foo: Callable) -> Callable:
     return _wrapped_foo
 
 
+@lru_cache(maxsize=1)
+def _host(config) -> str:
+    host = config.host
+    if not host.startswith(("http://", "https://")):
+        if config.port == 443:
+            # Force https
+            host = f"https://{host}"
+        elif config.port == 80:
+            host = f"http://{host}"
+        else:
+            host = f"{config.protocol}://{host}"
+    if host.endswith("/"):
+        host = host[:-1]
+    if config.port:
+        if config.port not in (80, 443):
+            host += f":{config.port}"
+
+    return host
+
+
 class GatewayClientConfig(BaseModel):
     model_config = dict(extra="forbid")  # To raise error on misspelling/misspecification
 
     protocol: Literal["http", "https"] = "http"
     host: str = "localhost"
-    port: Optional[int] = 8000
+    port: Optional[int] = Field(default=8000, ge=1, le=65535, description="Port number for the gateway server")
     api_route: str = "/api/v1"
     authenticate: bool = False
     api_key: str = ""
     return_raw_json: bool = Field(
         True, description="Determines whether REST request responses should be returned as raw json data, or as a ResponseWrapper object."
     )
+
+    @model_validator(mode="after")
+    def validate_config(self):
+        if self.port is not None and self.port < 1:
+            raise ValueError("Port must be a positive integer")
+        if self.api_key and not self.authenticate:
+            raise ValueError("API key must be provided if authentication is enabled")
+        if self.host.startswith("http"):
+            # Switch protocol to host
+            protocol, host = self.host.split("://")
+            self.__dict__["protocol"] = protocol
+            self.__dict__["host"] = host
+        return self
+
+    def __hash__(self):
+        return hash(self.model_dump_json())
 
 
 class ResponseWrapper(BaseModel):
@@ -250,9 +305,13 @@ class BaseGatewayClient(BaseModel):
     _event_loop: Optional[AbstractEventLoop] = PrivateAttr(default=None)
     _event_loop_thread: Optional[Thread] = PrivateAttr(default=None)
 
-    def __init__(self, config: GatewayClientConfig = None) -> None:
+    def __init__(self, config: GatewayClientConfig = None, **kwargs) -> None:
         # Exists for compatibility with positional argument instantiation
-        super().__init__(config=config or GatewayClientConfig())
+        if config is None:
+            config = GatewayClientConfig()
+        if kwargs:
+            config = GatewayClientConfig(**{**config.model_dump(exclude_unset=True), **kwargs})
+        super().__init__(config=config)
 
     @model_validator(mode="after")
     def validate_client(self):
@@ -275,7 +334,7 @@ class BaseGatewayClient(BaseModel):
                 self._event_loop_setup = True
             else:
                 # setup a new event loop in thread
-                self._event_loop_thread = Thread(target=self._event_loop.run_forever, daemon=True)
+                self._event_loop_thread = get_thread(target=self._event_loop.run_forever)
                 self._event_loop_thread.start()
 
             self._initialized_streaming.set_result(True)
@@ -284,17 +343,7 @@ class BaseGatewayClient(BaseModel):
         if not self._initialized:
             # grab openapi spec
             self._openapi_spec: Dict[Any, Any] = replace_refs(
-                cast(
-                    Dict[Any, Any],
-                    GET(
-                        "{}://{}{}/{}".format(
-                            "http" if self.config.port == 80 else "https" if self.config.port == 443 else self.config.protocol,
-                            self.config.host,
-                            ":{}".format(self.config.port) if self.config.port else "",
-                            "openapi.json",
-                        )
-                    ).json(),
-                )
+                cast(Dict[Any, Any], GET(f"{_host(self.config)}/openapi.json")).json(),
             )
 
             # collect mounted routes
@@ -332,23 +381,25 @@ class BaseGatewayClient(BaseModel):
         return f"{self.config.api_route}/{route}"
 
     def _buildroute(self, route: str) -> str:
-        base_url = f"{self.config.protocol}://{self.config.host}"
-        if self.config.port:
-            base_url += f":{self.config.port}"
-        base_url += self._buildpath(route)
+        url = f"{_host(self.config)}{self._buildpath(route)}"
         if self.config.authenticate:
-            return base_url, {"token": self.config.api_key}
-        return base_url, {}
+            return url, {"token": self.config.api_key}
+        return url, {}
 
     def _api_path_and_route(self, route: str) -> str:
         return self.config.api_route + "/" + route
 
     def _buildroutews(self, route: str) -> str:
-        protocol = "wss" if "https" in self.config.protocol else "ws"
-        port = f":{self.config.port}" if self.config.port else ""
-        auth = f"?token={self.config.api_key}" if self.config.authenticate else ""
-
-        return f"{protocol}://{self.config.host}{port}{self.config.api_route}/{route}{auth}"
+        host = _host(self.config)
+        if host.startswith("http://"):
+            host = host.replace("http://", "ws://")
+        elif host.startswith("https://"):
+            host = host.replace("https://", "wss://")
+        if self.config.authenticate:
+            auth = f"?token={self.config.api_key}"
+        else:
+            auth = ""
+        return f"{host}{self.config.api_route}/{route}{auth}"
 
     def _handle_response(self, resp: Response, route: str) -> ResponseType:
         try:
@@ -385,7 +436,7 @@ class BaseGatewayClient(BaseModel):
     ) -> ResponseType:
         params = params or {}
         resolved_route, extra_params = self._buildroute(route)
-        async with AsyncClient() as client:
+        async with httpx_AsyncClient() as client:
             return self._handle_response(await client.get(resolved_route, params={**params, **extra_params}, timeout=timeout), route=route)
 
     def _post(
@@ -408,7 +459,7 @@ class BaseGatewayClient(BaseModel):
     ) -> ResponseType:
         params = params or {}
         resolved_route, extra_params = self._buildroute(route)
-        async with AsyncClient() as client:
+        async with httpx_AsyncClient() as client:
             return self._handle_response(
                 await client.post(resolved_route, params={**params, **extra_params}, json=data, timeout=timeout), route=route
             )
@@ -853,4 +904,10 @@ class AsyncGatewayClient(AsyncGatewayClientMixin, BaseGatewayClient):
     ...
 
 
+Client = SyncGatewayClient
+AsyncClient = AsyncGatewayClient
 GatewayClient = SyncGatewayClient
+
+ClientConfig = GatewayClientConfig
+GatewayClientConfiguration = GatewayClientConfig
+ClientConfiguration = GatewayClientConfig

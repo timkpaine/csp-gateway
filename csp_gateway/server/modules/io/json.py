@@ -20,6 +20,7 @@ class JSONWriterThread(Thread):
         self.file_path = file_path
         self.write_queue = write_queue
         self.file_mode = file_mode
+        self.daemon = True
 
     def run(self):
         p = Path(self.file_path)
@@ -46,7 +47,6 @@ class ReplayEngineJSON(EngineReplay):
             file_mode = "w" if self.overwrite_if_writing else "a"
             s_queue = Queue()
             s_json_writer_thread = JSONWriterThread(self.filename, s_queue, file_mode)
-            s_json_writer_thread.daemon = True
             s_json_writer_thread.start()
 
         with csp.stop():

@@ -6,7 +6,6 @@ advantages/disadvantages to each approach."""
 import logging
 from datetime import timedelta
 from queue import Queue
-from threading import Thread
 from typing import Any, Dict, Optional
 
 import csp
@@ -18,7 +17,7 @@ from ccflow import BaseModel
 from csp import ts
 from pydantic import Field, PrivateAttr
 
-from csp_gateway import Gateway, GatewayChannels, GatewayModule, GatewayStruct
+from csp_gateway import Gateway, GatewayChannels, GatewayModule, GatewayStruct, get_thread
 
 
 class ExampleData(GatewayStruct):
@@ -99,7 +98,7 @@ class ExamplePanelApp(BaseModel):
 
     def run(self):
         """Run the panel app and serve it."""
-        t = Thread(target=self._process_queue, daemon=True)
+        t = get_thread(target=self._process_queue)
         t.start()
 
         pn.extension("plotly")
@@ -123,7 +122,7 @@ class ExamplePanelModule(GatewayModule):
             self.app.accumulate_data(csp.now(), data)
 
     def connect(self, channels: ExampleGatewayChannel) -> None:
-        t = Thread(target=self.app.run, daemon=True)
+        t = get_thread(target=self.app.run)
         t.start()
         data = channels.get_channel("data")
         self._send_data_to_panel(data=data)

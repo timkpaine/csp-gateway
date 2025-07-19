@@ -13,6 +13,7 @@ from csp_gateway.server.modules.logging.util import (
     MonitoringEvent,
     MonitoringMetric,
 )
+from csp_gateway.utils import get_thread
 
 log = logging.getLogger(__name__)
 logging.getLogger("urllib3.connectionpool").setLevel(logging.ERROR)
@@ -116,10 +117,9 @@ class PublishDatadog(GatewayModule):
         else:
             metrics = csp.null_ts([[MonitoringMetric]])
 
-        dd_thread = Thread(
+        dd_thread = get_thread(
             target=_send_to_datadog,
             args=(dd_queue, self.dd_latency_log_threshold_seconds),
-            daemon=True,
         )
         dd_thread.start()
         self._publish_datadog(events, metrics, dd_queue, dd_thread, self.dd_tags)

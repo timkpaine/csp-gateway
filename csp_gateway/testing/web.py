@@ -1,10 +1,9 @@
 import time
-from threading import Thread
 
 import csp
 from csp import ts
 
-from csp_gateway import GatewayModule
+from csp_gateway import GatewayModule, get_thread
 
 __all__ = (
     "NeverDieModule",
@@ -24,7 +23,7 @@ def _never_die():
 
 class NeverDieModule(GatewayModule):
     def connect(self, *args, **kwargs) -> None:
-        self._thread = Thread(target=_never_die, daemon=True)
+        self._thread = get_thread(target=_never_die)
         self._thread.start()
 
 
