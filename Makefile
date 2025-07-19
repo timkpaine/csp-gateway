@@ -3,7 +3,7 @@
 #########
 .PHONY: develop-py develop-js develop
 develop-py:
-	python -m pip install -e .[develop]
+	uv pip install -e .[develop]
 
 develop-js:
 	cd js; pnpm install
@@ -15,19 +15,19 @@ build-py:
 	python -m build -w -n
 
 build-js:
-	cd js; pnpm build
+	cd js; pnpm run build
 
 build: build-js build-py  ## build the project
 
 .PHONY: requirements
 requirements:  ## install prerequisite python build requirements
-	python -m pip install --upgrade pip toml
-	python -m pip install `python -c 'import toml; c = toml.load("pyproject.toml"); print("\n".join(c["build-system"]["requires"]))'`
-	python -m pip install `python -c 'import toml; c = toml.load("pyproject.toml"); print(" ".join(c["project"]["optional-dependencies"]["develop"]))'`
+	uv pip install --upgrade pip toml
+	uv pip install `python -c 'import toml; c = toml.load("pyproject.toml"); print("\n".join(c["build-system"]["requires"]))'`
+	uv pip install `python -c 'import toml; c = toml.load("pyproject.toml"); print(" ".join(c["project"]["optional-dependencies"]["develop"]))'`
 
 .PHONY: install
 install:  ## install python library
-	python -m pip install .
+	uv pip install .
 
 #########
 # LINTS #
@@ -38,7 +38,7 @@ lint-py:  ## run python linter with ruff
 	python -m ruff format --check csp_gateway examples
 
 lint-js:  ## run js linter
-	cd js; pnpm lint
+	cd js; pnpm run lint
 
 lint: lint-js lint-py  ## run project linters
 
@@ -51,7 +51,7 @@ fix-py:  ## fix python formatting with ruff
 	python -m ruff format csp_gateway examples
 
 fix-js:  ## fix js formatting
-	cd js; pnpm fix
+	cd js; pnpm run fix
 
 fix: fix-js fix-py  ## run project autoformatters
 
@@ -86,7 +86,7 @@ coverage-py:  ## run python tests and collect test coverage
 
 .PHONY: test-js tests-js coverage-js
 test-js:  ## run js tests
-	cd js; pnpm test
+	cd js; pnpm run test
 
 # alias
 tests-js: test-js
