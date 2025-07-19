@@ -15,8 +15,8 @@ importers:
         specifier: 3.7.3
         version: 3.7.3
       '@finos/perspective-viewer-d3fc':
-        specifier: 3.7.1
-        version: 3.7.1(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)
+        specifier: 3.7.3
+        version: 3.7.3(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)
       '@finos/perspective-viewer-datagrid':
         specifier: 3.7.3
         version: 3.7.3
@@ -329,8 +329,8 @@ packages:
   '@finos/perspective-esbuild-plugin@3.2.1':
     resolution: {integrity: sha512-6EqacFm5rGA0EtzD2p9RuxtVLEci9AEC4NPiOCpqFdgxxX8Msv8LlL7Ml3opxyaEeKpndVsLFdOD5U+PNaaa+A==}
 
-  '@finos/perspective-viewer-d3fc@3.7.1':
-    resolution: {integrity: sha512-pcEzo6RvGVslxO0hZMSFpgrWJBhMROtSBinI9LFhJ2URoKZfylpTKkZlpGBCxA9twYZLIOxRr5sJtiF54z9o4w==}
+  '@finos/perspective-viewer-d3fc@3.7.3':
+    resolution: {integrity: sha512-8xcYWxnhzD5/rN8fRCGz6TbMTOs/rdzxVLmeryPaucob30wsS3kmf9lA6iYHH9LV7/lNU6T96dQbydYyfrN5fg==}
 
   '@finos/perspective-viewer-datagrid@3.7.3':
     resolution: {integrity: sha512-gdzmbnh+ZLwyflTlNmacu80y0rJejUfqQUev8tsQyLI3HA5rB6xHrWKcCnf7Nh2/AO6F0bRbY+7c9x5r6RBq/A==}
@@ -1683,7 +1683,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@finos/perspective-viewer-d3fc@3.7.1(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)':
+  '@finos/perspective-viewer-d3fc@3.7.3(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)':
     dependencies:
       '@d3fc/d3fc-chart': 5.1.9(d3-array@3.2.4)(d3-path@3.1.0)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-selection@3.0.0)(d3-shape@3.2.0)
       '@d3fc/d3fc-element': 6.2.0
