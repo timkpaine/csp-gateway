@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@finos/perspective':
-        specifier: 3.7.1
-        version: 3.7.1
+        specifier: 3.7.3
+        version: 3.7.3
       '@finos/perspective-viewer':
         specifier: 3.7.3
         version: 3.7.3
@@ -340,9 +340,6 @@ packages:
 
   '@finos/perspective-workspace@3.7.1':
     resolution: {integrity: sha512-VzTVn+8sMdCA2wqk/iAK2Nhuqfr8boCex/wSTvm8vvGaGqfO8nXXqHb53Dd5mUGlLg1VzTe33BXsy8tAA3JmJg==}
-
-  '@finos/perspective@3.7.1':
-    resolution: {integrity: sha512-u/A8zx3777N25vmQDdHR0NKRIVqoM1i6iTKSIDJAoqRwFiahz8OpPaIOCaMZo6M2TvOetqhK+Zs2+WdeLQXH+Q==}
 
   '@finos/perspective@3.7.3':
     resolution: {integrity: sha512-fSC9jMkejXbVTg81ic5ll+Lq2OdDJPpBQxaWDf9oMWUbmhy5+IsF2Bo8ygAZc+Ln37BhO5ElGYp4s9xRImlhGg==}
@@ -1690,7 +1687,7 @@ snapshots:
     dependencies:
       '@d3fc/d3fc-chart': 5.1.9(d3-array@3.2.4)(d3-path@3.1.0)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-selection@3.0.0)(d3-shape@3.2.0)
       '@d3fc/d3fc-element': 6.2.0
-      '@finos/perspective': 3.7.1
+      '@finos/perspective': 3.7.3
       '@finos/perspective-viewer': 3.7.3
       chroma-js: 1.4.1
       d3: 7.9.0
@@ -1717,7 +1714,7 @@ snapshots:
 
   '@finos/perspective-viewer-datagrid@3.7.1':
     dependencies:
-      '@finos/perspective': 3.7.1
+      '@finos/perspective': 3.7.3
       '@finos/perspective-viewer': 3.7.3
       chroma-js: 1.4.1
       regular-table: 0.6.8
@@ -1739,7 +1736,7 @@ snapshots:
 
   '@finos/perspective-workspace@3.7.1':
     dependencies:
-      '@finos/perspective': 3.7.1
+      '@finos/perspective': 3.7.3
       '@finos/perspective-viewer': 3.7.3
       '@lumino/algorithm': 2.0.3
       '@lumino/commands': 2.3.2
@@ -1754,14 +1751,6 @@ snapshots:
       - bufferutil
       - debug
       - supports-color
-      - utf-8-validate
-
-  '@finos/perspective@3.7.1':
-    dependencies:
-      stoppable: 1.1.0
-      ws: 8.18.3
-    transitivePeerDependencies:
-      - bufferutil
       - utf-8-validate
 
   '@finos/perspective@3.7.3':
