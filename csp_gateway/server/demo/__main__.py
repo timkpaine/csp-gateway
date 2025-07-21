@@ -4,6 +4,7 @@ from pathlib import Path
 from csp_gateway import (
     Gateway,
     GatewaySettings,
+    MountOutputsFolder,
     MountPerspectiveTables,
     MountRestRoutes,
 )
@@ -19,6 +20,7 @@ gateway = Gateway(
     settings=GatewaySettings(),
     modules=[
         ExampleModule(),
+        MountOutputsFolder(),
         MountPerspectiveTables(),
         MountRestRoutes(force_mount_all=True),
     ],
