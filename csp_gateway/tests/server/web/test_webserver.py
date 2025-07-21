@@ -99,6 +99,11 @@ class TestGatewayWebserver:
         assert response.status_code == 404
         assert response.json() == {"detail": "Not Found"}
 
+    def test_static_cachecontrol(self, rest_client: TestClient):
+        response = rest_client.get("/static/favicon.png")
+        assert response.status_code == 200
+        assert response.headers["Cache-Control"] == "public, max-age=604800"
+
     ######################
     # Core Functionality #
     def test_log_viewer(self, rest_client: TestClient):

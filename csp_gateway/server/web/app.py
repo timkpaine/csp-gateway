@@ -12,7 +12,6 @@ from fastapi import APIRouter, FastAPI
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
@@ -40,6 +39,7 @@ from .routes import (
     add_state_api_available_channels,
     add_state_routes,
 )
+from .static import CacheControlledStaticFiles
 
 # from uvicorn.supervisors import Multiprocess
 
@@ -208,14 +208,14 @@ class GatewayWebApp(object):
         # Mount static files
         self.app.mount(
             "/static",
-            StaticFiles(directory=static_files_dir, check_dir=False, html=True),
+            CacheControlledStaticFiles(directory=static_files_dir, check_dir=False, html=True),
             name="frontend",
         )
 
         # Mount images
         self.app.mount(
             "/img",
-            StaticFiles(directory=images_files_dir, check_dir=False, html=True),
+            CacheControlledStaticFiles(directory=images_files_dir, check_dir=False, html=True),
             name="img",
         )
 
