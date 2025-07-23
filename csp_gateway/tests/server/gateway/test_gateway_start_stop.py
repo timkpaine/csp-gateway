@@ -12,7 +12,7 @@ import pytest
 import requests
 from fastapi.testclient import TestClient
 
-from csp_gateway import Gateway, GatewaySettings, MountRestRoutes
+from csp_gateway import Gateway, GatewaySettings, MountControls, MountRestRoutes
 from csp_gateway.server.demo import ExampleGatewayChannels, ExampleModule
 from csp_gateway.testing import CspDieModule, LongStartModule
 from csp_gateway.tests.server.gateway.test_gateway import MyBuildFailureModule
@@ -119,10 +119,11 @@ def test_start_and_then_graph_start_error(caplog, free_port):
 def test_stop_with_shutdown(free_port):
     # instantiate gateway
     gateway = Gateway(
-        settings=GatewaySettings(API_KEY="12345", AUTHENTICATE=False, PORT=free_port),
+        settings=GatewaySettings(AUTHENTICATE=False, PORT=free_port),
         modules=[
             ExampleModule(),
             MountRestRoutes(force_mount_all=True),
+            MountControls(),
         ],
         channels=ExampleGatewayChannels(),
     )
@@ -145,6 +146,7 @@ def run_gateway(port_str):
         modules=[
             ExampleModule(),
             MountRestRoutes(force_mount_all=True),
+            MountControls(),
         ],
         channels=ExampleGatewayChannels(),
     )
