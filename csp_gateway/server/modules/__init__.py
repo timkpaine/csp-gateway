@@ -1,4 +1,5 @@
 from .controls import *
+from .filedrop import *
 from .initializer import *
 from .io import *
 from .kafka import *

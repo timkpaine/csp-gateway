@@ -71,11 +71,13 @@ server = [
     "omegaconf",
     "orjson",
     "perspective-python>=3.7,<4",
+    "polars",
     "psutil",
     "pyarrow",
     "pydantic>=2",
     "uvicorn>=0.28.1,<0.31",
     "uvloop",
+    "watchdog",
     "websockets",
 ]
 client = [
