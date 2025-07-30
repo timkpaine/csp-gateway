@@ -1,45 +1,31 @@
 import logging
 import os
-from datetime import datetime
-from enum import Enum, auto
-from typing import Dict, List, get_args, get_origin
+from typing import Dict, List
 
 import csp
-import orjson
-import polars as pl
 from ccflow import BaseModel
-from csp import ts
-from csp.impl.pushadapter import PushInputAdapter
-from csp.impl.types.container_type_normalizer import ContainerTypeNormalizer
-from csp.impl.wiring import py_push_adapter_def
 from pydantic import Field
-from watchdog.events import FileSystemEvent, FileSystemEventHandler
-from watchdog.observers import Observer
 
 from csp_gateway.server import (
     GatewayChannels,
     GatewayModule,
 )
 
+from .adapter import FileDropAdapterConfiguration, FileDropType, filedrop_adapter_def
+
 __all__ = (
-    "FiledropConfiguration",
-    "FiledropType",
-    "ReadFiledrop",
+    "ReadFileDropConfiguration",
+    "ReadFileDrop",
 )
 
 log = logging.getLogger(__name__)
 
 
-class FiledropType(Enum):
-    JSON = auto()
-    PARQUET = auto()
-
-
-class FiledropConfiguration(BaseModel):
+class ReadFileDropConfiguration(BaseModel):
     """The configuration of a filedrop adapter for a directory and filetype"""
 
     channel_name: str = Field(description="Name of the channel to send the structs to")
-    fd_type: FiledropType = Field(description="The type of files to expect and accordingly read i.e. parquet, json, etc")
+    filedrop_type: FileDropType = Field(description="The type of files to expect and accordingly read i.e. parquet, json, etc")
     field_map: Dict[str, str] = Field(
         default={}, description="A map to convert the keys in the data to the field names in the struct type of the channel"
     )
@@ -54,11 +40,11 @@ class FiledropConfiguration(BaseModel):
     )
 
 
-class ReadFiledrop(GatewayModule):
+class ReadFileDrop(GatewayModule):
     """The module to read data from files dropped in specific directories and send them as structs to specific channels"""
 
-    directory_configs: Dict[str, List[FiledropConfiguration]] = Field(
-        description="Mapping of directories to a list of FiledropConfiguration, for that directory in the filedrop module"
+    directory_configs: Dict[str, List[ReadFileDropConfiguration]] = Field(
+        description="Mapping of directories to a list of ReadFileDropConfiguration, for that directory in the filedrop module"
     )
 
     def connect(self, channels: GatewayChannels):
@@ -70,156 +56,19 @@ class ReadFiledrop(GatewayModule):
                 channel_data[config.channel_name] = []
         for dir, configs in self.directory_configs.items():
             for config in configs:
+                type_adapter_args = {
+                    "force_new_id": not config.subscribe_with_struct_id,
+                    "force_new_timestamp": not config.subscribe_with_struct_timestamp,
+                }
+                adapter_config = FileDropAdapterConfiguration(
+                    dir_path=dir,
+                    filedrop_type=config.filedrop_type,
+                    field_map=config.field_map,
+                    extensions=config.extensions,
+                    type_adapter_args=type_adapter_args,
+                )
                 channel_type = channels.get_outer_type(config.channel_name).typ
-                data = _filedrop_adapter_def(dir_path=dir, config=config, ts_typ=channel_type)
+                data = filedrop_adapter_def(config=adapter_config, ts_typ=channel_type)
                 channel_data[config.channel_name].append(data)
         for channel_name, data_list in channel_data.items():
             channels.set_channel(channel_name, csp.flatten(data_list))
-
-
-class FileReaderBase:
-    """The base file reader that reads data from files and generates structs"""
-
-    def __init__(self, config: FiledropConfiguration, ts_typ: object):
-        self.field_map = config.field_map
-        self.extensions = config.extensions
-        normalized_type = ContainerTypeNormalizer.normalize_type(ts_typ)
-        self.is_list = get_origin(normalized_type) is list
-        if self.is_list:
-            inner_type = get_args(normalized_type)[0]
-            type_adapter = inner_type.type_adapter()
-        else:
-            type_adapter = ts_typ.type_adapter()
-        self.type_adapter = type_adapter
-        self.context = {}
-        if not config.subscribe_with_struct_id:
-            self.context["force_new_id"] = True
-        if not config.subscribe_with_struct_timestamp:
-            self.context["force_new_timestamp"] = True
-
-    def read(self, src_path: str) -> object:
-        """Generator to return stucts from a filepath"""
-
-        should_read = True
-        if self.extensions:
-            if not any([src_path.endswith(suffix) for suffix in self.extensions]):
-                should_read = False
-        if should_read:
-            dicts = self.read_impl(src_path)
-            structs = [self.deserialize_dict(self.apply_field_map(v)) for v in dicts]
-            if self.is_list:
-                yield structs
-            else:
-                for s in structs:
-                    yield s
-
-    def read_impl(self, src_path: str) -> List[dict]:
-        """File type specific implementation"""
-
-        raise Exception(f"read not implemented for {self}")
-
-    def apply_field_map(self, data: dict) -> dict:
-        """Convert the keys in the data to the field names of the struct"""
-
-        if self.field_map:
-            new_data = {}
-            for k, v in data.items():
-                new_k = self.field_map.get(k, k)
-                new_data[new_k] = v
-            return new_data
-        else:
-            return data
-
-    def deserialize_dict(self, dict: dict) -> object:
-        """Convert a dict to struct"""
-
-        return self.type_adapter.validate_python(dict, context=self.context)
-
-
-class FileReaderParquet(FileReaderBase):
-    """File reader for parquet file type"""
-
-    def read_impl(self, src_path: str) -> List[dict]:
-        df = pl.read_parquet(src_path)
-        return df.to_dicts()
-
-
-class FileReaderJson(FileReaderBase):
-    """File reader for json file type"""
-
-    def read_impl(self, src_path: str) -> List[dict]:
-        with open(src_path, "rb") as f:
-            data = orjson.loads(f.read())
-        if isinstance(data, list):
-            res = data
-        else:
-            res = [data]
-        return res
-
-
-class EventHandlerCustom(FileSystemEventHandler):
-    def __init__(self, adapter: PushInputAdapter, dir_path: str, file_reader: FileReaderBase):
-        self.file_reader = file_reader
-        self.adapter = adapter
-        self.dir_path = dir_path
-        self._created = set()
-        self._opened = set()
-        self._modified = set()
-        self._closed = set()
-
-    def on_created(self, event: FileSystemEvent):
-        self._created.add(event.src_path)
-
-    def on_opened(self, event: FileSystemEvent):
-        if event.src_path in self._created:
-            self._created.remove(event.src_path)
-            self._opened.add(event.src_path)
-
-    def on_modified(self, event: FileSystemEvent):
-        if event.src_path in self._opened:
-            self._opened.remove(event.src_path)
-            self._modified.add(event.src_path)
-
-    def on_closed(self, event: FileSystemEvent):
-        if event.src_path in self._modified:
-            self._modified.remove(event.src_path)
-            file_path = event.src_path
-            try:
-                for data in self.file_reader.read(file_path):
-                    self.adapter.push_tick(data)
-            except Exception as e:
-                log.error(f"Failed to read data from {file_path} with exception: {e}, skipping")
-
-
-class _FiledropImpl(PushInputAdapter):
-    FILEREADER_MAP = {
-        FiledropType.PARQUET: FileReaderParquet,
-        FiledropType.JSON: FileReaderJson,
-    }
-
-    def __init__(self, dir_path: str, config: FiledropConfiguration, ts_typ: "T"):  # noqa
-        self.dir_path = dir_path
-        self.observer = Observer()
-        reader = self.FILEREADER_MAP[config.fd_type]
-        file_reader = reader(config, ts_typ)
-        self.event_handler = EventHandlerCustom(self, self.dir_path, file_reader)
-        self.observer.schedule(self.event_handler, self.dir_path, recursive=False)
-
-    def start(self, starttime: datetime, endtime: datetime):
-        self.observer.start()
-        self.observer_started = True
-
-    def stop(self):
-        if self.observer_started:
-            self.observer.stop()
-            self.observer.join()
-
-
-_filedrop_adapter_def = py_push_adapter_def(
-    "_filedrop_adapter_def",
-    _FiledropImpl,
-    ts["T"],
-    dir_path=str,
-    config=FiledropConfiguration,
-    ts_typ="T",
-)

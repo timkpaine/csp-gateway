@@ -1,1 +1,5 @@
-from .filedrop import *
+try:
+    from .adapter import *
+    from .filedrop import *
+except ImportError:
+    pass
