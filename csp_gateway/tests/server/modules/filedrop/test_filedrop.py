@@ -1,5 +1,6 @@
 import csv
 import logging
+import sys
 import tempfile
 from datetime import timedelta
 from pathlib import Path
@@ -10,6 +11,10 @@ import orjson
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+
+if not sys.platform.startswith("linux"):
+    pytest.skip("Skipping Linux-specific tests on macOS platforms", allow_module_level=True)
+
 from csp import ts
 
 from csp_gateway import AddChannelsToGraphOutput, FileDropType, GatewayChannels, GatewayModule, GatewayStruct, ReadFileDrop, ReadFileDropConfiguration

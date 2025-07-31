@@ -4,13 +4,13 @@ import csp
 
 from csp_gateway import (
     AddChannelsToGraphOutput,
-    FiledropConfiguration,
-    FiledropType,
+    FileDropType,
     Gateway,
     GatewayChannels,
     GatewayModule,
     GatewayStruct,
-    ReadFiledrop,
+    ReadFileDrop,
+    ReadFileDropConfiguration,
 )
 
 
@@ -32,7 +32,7 @@ class PrintModule(GatewayModule):
 
 
 if __name__ == "__main__":
-    # In this example, the functionality of ReadFiledrop is shown
+    # In this example, the functionality of ReadFileDrop is shown
 
     # When ran, this program will wait for:
     #  Any new json files in ./json_fd/
@@ -55,15 +55,15 @@ if __name__ == "__main__":
     channels = [GWC.data, GWC.list_data]
 
     print("Waiting for files in ./json_fd/ & ./parquet_fd/")
-    fd_module = ReadFiledrop(
+    fd_module = ReadFileDrop(
         directory_configs={
             "json_fd": [
-                FiledropConfiguration(channel_name="data", fd_type=FiledropType.JSON),
-                FiledropConfiguration(channel_name="list_data", fd_type=FiledropType.JSON),
+                ReadFileDropConfiguration(channel_name="data", filedrop_type=FileDropType.JSON),
+                ReadFileDropConfiguration(channel_name="list_data", filedrop_type=FileDropType.JSON),
             ],
             "parquet_fd": [
-                FiledropConfiguration(channel_name="data", fd_type=FiledropType.PARQUET),
-                FiledropConfiguration(channel_name="list_data", fd_type=FiledropType.PARQUET),
+                ReadFileDropConfiguration(channel_name="data", filedrop_type=FileDropType.PARQUET),
+                ReadFileDropConfiguration(channel_name="list_data", filedrop_type=FileDropType.PARQUET),
             ],
         }
     )
