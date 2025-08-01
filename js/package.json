@@ -15,13 +15,13 @@
     "prepack": "pnpm run build"
   },
   "dependencies": {
-    "@finos/perspective": "3.7.3",
-    "@finos/perspective-viewer": "3.7.3",
-    "@finos/perspective-viewer-d3fc": "3.7.3",
-    "@finos/perspective-viewer-datagrid": "3.7.3",
-    "@finos/perspective-workspace": "3.7.1",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "@finos/perspective": "3.7.4",
+    "@finos/perspective-viewer": "3.7.4",
+    "@finos/perspective-viewer-d3fc": "3.7.4",
+    "@finos/perspective-viewer-datagrid": "3.7.4",
+    "@finos/perspective-workspace": "3.7.4",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
     "react-icons": "^5.5.0",
     "react-modern-drawer": "^1.4.0"
   },
@@ -29,7 +29,7 @@
     "@finos/perspective-esbuild-plugin": "3.2.1",
     "@prospective.co/procss": "^0.1.17",
     "cpy": "^11.1.0",
-    "esbuild": "^0.25.5",
+    "esbuild": "^0.25.8",
     "npm-run-all": "^4.1.5",
     "prettier": "^3.6.2"
   }
