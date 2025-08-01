@@ -47,6 +47,7 @@ develop = [
     "datadog",
     "opsgenie_sdk",
     "sqlalchemy",
+    "watchdog",
     # client
     "aiohttp",
     "aiostream",
