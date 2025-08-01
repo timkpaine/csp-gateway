@@ -4,7 +4,7 @@ import sys
 import tempfile
 from datetime import timedelta
 from pathlib import Path
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import csp
 import orjson
@@ -40,11 +40,27 @@ class FDGatewayChannels(GatewayChannels):
     fd_channel: ts[FDStruct] = None
     fd_list_channel: ts[List[FDStruct]] = None
     fd_list_channel_2: ts[List[FDStruct]] = None
-    write_channel: ts[int] = None
+    fd_dict_channel: ts[Dict[str, FDStruct]] = None
+    fd_dict_basket_channel: Dict[str, ts[FDStruct]] = None
+
+    def dynamic_keys(self):
+        return {FDGatewayChannels.fd_dict_basket_channel: ["a", "b", "c"]}
+
+
+def convert_to_dict(data):
+    new_data = []
+    for d in data:
+        if isinstance(d, list):
+            new_data.append(convert_to_dict(d))
+        elif isinstance(d, dict):
+            new_data.append({k: v.to_dict() for k, v in d.items()})
+        else:
+            new_data.append(d.to_dict())
+    return new_data
 
 
 def csv_writer(path, data):
-    dict_data = [d.to_dict() for d in data]
+    dict_data = convert_to_dict(data)
     fieldnames = []
     for d in dict_data:
         fieldnames.extend(list(d.keys()))
@@ -56,7 +72,7 @@ def csv_writer(path, data):
 
 
 def json_writer(path, data, write_bad_file=False, field_map=None):
-    dict_data = [d.to_dict() for d in data]
+    dict_data = convert_to_dict(data)
     if field_map:
         new_dict_data = []
         for d in dict_data:
@@ -84,7 +100,7 @@ def json_writer_field_map(path, data):
 
 
 def parquet_writer(path, data):
-    table = pa.Table.from_pylist([d.to_dict() for d in data])
+    table = pa.Table.from_pylist(convert_to_dict(data))
     pq.write_table(table, path)
 
 
@@ -163,9 +179,9 @@ def test_basic(structs):
 @pytest.mark.parametrize(
     "structs",
     [
-        [FDStruct(i=i) for i in range(1)],
-        [FDStruct(i=i) for i in range(10)],
-        [FDStruct(i=i) for i in range(100)],
+        [[FDStruct(i=i) for i in range(1)]],
+        [[FDStruct(i=i) for i in range(10)]],
+        [[FDStruct(i=i) for i in range(100)]],
     ],
 )
 def test_list_of_structs(structs):
@@ -186,10 +202,10 @@ def test_list_of_structs(structs):
         out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
         out_data = [d[1] for d in out["fd_list_channel"]]
         assert len(out_data) == 1
-        match_lists(out_data, structs)
+        match_lists(out_data, structs[0])
 
 
-@pytest.mark.parametrize("structs", [[FDStruct(i=i) for i in range(10)]])
+@pytest.mark.parametrize("structs", [[[FDStruct(i=i) for i in range(10)]]])
 @pytest.mark.parametrize("no_readers", [1, 2, 5])
 def test_multi_readers_single_channel_single_dir(structs, no_readers):
     with tempfile.TemporaryDirectory(dir=".") as dir:
@@ -210,10 +226,10 @@ def test_multi_readers_single_channel_single_dir(structs, no_readers):
         out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
         out_data = [d[1] for d in out["fd_list_channel"]]
         assert len(out_data) == no_readers
-        match_lists(out_data, structs)
+        match_lists(out_data, structs[0])
 
 
-@pytest.mark.parametrize("structs", [[FDStruct(i=i) for i in range(10)]])
+@pytest.mark.parametrize("structs", [[[FDStruct(i=i) for i in range(10)]]])
 def test_multi_readers_multi_channel_single_directory(structs):
     with tempfile.TemporaryDirectory(dir=".") as dir:
         dirpath = Path(dir)
@@ -235,16 +251,16 @@ def test_multi_readers_multi_channel_single_directory(structs):
         out_data_2 = [d[1] for d in out["fd_list_channel_2"]]
         assert len(out_data_1) == 1
         assert len(out_data_2) == 1
-        match_lists(out_data_1, structs)
-        match_lists(out_data_2, structs)
+        match_lists(out_data_1, structs[0])
+        match_lists(out_data_2, structs[0])
 
 
 @pytest.mark.parametrize(
     "structs",
     [
-        [FDStruct(i=i) for i in range(1)],
-        [FDStruct(i=i) for i in range(10)],
-        [FDStruct(i=i) for i in range(100)],
+        [[FDStruct(i=i) for i in range(1)]],
+        [[FDStruct(i=i) for i in range(10)]],
+        [[FDStruct(i=i) for i in range(100)]],
     ],
 )
 def test_single_channel_multi_dir(structs):
@@ -272,15 +288,15 @@ def test_single_channel_multi_dir(structs):
             out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
             out_data = [d[1] for d in out["fd_list_channel"]]
             assert len(out_data) == 2
-            match_lists(out_data, structs)
+            match_lists(out_data, structs[0])
 
 
 @pytest.mark.parametrize(
     "structs",
     [
-        [FDStruct(i=i) for i in range(1)],
-        [FDStruct(i=i) for i in range(10)],
-        [FDStruct(i=i) for i in range(100)],
+        [[FDStruct(i=i) for i in range(1)]],
+        [[FDStruct(i=i) for i in range(10)]],
+        [[FDStruct(i=i) for i in range(100)]],
     ],
 )
 def test_multi_channel_multi_dir(structs):
@@ -310,8 +326,8 @@ def test_multi_channel_multi_dir(structs):
             out_data_2 = [d[1] for d in out["fd_list_channel_2"]]
             assert len(out_data_1) == 1
             assert len(out_data_2) == 1
-            match_lists(out_data_1, structs)
-            match_lists(out_data_2, structs)
+            match_lists(out_data_1, structs[0])
+            match_lists(out_data_2, structs[0])
 
 
 @pytest.mark.parametrize(
@@ -398,7 +414,7 @@ def test_invalid_struct(caplog):
 @pytest.mark.parametrize(
     "filedata",
     [
-        [[0.1, f"file{idx}", [FDStruct(i=val) for val in range(idx + 1)]] for idx in range(1)],
+        [[0.1, f"file{idx}", [FDStruct(i=val) for val in range(idx + 1)]] for idx in range(2)],
         [[0.01, f"file{idx}", [FDStruct(i=val) for val in range(idx + 1)]] for idx in range(10)],
         [[0.01, f"file{idx}", [FDStruct(i=val) for val in range(idx + 1)]] for idx in range(100)],
     ],
@@ -410,7 +426,7 @@ def test_multiple_files(writer_data, filedata):
         fd_module = ReadFileDrop(
             directory_configs={
                 str(dirpath): [
-                    ReadFileDropConfiguration(channel_name="fd_list_channel", filedrop_type=writer_data[1]),
+                    ReadFileDropConfiguration(channel_name="fd_channel", filedrop_type=writer_data[1]),
                 ],
             }
         )
@@ -419,17 +435,21 @@ def test_multiple_files(writer_data, filedata):
             channels=FDGatewayChannels(),
         )
         out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
-        assert len(out["fd_list_channel"]) == len(filedata)
-        for idx, d in enumerate(out["fd_list_channel"]):
-            match_data(d[1], filedata[idx][2])
+        s = sum([len(fd[2]) for fd in filedata])
+        assert len(out["fd_channel"]) == s
+        csp_data = [d[1] for d in out["fd_channel"]]
+        fd = []
+        for fd_data in filedata:
+            fd.extend(fd_data[2])
+        match_data(csp_data, fd)
 
 
 @pytest.mark.parametrize(
     "structs",
     [
         [FDStruct(i=i, s=chr(ord("a") + i % 26)) for i in range(1)],
-        #  [FDStruct(i=i, s=chr(ord('a') + i%26)) for i in range(10)],
-        #  [FDStruct(i=i, s=chr(ord('a') + i%26)) for i in range(100)],
+        [FDStruct(i=i, s=chr(ord("a") + i % 26)) for i in range(10)],
+        [FDStruct(i=i, s=chr(ord("a") + i % 26)) for i in range(100)],
     ],
 )
 def test_config_options(structs):
@@ -475,8 +495,8 @@ def test_config_options(structs):
 
 
 def test_extensions():
-    structs_1 = [FDStruct(i=i) for i in range(10)]
-    structs_2 = [FDStruct(i=i) for i in range(20)]
+    structs_1 = [[FDStruct(i=i) for i in range(10)]]
+    structs_2 = [[FDStruct(i=i) for i in range(20)]]
     with tempfile.TemporaryDirectory(dir=".") as dir:
         dirpath = Path(dir)
         writer = Writer(
@@ -499,5 +519,56 @@ def test_extensions():
         out_data_2 = [d[1] for d in out["fd_list_channel_2"]]
         assert len(out_data_1) == 1
         assert len(out_data_2) == 1
-        match_lists(out_data_1, structs_1)
-        match_lists(out_data_2, structs_2)
+        match_lists(out_data_1, structs_1[0])
+        match_lists(out_data_2, structs_2[0])
+
+
+@pytest.mark.parametrize(
+    "structs",
+    [
+        [{"a": FDStruct(i=i)} for i in range(1)],
+        [{"a": FDStruct(i=i)} for i in range(10)],
+        [{"a": FDStruct(i=i)} for i in range(100)],
+    ],
+)
+def test_dict(structs):
+    with tempfile.TemporaryDirectory(dir=".") as dir:
+        dirpath = Path(dir)
+        writer = Writer(data=[[1, json_writer, str(dirpath / "json_file1.json"), structs]])
+        fd_module = ReadFileDrop(
+            directory_configs={
+                str(dirpath): [
+                    ReadFileDropConfiguration(channel_name="fd_dict_channel", filedrop_type=FileDropType.JSON),
+                ],
+            }
+        )
+        gateway = MyGateway(
+            modules=[writer, fd_module, AddChannelsToGraphOutput()],
+            channels=FDGatewayChannels(),
+        )
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+        csp_data = [d[1] for d in out["fd_dict_channel"]]
+        for d in csp_data:
+            assert "a" in d
+        csp_data = [d["a"] for d in csp_data]
+        data = [d["a"] for d in structs]
+        match_data(csp_data, data)
+
+    with tempfile.TemporaryDirectory(dir=".") as dir:
+        dirpath = Path(dir)
+        writer = Writer(data=[[1, json_writer, str(dirpath / "json_file1.json"), structs]])
+        fd_module = ReadFileDrop(
+            directory_configs={
+                str(dirpath): [
+                    ReadFileDropConfiguration(channel_name="fd_dict_basket_channel", filedrop_type=FileDropType.JSON),
+                ],
+            }
+        )
+        gateway = MyGateway(
+            modules=[writer, fd_module, AddChannelsToGraphOutput()],
+            channels=FDGatewayChannels(),
+        )
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+        csp_data = [d[1] for d in out["fd_dict_basket_channel[a]"]]
+        data = [d["a"] for d in structs]
+        match_data(csp_data, data)

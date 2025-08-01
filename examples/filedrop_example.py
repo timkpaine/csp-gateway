@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 import csp
 
@@ -14,13 +15,25 @@ from csp_gateway import (
 )
 
 
+class MySubStruct(GatewayStruct):
+    foo: str
+
+
 class MyStruct(GatewayStruct):
     foo: str
 
 
 class GWC(GatewayChannels):
     data: csp.ts[MyStruct] = None
-    list_data: csp.ts[[MyStruct]] = None
+    list_data: csp.ts[List[MyStruct]] = None
+    dict_data: dict[str, csp.ts[MyStruct]] = None
+
+    def dynamic_keys(self) -> Optional[Dict[str, List[Any]]]:
+        """Define dynamic dictionary keys by field, driven by data from the channels."""
+        keys = ["a", "b", "c"]
+        return {
+            GWC.dict_data: keys,
+        }
 
 
 class PrintModule(GatewayModule):
@@ -29,6 +42,8 @@ class PrintModule(GatewayModule):
         csp.print("Data", data)
         list_data = channels.get_channel(GWC.list_data)
         csp.print("ListData", list_data)
+        dict_data = channels.get_channel(GWC.dict_data)
+        csp.print("DictData", dict_data)
 
 
 if __name__ == "__main__":
@@ -60,10 +75,12 @@ if __name__ == "__main__":
             "json_fd": [
                 ReadFileDropConfiguration(channel_name="data", filedrop_type=FileDropType.JSON),
                 ReadFileDropConfiguration(channel_name="list_data", filedrop_type=FileDropType.JSON),
+                ReadFileDropConfiguration(channel_name="dict_data", filedrop_type=FileDropType.JSON),
             ],
             "parquet_fd": [
                 ReadFileDropConfiguration(channel_name="data", filedrop_type=FileDropType.PARQUET),
                 ReadFileDropConfiguration(channel_name="list_data", filedrop_type=FileDropType.PARQUET),
+                ReadFileDropConfiguration(channel_name="dict_data", filedrop_type=FileDropType.PARQUET),
             ],
         }
     )

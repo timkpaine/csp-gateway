@@ -1,9 +1,11 @@
 import logging
 import os
-from typing import Dict, List
+from typing import Dict, List, TypeVar, get_args, get_origin
 
 import csp
 from ccflow import BaseModel
+from csp.impl.types.container_type_normalizer import ContainerTypeNormalizer
+from csp.impl.types.tstype import isTsType
 from pydantic import Field
 
 from csp_gateway.server import (
@@ -40,6 +42,10 @@ class ReadFileDropConfiguration(BaseModel):
     )
 
 
+T = TypeVar("T")
+K = TypeVar("K")
+
+
 class ReadFileDrop(GatewayModule):
     """The module to read data from files dropped in specific directories and send them as structs to specific channels"""
 
@@ -47,8 +53,20 @@ class ReadFileDrop(GatewayModule):
         description="Mapping of directories to a list of ReadFileDropConfiguration, for that directory in the filedrop module"
     )
 
+    @csp.node
+    def handle_list_basket(self, data: csp.ts[List[T]], list_size: int) -> csp.OutputBasket(List[csp.ts[T]], shape="list_size"):
+        if csp.ticked(data):
+            return data
+
+    @csp.node
+    def handle_dict_basket(self, data: csp.ts[Dict[K, T]], dict_keys: List[K]) -> csp.OutputBasket(Dict[K, csp.ts[T]], shape="dict_keys"):
+        if csp.ticked(data):
+            return data
+
     def connect(self, channels: GatewayChannels):
         channel_data = {}
+        channel_basket_types = {}
+        channel_base_types = {}
         for dir, configs in self.directory_configs.items():
             # ensure that directories exist
             os.makedirs(dir, exist_ok=True)
@@ -56,7 +74,7 @@ class ReadFileDrop(GatewayModule):
                 channel_data[config.channel_name] = []
         for dir, configs in self.directory_configs.items():
             for config in configs:
-                type_adapter_args = {
+                context = {
                     "force_new_id": not config.subscribe_with_struct_id,
                     "force_new_timestamp": not config.subscribe_with_struct_timestamp,
                 }
@@ -65,10 +83,40 @@ class ReadFileDrop(GatewayModule):
                     filedrop_type=config.filedrop_type,
                     field_map=config.field_map,
                     extensions=config.extensions,
-                    type_adapter_args=type_adapter_args,
+                    type_adapter_args=context,
                 )
-                channel_type = channels.get_outer_type(config.channel_name).typ
-                data = filedrop_adapter_def(config=adapter_config, ts_typ=channel_type)
+                channel_type = channels.get_outer_type(config.channel_name)
+                if isTsType(channel_type):
+                    non_ts_type = channel_type.typ
+                    channel_basket_types[config.channel_name] = ""
+                else:
+                    normalized_type = ContainerTypeNormalizer.normalize_type(channel_type)
+                    if get_origin(normalized_type) is list:
+                        inner_type = get_args(normalized_type)[0]
+                        if not isTsType(inner_type):
+                            raise ValueError(f"Channel type for {config.channel_name} should be of the form List[TsType], got: {channel_type}")
+                        non_ts_type = List[inner_type.typ]
+                        channel_basket_types[config.channel_name] = "list"
+                    elif get_origin(normalized_type) is dict:
+                        key_type, inner_type = get_args(normalized_type)
+                        if not isTsType(inner_type):
+                            raise ValueError(
+                                f"Channel type for {config.channel_name} should be of the form Dict[KeyType, TsType], got: {channel_type}"
+                            )
+                        non_ts_type = Dict[key_type, inner_type.typ]
+                        channel_basket_types[config.channel_name] = "dict"
+                    else:
+                        raise Exception(f"Channel type cannot be handled: {channel_type}")
+                channel_base_types[config.channel_name] = non_ts_type
+                # NOTE: We have to pass in the type as [type] because of the type normalization issue in csp: https://github.com/Point72/csp/issues/569
+                data = filedrop_adapter_def(config=adapter_config, ts_typ=[non_ts_type], deserializer=None)
                 channel_data[config.channel_name].append(data)
         for channel_name, data_list in channel_data.items():
-            channels.set_channel(channel_name, csp.flatten(data_list))
+            data = csp.flatten(data_list)
+            typed_data = csp.apply(data, lambda x: x, channel_base_types[channel_name])
+            if channel_basket_types[channel_name] == "list":
+                channels.set_channel(channel_name, self.handle_list_basket(typed_data, list_size=channels.dynamic_keys()[channel_name]))
+            elif channel_basket_types[channel_name] == "dict":
+                channels.set_channel(channel_name, self.handle_dict_basket(typed_data, dict_keys=channels.dynamic_keys()[channel_name]))
+            else:
+                channels.set_channel(channel_name, typed_data)
