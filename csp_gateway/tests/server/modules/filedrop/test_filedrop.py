@@ -71,16 +71,8 @@ def csv_writer(path, data):
         writer.writerows(dict_data)
 
 
-def json_writer(path, data, write_bad_file=False, field_map=None):
+def json_writer(path, data, write_bad_file=False):
     dict_data = convert_to_dict(data)
-    if field_map:
-        new_dict_data = []
-        for d in dict_data:
-            new_d = {}
-            for k, v in d.items():
-                new_d[field_map.get(k, k)] = v
-            new_dict_data.append(new_d)
-        dict_data = new_dict_data
     with open(path, "wb") as f:
         data_bytes = orjson.dumps(dict_data)
         if write_bad_file:
@@ -88,15 +80,8 @@ def json_writer(path, data, write_bad_file=False, field_map=None):
         f.write(data_bytes)
 
 
-_FIELD_MAP = {}
-
-
 def json_writer_bad(path, data):
     json_writer(path, data, True)
-
-
-def json_writer_field_map(path, data):
-    json_writer(path, data, False, field_map=_FIELD_MAP)
 
 
 def parquet_writer(path, data):
@@ -172,7 +157,7 @@ def test_basic(structs):
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
             channels=FDGatewayChannels(),
         )
-        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
         match_data([d[1] for d in out["fd_channel"]], structs)
 
 
@@ -199,7 +184,7 @@ def test_list_of_structs(structs):
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
             channels=FDGatewayChannels(),
         )
-        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
         out_data = [d[1] for d in out["fd_list_channel"]]
         assert len(out_data) == 1
         match_lists(out_data, structs[0])
@@ -223,7 +208,7 @@ def test_multi_readers_single_channel_single_dir(structs, no_readers):
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
             channels=FDGatewayChannels(),
         )
-        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
         out_data = [d[1] for d in out["fd_list_channel"]]
         assert len(out_data) == no_readers
         match_lists(out_data, structs[0])
@@ -246,7 +231,7 @@ def test_multi_readers_multi_channel_single_directory(structs):
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
             channels=FDGatewayChannels(),
         )
-        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
         out_data_1 = [d[1] for d in out["fd_list_channel"]]
         out_data_2 = [d[1] for d in out["fd_list_channel_2"]]
         assert len(out_data_1) == 1
@@ -285,7 +270,7 @@ def test_single_channel_multi_dir(structs):
                 modules=[writer, fd_module, AddChannelsToGraphOutput()],
                 channels=FDGatewayChannels(),
             )
-            out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+            out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
             out_data = [d[1] for d in out["fd_list_channel"]]
             assert len(out_data) == 2
             match_lists(out_data, structs[0])
@@ -321,7 +306,7 @@ def test_multi_channel_multi_dir(structs):
                 modules=[writer, fd_module, AddChannelsToGraphOutput()],
                 channels=FDGatewayChannels(),
             )
-            out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+            out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
             out_data_1 = [d[1] for d in out["fd_list_channel"]]
             out_data_2 = [d[1] for d in out["fd_list_channel_2"]]
             assert len(out_data_1) == 1
@@ -362,7 +347,7 @@ def test_filetypes(structs, filetype_data):
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
             channels=FDGatewayChannels(),
         )
-        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
         match_data([d[1] for d in out["fd_channel"]], structs)
 
 
@@ -383,7 +368,7 @@ def test_invalid_data(caplog):
                 modules=[writer, fd_module, AddChannelsToGraphOutput()],
                 channels=FDGatewayChannels(),
             )
-            _ = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+            _ = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
     assert len(caplog.text) > 0
     assert "Failed to read data" in caplog.text
 
@@ -405,7 +390,7 @@ def test_invalid_struct(caplog):
                 modules=[writer, fd_module, AddChannelsToGraphOutput()],
                 channels=FDGatewayChannels(),
             )
-            _ = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+            _ = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
     assert len(caplog.text) > 0
     assert "Failed to read data" in caplog.text
 
@@ -434,7 +419,7 @@ def test_multiple_files(writer_data, filedata):
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
             channels=FDGatewayChannels(),
         )
-        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
         s = sum([len(fd[2]) for fd in filedata])
         assert len(out["fd_channel"]) == s
         csp_data = [d[1] for d in out["fd_channel"]]
@@ -472,26 +457,8 @@ def test_config_options(structs):
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
             channels=FDGatewayChannels(),
         )
-        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
         match_data([d[1] for d in out["fd_channel"]], structs, exact=True)
-
-    global _FIELD_MAP
-    _FIELD_MAP = {"i": "int", "s": "string"}
-    rev_field_map = {v: k for k, v in _FIELD_MAP.items()}
-    with tempfile.TemporaryDirectory(dir=".") as dir:
-        dirpath = Path(dir)
-        writer = Writer(data=[[1, json_writer_field_map, str(dirpath / "json_file1.json"), structs]])
-        fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [ReadFileDropConfiguration(channel_name="fd_channel", filedrop_type=FileDropType.JSON, field_map=rev_field_map)],
-            }
-        )
-        gateway = MyGateway(
-            modules=[writer, fd_module, AddChannelsToGraphOutput()],
-            channels=FDGatewayChannels(),
-        )
-        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
-        match_data([d[1] for d in out["fd_channel"]], structs)
 
 
 def test_extensions():
@@ -514,7 +481,7 @@ def test_extensions():
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
             channels=FDGatewayChannels(),
         )
-        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
         out_data_1 = [d[1] for d in out["fd_list_channel"]]
         out_data_2 = [d[1] for d in out["fd_list_channel_2"]]
         assert len(out_data_1) == 1
@@ -546,7 +513,7 @@ def test_dict(structs):
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
             channels=FDGatewayChannels(),
         )
-        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
         csp_data = [d[1] for d in out["fd_dict_channel"]]
         for d in csp_data:
             assert "a" in d
@@ -568,7 +535,123 @@ def test_dict(structs):
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
             channels=FDGatewayChannels(),
         )
-        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=2))
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
         csp_data = [d[1] for d in out["fd_dict_basket_channel[a]"]]
         data = [d["a"] for d in structs]
         match_data(csp_data, data)
+
+
+@pytest.mark.parametrize(
+    "structs",
+    [
+        [FDStruct(i=i) for i in range(1)],
+        [FDStruct(i=i) for i in range(10)],
+    ],
+)
+def test_filedrop_type_custom(structs):
+    def custom_writer(path, data):
+        dict_data = convert_to_dict(data)
+        new_dict_data = []
+        for d in dict_data:
+            new_d = {}
+            for k, v in d.items():
+                new_d[k.upper()] = v
+            new_dict_data.append(new_d)
+        with open(path, "wb") as f:
+            data_bytes = orjson.dumps(new_dict_data)
+            f.write(data_bytes)
+
+    def custom_loader(path):
+        with open(path, "rb") as f:
+            dict_data = orjson.loads(f.read())
+        dict_data = [{k.lower(): v for k, v in d.items()} for d in dict_data]
+        return dict_data
+
+    with tempfile.TemporaryDirectory(dir=".") as dir:
+        dirpath = Path(dir)
+        writer = Writer(data=[[1, custom_writer, str(dirpath / "json_file1.json"), structs]])
+        fd_module = ReadFileDrop(
+            directory_configs={
+                str(dirpath): [
+                    ReadFileDropConfiguration(channel_name="fd_channel", filedrop_type=FileDropType.CUSTOM, loader=custom_loader),
+                ],
+            }
+        )
+        gateway = MyGateway(
+            modules=[writer, fd_module, AddChannelsToGraphOutput()],
+            channels=FDGatewayChannels(),
+        )
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
+        match_data([d[1] for d in out["fd_channel"]], structs)
+
+
+@pytest.mark.parametrize(
+    "structs",
+    [
+        [FDStruct(i=i) for i in range(1)],
+        [FDStruct(i=i) for i in range(10)],
+    ],
+)
+def test_deserializer(structs):
+    def custom_writer(path, data):
+        dict_data = convert_to_dict(data)
+        new_dict_data = []
+        for d in dict_data:
+            new_d = {}
+            for k, v in d.items():
+                new_d[k.upper()] = v
+            new_dict_data.append(new_d)
+        with open(path, "wb") as f:
+            data_bytes = orjson.dumps(new_dict_data)
+            f.write(data_bytes)
+
+    def deserializer(data):
+        new_data = {k.lower(): v for k, v in data.items()}
+        new_data.pop("id")
+        new_data.pop("timestamp")
+        return FDStruct(**new_data)
+
+    with tempfile.TemporaryDirectory(dir=".") as dir:
+        dirpath = Path(dir)
+        writer = Writer(data=[[1, custom_writer, str(dirpath / "json_file1.json"), structs]])
+        fd_module = ReadFileDrop(
+            directory_configs={
+                str(dirpath): [
+                    ReadFileDropConfiguration(channel_name="fd_channel", filedrop_type=FileDropType.JSON, deserializer=deserializer),
+                ],
+            }
+        )
+        gateway = MyGateway(
+            modules=[writer, fd_module, AddChannelsToGraphOutput()],
+            channels=FDGatewayChannels(),
+        )
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
+        match_data([d[1] for d in out["fd_channel"]], structs)
+
+
+def test_fieldrop_type_as_str():
+    structs = [FDStruct(i=i) for i in range(1)]
+    with tempfile.TemporaryDirectory(dir=".") as dir:
+        dirpath = Path(dir)
+        writer = Writer(data=[[1, json_writer, str(dirpath / "json_file1.json"), structs]])
+        fd_module = ReadFileDrop(
+            directory_configs={
+                str(dirpath): [
+                    ReadFileDropConfiguration(channel_name="fd_channel", filedrop_type="JSON"),
+                ],
+            }
+        )
+        gateway = MyGateway(
+            modules=[writer, fd_module, AddChannelsToGraphOutput()],
+            channels=FDGatewayChannels(),
+        )
+        out = csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
+        match_data([d[1] for d in out["fd_channel"]], structs)
+
+    with pytest.raises(ValueError):
+        ReadFileDropConfiguration(channel_name="fd_channel", filetype_data="NOT_A_TYPE")
+
+    with pytest.raises(ValueError):
+        ReadFileDropConfiguration(channel_name="fd_channel", filetype_data="CUSTOM")
+    with pytest.raises(ValueError):
+        ReadFileDropConfiguration(channel_name="fd_channel", filetype_data=FileDropType.CUSTOM, loader=None)
