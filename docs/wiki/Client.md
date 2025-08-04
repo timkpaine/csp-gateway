@@ -14,7 +14,7 @@ We can also specify in the config `return_raw_json`, which specifies whether we 
 
 A client as a small number of general-purpose methods. In alphabetical order:
 
-- `controls`: managment controls for monitoring/configurating the running server
+- `controls`: management controls for monitoring/configuring the running server
 - `last`: get the last ticked data value on a channel
 - `lookup`: lookup a piece of data by `id`
 - `next`: get the next ticked data value on a channel
@@ -55,11 +55,13 @@ The first time we use our client, it will take a little longer than usual as it 
 client.controls("heartbeat").as_json()
 ```
 
-    [{'id': '2319375449026723841',
-      'timestamp': '2024-02-08T15:42:24.529000+00:00',
-      'name': 'heartbeat',
-      'status': 'ok',
-      'data': {}}]
+```
+[{'id': '2319375449026723841',
+  'timestamp': '2024-02-08T15:42:24.529000+00:00',
+  'name': 'heartbeat',
+  'status': 'ok',
+  'data': {}}]
+```
 
 ```python
 # openapi spec
@@ -67,24 +69,28 @@ from IPython.display import JSON
 JSON(client._openapi_spec)
 ```
 
-    <IPython.core.display.JSON object>
+```
+<IPython.core.display.JSON object>
+```
 
 ```python
 # machine stats
 client.controls("stats").as_json()
 ```
 
-    [{'id': '2319375449026723842',
-      'timestamp': '2024-02-08T15:42:24.707000+00:00',
-      'name': 'stats',
-      'status': 'ok',
-      'data': {'cpu': 9.5,
-       'memory': 70.0,
-       'memory-total': 29.98,
-       'now': '2024-02-08T15:42:24.709000+00:00',
-       'csp-now': '2024-02-08T15:42:24.707178+00:00',
-       'host': 'devqtccrt06',
-       'user': 'nk12433'}}]
+```
+[{'id': '2319375449026723842',
+  'timestamp': '2024-02-08T15:42:24.707000+00:00',
+  'name': 'stats',
+  'status': 'ok',
+  'data': {'cpu': 9.5,
+   'memory': 70.0,
+   'memory-total': 29.98,
+   'now': '2024-02-08T15:42:24.709000+00:00',
+   'csp-now': '2024-02-08T15:42:24.707178+00:00',
+   'host': 'devqtccrt06',
+   'user': 'nk12433'}}]
+```
 
 ## Last, State, Lookup, Send
 
@@ -94,81 +100,87 @@ Let's look at what channels we have available for `last`:
 client.last().as_json()
 ```
 
-    ['never_ticks', 'example', 'example_list', 'str_basket', 'controls', 'basket']
+```
+['never_ticks', 'example', 'example_list', 'str_basket', 'controls', 'basket']
+```
 
 ```python
 client.last("example").as_json()
 ```
 
-    [{'id': '2319375449093843665',
-      'timestamp': '2024-02-08T15:42:24.674000+00:00',
-      'x': 2740,
-      'y': '274027402740',
-      'internal_csp_struct': {'z': 12},
-      'data': [0.04214403621123841,
-       0.2777565518959145,
-       0.8924844325909429,
-       0.34476509440152614,
-       0.20822638755894596,
-       0.9031877679300264,
-       0.6124216455541363,
-       0.9848707643841728,
-       0.618990569185841,
-       0.5582898776824039],
-      'mapping': {'2740': 2740}}]
+```
+[{'id': '2319375449093843665',
+  'timestamp': '2024-02-08T15:42:24.674000+00:00',
+  'x': 2740,
+  'y': '274027402740',
+  'internal_csp_struct': {'z': 12},
+  'data': [0.04214403621123841,
+   0.2777565518959145,
+   0.8924844325909429,
+   0.34476509440152614,
+   0.20822638755894596,
+   0.9031877679300264,
+   0.6124216455541363,
+   0.9848707643841728,
+   0.618990569185841,
+   0.5582898776824039],
+  'mapping': {'2740': 2740}}]
+```
 
 ```python
 client.last("basket").as_json()
 ```
 
-    [{'id': '2319375449093843662',
-      'timestamp': '2024-02-08T15:42:24.674000+00:00',
-      'x': 2740,
-      'y': '2740',
-      'internal_csp_struct': {'z': 12},
-      'data': [0.4358136168874479,
-       0.9866855468623034,
-       0.7370733232695977,
-       0.2473537128693415,
-       0.33386372679049414,
-       0.855059230303771,
-       0.23094109313426026,
-       0.15447614788689634,
-       0.028364551604262656,
-       0.3461902446665106],
-      'mapping': {'2740': 2740}},
-     {'id': '2319375449093843663',
-      'timestamp': '2024-02-08T15:42:24.674000+00:00',
-      'x': 2740,
-      'y': '27402740',
-      'internal_csp_struct': {'z': 12},
-      'data': [0.6377430109697712,
-       0.9945325429350265,
-       0.21250129814975605,
-       0.7428201790683369,
-       0.748495275897516,
-       0.7495896160497952,
-       0.052122337434189814,
-       0.28571381888827774,
-       0.15916263368074623,
-       0.5859045937429175],
-      'mapping': {'2740': 2740}},
-     {'id': '2319375449093843664',
-      'timestamp': '2024-02-08T15:42:24.674000+00:00',
-      'x': 2740,
-      'y': '274027402740',
-      'internal_csp_struct': {'z': 12},
-      'data': [0.09866777488177447,
-       0.9338912139505706,
-       0.4008220677833475,
-       0.3970734597363782,
-       0.5698499914906174,
-       0.9409930883247017,
-       0.40646346343477957,
-       0.6625127227460902,
-       0.6663193112635586,
-       0.7144147693528888],
-      'mapping': {'2740': 2740}}]
+```
+[{'id': '2319375449093843662',
+  'timestamp': '2024-02-08T15:42:24.674000+00:00',
+  'x': 2740,
+  'y': '2740',
+  'internal_csp_struct': {'z': 12},
+  'data': [0.4358136168874479,
+   0.9866855468623034,
+   0.7370733232695977,
+   0.2473537128693415,
+   0.33386372679049414,
+   0.855059230303771,
+   0.23094109313426026,
+   0.15447614788689634,
+   0.028364551604262656,
+   0.3461902446665106],
+  'mapping': {'2740': 2740}},
+ {'id': '2319375449093843663',
+  'timestamp': '2024-02-08T15:42:24.674000+00:00',
+  'x': 2740,
+  'y': '27402740',
+  'internal_csp_struct': {'z': 12},
+  'data': [0.6377430109697712,
+   0.9945325429350265,
+   0.21250129814975605,
+   0.7428201790683369,
+   0.748495275897516,
+   0.7495896160497952,
+   0.052122337434189814,
+   0.28571381888827774,
+   0.15916263368074623,
+   0.5859045937429175],
+  'mapping': {'2740': 2740}},
+ {'id': '2319375449093843664',
+  'timestamp': '2024-02-08T15:42:24.674000+00:00',
+  'x': 2740,
+  'y': '274027402740',
+  'internal_csp_struct': {'z': 12},
+  'data': [0.09866777488177447,
+   0.9338912139505706,
+   0.4008220677833475,
+   0.3970734597363782,
+   0.5698499914906174,
+   0.9409930883247017,
+   0.40646346343477957,
+   0.6625127227460902,
+   0.6663193112635586,
+   0.7144147693528888],
+  'mapping': {'2740': 2740}}]
+```
 
 ```python
 client.last("basket").as_pandas_df()
@@ -180,13 +192,15 @@ client.last("basket").as_pandas_df()
         vertical-align: middle;
     }
 
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
+```
+.dataframe tbody tr th {
+    vertical-align: top;
+}
 
-    .dataframe thead th {
-        text-align: right;
-    }
+.dataframe thead th {
+    text-align: right;
+}
+```
 
 </style>
 <table border="1" class="dataframe">
@@ -251,14 +265,16 @@ State channels are used to perform state accumulation over a number of ticks. Th
 client.state().as_json()
 ```
 
-    ['example']
+```
+['example']
+```
 
 ```python
 client.state("example").as_pandas_df().tail()
 
 # We note that there are a large number of columns in the above dataframe.
 # This is because `mapping` is a dict with different keys for eery row.
-# To accomodate all of them, the returned pandas dataframe has a column for any key present in the `mapping` attribute of any `ExampleData` Struct
+# To accommodate all of them, the returned pandas dataframe has a column for any key present in the `mapping` attribute of any `ExampleData` Struct
 ```
 
 <div>
@@ -267,13 +283,15 @@ client.state("example").as_pandas_df().tail()
         vertical-align: middle;
     }
 
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
+```
+.dataframe tbody tr th {
+    vertical-align: top;
+}
 
-    .dataframe thead th {
-        text-align: right;
-    }
+.dataframe thead th {
+    text-align: right;
+}
+```
 
 </style>
 <table border="1" class="dataframe">
@@ -438,22 +456,24 @@ last_id = last["id"]
 client.lookup("example", last_id).as_json()
 ```
 
-    [{'id': '2319375449093843677',
-      'timestamp': '2024-02-08T15:42:27.674000+00:00',
-      'x': 2743,
-      'y': '274327432743',
-      'internal_csp_struct': {'z': 12},
-      'data': [0.11397482092369415,
-       0.8082756046612577,
-       0.5269320054610495,
-       0.09017303257799603,
-       0.8346823428352325,
-       0.12803545825097729,
-       0.8563661560959381,
-       0.8337489771318026,
-       0.9665893466463059,
-       0.7835381554236741],
-      'mapping': {'2743': 2743}}]
+```
+[{'id': '2319375449093843677',
+  'timestamp': '2024-02-08T15:42:27.674000+00:00',
+  'x': 2743,
+  'y': '274327432743',
+  'internal_csp_struct': {'z': 12},
+  'data': [0.11397482092369415,
+   0.8082756046612577,
+   0.5269320054610495,
+   0.09017303257799603,
+   0.8346823428352325,
+   0.12803545825097729,
+   0.8563661560959381,
+   0.8337489771318026,
+   0.9665893466463059,
+   0.7835381554236741],
+  'mapping': {'2743': 2743}}]
+```
 
 Finally, we can send our own data into the API using `send`.
 
@@ -476,13 +496,15 @@ client.state("example").as_pandas_df().tail()
         vertical-align: middle;
     }
 
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
+```
+.dataframe tbody tr th {
+    vertical-align: top;
+}
 
-    .dataframe thead th {
-        text-align: right;
-    }
+.dataframe thead th {
+    text-align: right;
+}
+```
 
 </style>
 <table border="1" class="dataframe">
@@ -644,44 +666,46 @@ The REST API uses pydantic validation for `send` requests. Since `ExampleData` h
 client.send("example", {"x": -12, "y": "HEY!"})
 ```
 
-    ---------------------------------------------------------------------------
+```
+---------------------------------------------------------------------------
 
-    ServerUnprocessableException              Traceback (most recent call last)
+ServerUnprocessableException              Traceback (most recent call last)
 
-    Cell In[14], line 1
-    ----> 1 client.send("example", {"x": -12, "y": "HEY!"})
-
-
-    File /isilon/home/nk12433/bitbucket/csp-gateway/csp_gateway/client/client.py:88, in _raiseIfNotMounted.<locals>._wrapped_foo(self, field, *args, **kwargs)
-         86 if check_field and check_field not in self._mounted_apis[group]:
-         87     raise ServerRouteNotMountedException("Route not mounted in group {}: {}".format(group, field))
-    ---> 88 return foo(self, field, *args, **kwargs)
+Cell In[14], line 1
+----> 1 client.send("example", {"x": -12, "y": "HEY!"})
 
 
-    File /isilon/home/nk12433/bitbucket/csp-gateway/csp_gateway/client/client.py:550, in SyncGatewayClientMixin.send(self, field, data, timeout)
-        548 @_raiseIfNotMounted
-        549 def send(self, field: str = "", data: Any = None, timeout: float = _DEFAULT_TIMEOUT) -> ResponseType:
-    --> 550     return self._post("{}/{}".format("send", field), data=data, timeout=timeout)
+File /isilon/home/nk12433/bitbucket/csp-gateway/csp_gateway/client/client.py:88, in _raiseIfNotMounted.<locals>._wrapped_foo(self, field, *args, **kwargs)
+     86 if check_field and check_field not in self._mounted_apis[group]:
+     87     raise ServerRouteNotMountedException("Route not mounted in group {}: {}".format(group, field))
+---> 88 return foo(self, field, *args, **kwargs)
 
 
-    File /isilon/home/nk12433/bitbucket/csp-gateway/csp_gateway/client/client.py:320, in BaseGatewayClient._post(self, route, params, data, timeout)
-        313 def _post(
-        314     self,
-        315     route: str,
-       (...)
-        318     timeout: float = _DEFAULT_TIMEOUT,
-        319 ) -> ResponseType:
-    --> 320     return self._handle_response(POST(self._buildroute(route), params=params, json=data), route=route)
+File /isilon/home/nk12433/bitbucket/csp-gateway/csp_gateway/client/client.py:550, in SyncGatewayClientMixin.send(self, field, data, timeout)
+    548 @_raiseIfNotMounted
+    549 def send(self, field: str = "", data: Any = None, timeout: float = _DEFAULT_TIMEOUT) -> ResponseType:
+--> 550     return self._post("{}/{}".format("send", field), data=data, timeout=timeout)
 
 
-    File /isilon/home/nk12433/bitbucket/csp-gateway/csp_gateway/client/client.py:293, in BaseGatewayClient._handle_response(self, resp, route)
-        291     raise ServerRouteNotFoundException(resp_json.get("detail"))
-        292 elif resp.status_code == 422:
-    --> 293     raise ServerUnprocessableException(resp_json.get("detail"))
-        294 raise ServerUnknownException(f"{resp.status_code}: {resp_json.get('detail')}")
+File /isilon/home/nk12433/bitbucket/csp-gateway/csp_gateway/client/client.py:320, in BaseGatewayClient._post(self, route, params, data, timeout)
+    313 def _post(
+    314     self,
+    315     route: str,
+   (...)
+    318     timeout: float = _DEFAULT_TIMEOUT,
+    319 ) -> ResponseType:
+--> 320     return self._handle_response(POST(self._buildroute(route), params=params, json=data), route=route)
 
 
-    ServerUnprocessableException: [{'loc': ['body'], 'msg': 'value is not a valid list', 'type': 'type_error.list'}, {'loc': ['body', 'x'], 'msg': 'value must be non-negative.', 'type': 'value_error'}]
+File /isilon/home/nk12433/bitbucket/csp-gateway/csp_gateway/client/client.py:293, in BaseGatewayClient._handle_response(self, resp, route)
+    291     raise ServerRouteNotFoundException(resp_json.get("detail"))
+    292 elif resp.status_code == 422:
+--> 293     raise ServerUnprocessableException(resp_json.get("detail"))
+    294 raise ServerUnknownException(f"{resp.status_code}: {resp_json.get('detail')}")
+
+
+ServerUnprocessableException: [{'loc': ['body'], 'msg': 'value is not a valid list', 'type': 'type_error.list'}, {'loc': ['body', 'x'], 'msg': 'value must be non-negative.', 'type': 'value_error'}]
+```
 
 ## Next
 
@@ -691,22 +715,24 @@ The running `GatewayServer` is a synchronous system, and we're interacting it vi
 client.next("example").as_json()
 ```
 
-    [{'id': '2319375449093843978',
-      'timestamp': '2024-02-08T15:43:42.674000+00:00',
-      'x': 2818,
-      'y': '281828182818',
-      'internal_csp_struct': {'z': 12},
-      'data': [0.04177423824388882,
-       0.9576947646141436,
-       0.8797403395027252,
-       0.07591623282958704,
-       0.9012930744265685,
-       0.18036455365706483,
-       0.8368363380941581,
-       0.2958674194835621,
-       0.7139586435389245,
-       0.7923286062539309],
-      'mapping': {'2818': 2818}}]
+```
+[{'id': '2319375449093843978',
+  'timestamp': '2024-02-08T15:43:42.674000+00:00',
+  'x': 2818,
+  'y': '281828182818',
+  'internal_csp_struct': {'z': 12},
+  'data': [0.04177423824388882,
+   0.9576947646141436,
+   0.8797403395027252,
+   0.07591623282958704,
+   0.9012930744265685,
+   0.18036455365706483,
+   0.8368363380941581,
+   0.2958674194835621,
+   0.7139586435389245,
+   0.7923286062539309],
+  'mapping': {'2818': 2818}}]
+```
 
 Note that this call will **block** until the next value ticks.
 
@@ -718,9 +744,11 @@ If our webserver is configured with websockets, we can also stream data out of c
 client.stream(channels=["example"], callback=print)
 ```
 
-    {'channel': 'example', 'data': [{'id': '2319375449093843998', 'timestamp': '2024-02-08T15:43:47.674000+00:00', 'x': 2823, 'y': '282328232823', 'internal_csp_struct': {'z': 12}, 'data': [0.7733188729889257, 0.3505657636995222, 0.37947167012560834, 0.5813803503480363, 0.4224356797080008, 0.7882237596018704, 0.7501837172662043, 0.3014755082030406, 0.11662082552665554, 0.1760084143205467], 'mapping': {'2823': 2823}}]}
-    {'channel': 'example', 'data': [{'id': '2319375449093844002', 'timestamp': '2024-02-08T15:43:48.674000+00:00', 'x': 2824, 'y': '282428242824', 'internal_csp_struct': {'z': 12}, 'data': [0.7935760696606141, 0.04502649843404605, 0.5772625402239133, 0.6083217755224994, 0.949351551805679, 0.2619775463100148, 0.6036207137382622, 0.0005275136962938909, 0.827541831606724, 0.88364890012582], 'mapping': {'2824': 2824}}]}
-    {'channel': 'example', 'data': [{'id': '2319375449093844006', 'timestamp': '2024-02-08T15:43:49.674000+00:00', 'x': 2825, 'y': '282528252825', 'internal_csp_struct': {'z': 12}, 'data': [0.94651479729033, 0.467475460176196, 0.9733450874656052, 0.9147464907192908, 0.38929946260272874, 0.1036030662184213, 0.4733157330556428, 0.8232663407131828, 0.13931853773352143, 0.6087557420151944], 'mapping': {'2825': 2825}}]}
+```
+{'channel': 'example', 'data': [{'id': '2319375449093843998', 'timestamp': '2024-02-08T15:43:47.674000+00:00', 'x': 2823, 'y': '282328232823', 'internal_csp_struct': {'z': 12}, 'data': [0.7733188729889257, 0.3505657636995222, 0.37947167012560834, 0.5813803503480363, 0.4224356797080008, 0.7882237596018704, 0.7501837172662043, 0.3014755082030406, 0.11662082552665554, 0.1760084143205467], 'mapping': {'2823': 2823}}]}
+{'channel': 'example', 'data': [{'id': '2319375449093844002', 'timestamp': '2024-02-08T15:43:48.674000+00:00', 'x': 2824, 'y': '282428242824', 'internal_csp_struct': {'z': 12}, 'data': [0.7935760696606141, 0.04502649843404605, 0.5772625402239133, 0.6083217755224994, 0.949351551805679, 0.2619775463100148, 0.6036207137382622, 0.0005275136962938909, 0.827541831606724, 0.88364890012582], 'mapping': {'2824': 2824}}]}
+{'channel': 'example', 'data': [{'id': '2319375449093844006', 'timestamp': '2024-02-08T15:43:49.674000+00:00', 'x': 2825, 'y': '282528252825', 'internal_csp_struct': {'z': 12}, 'data': [0.94651479729033, 0.467475460176196, 0.9733450874656052, 0.9147464907192908, 0.38929946260272874, 0.1036030662184213, 0.4733157330556428, 0.8232663407131828, 0.13931853773352143, 0.6087557420151944], 'mapping': {'2825': 2825}}]}
+```
 
 ## Asynchronous client
 
@@ -747,9 +775,11 @@ async def print_all():
 await print_all()
 ```
 
-    {'channel': 'example_list', 'data': [{'id': '2319375449093844034', 'timestamp': '2024-02-08T15:43:56.674000+00:00', 'x': 2832, 'y': '283228322832', 'internal_csp_struct': {'z': 12}, 'data': [0.6036805890478953, 0.6749444877468045, 0.5497958103280356, 0.7245526415750495, 0.8203822683954279, 0.7692240209863609, 0.6725744504378558, 0.7092152352091319, 0.22125780238809134, 0.8010351708291975], 'mapping': {'2832': 2832}}]}
-    {'channel': 'example', 'data': [{'id': '2319375449093844034', 'timestamp': '2024-02-08T15:43:56.674000+00:00', 'x': 2832, 'y': '283228322832', 'internal_csp_struct': {'z': 12}, 'data': [0.6036805890478953, 0.6749444877468045, 0.5497958103280356, 0.7245526415750495, 0.8203822683954279, 0.7692240209863609, 0.6725744504378558, 0.7092152352091319, 0.22125780238809134, 0.8010351708291975], 'mapping': {'2832': 2832}}]}
-    {'channel': 'example_list', 'data': [{'id': '2319375449093844038', 'timestamp': '2024-02-08T15:43:57.674000+00:00', 'x': 2833, 'y': '283328332833', 'internal_csp_struct': {'z': 12}, 'data': [0.6140667806797164, 0.30583287063145703, 0.4104660866032377, 0.2342635297957093, 0.675205453488038, 0.5500391636385289, 0.7266396287394276, 0.5642695215832931, 0.38469805427239556, 0.09133929703456811], 'mapping': {'2833': 2833}}]}
-    {'channel': 'example', 'data': [{'id': '2319375449093844038', 'timestamp': '2024-02-08T15:43:57.674000+00:00', 'x': 2833, 'y': '283328332833', 'internal_csp_struct': {'z': 12}, 'data': [0.6140667806797164, 0.30583287063145703, 0.4104660866032377, 0.2342635297957093, 0.675205453488038, 0.5500391636385289, 0.7266396287394276, 0.5642695215832931, 0.38469805427239556, 0.09133929703456811], 'mapping': {'2833': 2833}}]}
-    {'channel': 'example_list', 'data': [{'id': '2319375449093844042', 'timestamp': '2024-02-08T15:43:58.674000+00:00', 'x': 2834, 'y': '283428342834', 'internal_csp_struct': {'z': 12}, 'data': [0.5913608421402291, 0.8327500322981758, 0.7335846102808938, 0.019410934029975624, 0.5931185456840745, 0.6139373901871275, 0.22799843163499478, 0.9269009414380454, 0.18223248762349398, 0.15142314141377], 'mapping': {'2834': 2834}}]}
-    {'channel': 'example', 'data': [{'id': '2319375449093844042', 'timestamp': '2024-02-08T15:43:58.674000+00:00', 'x': 2834, 'y': '283428342834', 'internal_csp_struct': {'z': 12}, 'data': [0.5913608421402291, 0.8327500322981758, 0.7335846102808938, 0.019410934029975624, 0.5931185456840745, 0.6139373901871275, 0.22799843163499478, 0.9269009414380454, 0.18223248762349398, 0.15142314141377], 'mapping': {'2834': 2834}}]}
+```
+{'channel': 'example_list', 'data': [{'id': '2319375449093844034', 'timestamp': '2024-02-08T15:43:56.674000+00:00', 'x': 2832, 'y': '283228322832', 'internal_csp_struct': {'z': 12}, 'data': [0.6036805890478953, 0.6749444877468045, 0.5497958103280356, 0.7245526415750495, 0.8203822683954279, 0.7692240209863609, 0.6725744504378558, 0.7092152352091319, 0.22125780238809134, 0.8010351708291975], 'mapping': {'2832': 2832}}]}
+{'channel': 'example', 'data': [{'id': '2319375449093844034', 'timestamp': '2024-02-08T15:43:56.674000+00:00', 'x': 2832, 'y': '283228322832', 'internal_csp_struct': {'z': 12}, 'data': [0.6036805890478953, 0.6749444877468045, 0.5497958103280356, 0.7245526415750495, 0.8203822683954279, 0.7692240209863609, 0.6725744504378558, 0.7092152352091319, 0.22125780238809134, 0.8010351708291975], 'mapping': {'2832': 2832}}]}
+{'channel': 'example_list', 'data': [{'id': '2319375449093844038', 'timestamp': '2024-02-08T15:43:57.674000+00:00', 'x': 2833, 'y': '283328332833', 'internal_csp_struct': {'z': 12}, 'data': [0.6140667806797164, 0.30583287063145703, 0.4104660866032377, 0.2342635297957093, 0.675205453488038, 0.5500391636385289, 0.7266396287394276, 0.5642695215832931, 0.38469805427239556, 0.09133929703456811], 'mapping': {'2833': 2833}}]}
+{'channel': 'example', 'data': [{'id': '2319375449093844038', 'timestamp': '2024-02-08T15:43:57.674000+00:00', 'x': 2833, 'y': '283328332833', 'internal_csp_struct': {'z': 12}, 'data': [0.6140667806797164, 0.30583287063145703, 0.4104660866032377, 0.2342635297957093, 0.675205453488038, 0.5500391636385289, 0.7266396287394276, 0.5642695215832931, 0.38469805427239556, 0.09133929703456811], 'mapping': {'2833': 2833}}]}
+{'channel': 'example_list', 'data': [{'id': '2319375449093844042', 'timestamp': '2024-02-08T15:43:58.674000+00:00', 'x': 2834, 'y': '283428342834', 'internal_csp_struct': {'z': 12}, 'data': [0.5913608421402291, 0.8327500322981758, 0.7335846102808938, 0.019410934029975624, 0.5931185456840745, 0.6139373901871275, 0.22799843163499478, 0.9269009414380454, 0.18223248762349398, 0.15142314141377], 'mapping': {'2834': 2834}}]}
+{'channel': 'example', 'data': [{'id': '2319375449093844042', 'timestamp': '2024-02-08T15:43:58.674000+00:00', 'x': 2834, 'y': '283428342834', 'internal_csp_struct': {'z': 12}, 'data': [0.5913608421402291, 0.8327500322981758, 0.7335846102808938, 0.019410934029975624, 0.5931185456840745, 0.6139373901871275, 0.22799843163499478, 0.9269009414380454, 0.18223248762349398, 0.15142314141377], 'mapping': {'2834': 2834}}]}
+```

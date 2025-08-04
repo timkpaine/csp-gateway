@@ -5,25 +5,29 @@
 develop-py:
 	uv pip install -e .[develop]
 
-develop-js:
-	cd js; pnpm install
+develop-js: requirements-js
 
 develop: develop-js develop-py  ## setup project for development
+
+.PHONY: requirements-py requirements-js requirements
+requirements-py:  ## install prerequisite python build requirements
+	python -m pip install --upgrade pip toml
+	python -m pip install `python -c 'import toml; c = toml.load("pyproject.toml"); print("\n".join(c["build-system"]["requires"]))'`
+	python -m pip install `python -c 'import toml; c = toml.load("pyproject.toml"); print(" ".join(c["project"]["optional-dependencies"]["develop"]))'`
+
+requirements-js:  ## install prerequisite javascript build requirements
+	cd js; pnpm install && npx playwright install
+
+requirements: requirements-js requirements-py  ## setup project for development
 
 .PHONY: build-py build-js build
 build-py:
 	python -m build -w -n
 
 build-js:
-	cd js; pnpm run build
+	cd js; pnpm build
 
 build: build-js build-py  ## build the project
-
-.PHONY: requirements
-requirements:  ## install prerequisite python build requirements
-	uv pip install --upgrade pip toml
-	uv pip install `python -c 'import toml; c = toml.load("pyproject.toml"); print("\n".join(c["build-system"]["requires"]))'`
-	uv pip install `python -c 'import toml; c = toml.load("pyproject.toml"); print(" ".join(c["project"]["optional-dependencies"]["develop"]))'`
 
 .PHONY: install
 install:  ## install python library
@@ -34,26 +38,34 @@ install:  ## install python library
 #########
 .PHONY: lint-py lint-js lint lints
 lint-py:  ## run python linter with ruff
-	python -m ruff check csp_gateway examples
-	python -m ruff format --check csp_gateway examples
+	python -m ruff check csp_gateway
+	python -m ruff format --check csp_gateway
 
 lint-js:  ## run js linter
-	cd js; pnpm run lint
+	cd js; pnpm lint
 
-lint: lint-js lint-py  ## run project linters
+lint-docs:  ## lint docs with mdformat and codespell
+	python -m mdformat --check README.md docs/wiki/
+	python -m codespell_lib README.md docs/wiki/
+
+lint: lint-js lint-py lint-docs  ## run project linters
 
 # alias
 lints: lint
 
-.PHONY: fix-py fix-js fix format
+.PHONY: fix-py fix-js fix-docs fix format
 fix-py:  ## fix python formatting with ruff
-	python -m ruff check --fix csp_gateway examples
-	python -m ruff format csp_gateway examples
+	python -m ruff check --fix csp_gateway
+	python -m ruff format csp_gateway
 
 fix-js:  ## fix js formatting
-	cd js; pnpm run fix
+	cd js; pnpm fix
 
-fix: fix-js fix-py  ## run project autoformatters
+fix-docs:  ## autoformat docs with mdformat and codespell
+	python -m mdformat README.md docs/wiki/
+	python -m codespell_lib --write README.md docs/wiki/
+
+fix: fix-js fix-py fix-docs  ## run project autoformatters
 
 # alias
 format: fix
@@ -86,7 +98,7 @@ coverage-py:  ## run python tests and collect test coverage
 
 .PHONY: test-js tests-js coverage-js
 test-js:  ## run js tests
-	cd js; pnpm run test
+	cd js; pnpm test
 
 # alias
 tests-js: test-js
@@ -135,33 +147,6 @@ dist-check:  ## run python dist checker with twine
 dist: clean build dist-js dist-py dist-check  ## build all dists
 
 publish: dist  # publish python assets
-
-#############
-# BENCHMARK #
-#############
-.PHONY: benchmark benchmark-view
-
-benchmark: ## run benchmark
-	python -m asv run --config csp_gateway/benchmarks/asv.conf.jsonc --verbose `git rev-parse --abbrev-ref HEAD`^!
-
-benchmark-quick: ## run quick benchmark
-	python -m asv run --quick --config csp_gateway/benchmarks/asv.conf.jsonc --verbose `git rev-parse --abbrev-ref HEAD`^!
-
-benchmark-local: ## run benchmark using the local env
-	python -m asv run --python=same --config csp_gateway/benchmarks/asv.conf.jsonc --verbose
-
-benchmark-debug: ## debug a failing benchmark
-	if [ -z "${BENCHMARK_NAME}" ]; then echo 'Usage: make benchmark-debug BENCHMARK_NAME=<name of benchmark> [PARAM_INDEX=<index of param permutation>]'; exit 1; fi
-	if [ -z "${PARAM_INDEX}" ]; then \
-		python -m pdb -m asv.benchmark run csp_gateway/benchmarks/benchmarks ${BENCHMARK_NAME} "{}" /dev/null /dev/null; \
-	else \
-		python -m pdb -m asv.benchmark run csp_gateway/benchmarks/benchmarks ${BENCHMARK_NAME}-${PARAM_INDEX} "{}" /dev/null /dev/null; \
-	fi;
-
-benchmark-view:  ## generate viewable website of benchmark results
-	python -m asv publish --config csp_gateway/benchmarks/asv.conf.jsonc
-	python -m asv preview --config csp_gateway/benchmarks/asv.conf.jsonc
-
 
 #########
 # CLEAN #

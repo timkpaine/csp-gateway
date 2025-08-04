@@ -1,4 +1,4 @@
-name: Publish Docs
+name: Publish Wiki
 
 on:
   push:
@@ -20,24 +20,16 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Make home file
-        run: cp README.md docs/wiki/Home.md
-        
-      - name: Install Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - run: cp README.md docs/wiki/Home.md
+      - uses: Andrew-Chen-Wang/github-wiki-action@v5
         with:
-          python-version: 3.11
-      
-      - name: Install NBConvert
-        run: pip install nbconvert
-  
-      - name: Convert Example Notebooks to Markdown
-        run: jupyter nbconvert examples/Client.ipynb --to markdown --output  ../docs/wiki/Client.md
+          path: docs/wiki
 
-      - name: Upload Documentation to Wiki
-        uses: Andrew-Chen-Wang/github-wiki-action@v5
+      - uses: actions-ext/python/setup@main
+      - run: pip install nbconvert
+      - run: jupyter nbconvert examples/Client.ipynb --to markdown --output  ../docs/wiki/Client.md
+
+      - uses: Andrew-Chen-Wang/github-wiki-action@v5
         with:
           path: docs/wiki

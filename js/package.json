@@ -1,15 +1,17 @@
 {
   "name": "@point72/csp-gateway",
   "version": "2.1.7",
-  "description": "CSP Gateway with Perspective Workspace",
-  "author": "CSPOpenSource@point72.com",
+  "description": "csp-gateway is a framework for building high-performance streaming applications",
+  "repository": "git@github.com:Point72/csp-gateway.git",
+  "author": "Point72, L.P. <OpenSource@point72.com>",
   "license": "Apache-2.0",
+  "type": "module",
   "main": "./lib/index.js",
   "scripts": {
     "build": "node build.mjs",
     "clean": "rimraf dist",
-    "lint": "prettier --check \"src/**/*.js\" \"src/**/*.jsx\" \"src/style/*.css\" \"src/html/*.html\" \"*.mjs\" \"*.json\" \"*.md\" \"../*.md\" \"../docs/wiki/**/*.md\"",
-    "fix": "prettier --write  \"src/**/*.js\" \"src/**/*.jsx\" \"src/style/*.css\" \"src/html/*.html\" \"*.mjs\" \"*.json\" \"*.md\" \"../*.md\" \"../docs/wiki/**/*.md\"",
+    "lint": "prettier --check \"src/**/*.js\" \"src/**/*.jsx\" \"src/style/*.css\" \"src/html/*.html\" \"*.mjs\" \"*.json\"",
+    "fix": "prettier --write  \"src/**/*.js\" \"src/**/*.jsx\" \"src/style/*.css\" \"src/html/*.html\" \"*.mjs\" \"*.json\"",
     "test": "echo \"todo\"",
     "preinstall": "npx only-allow pnpm",
     "prepack": "pnpm run build"

@@ -1,8 +1,5 @@
-`csp-gateway` is written in Python and Javascript. While prebuilt wheels are provided for end users, it is also straightforward to build `csp-gateway` from either the Python [source distribution](https://packaging.python.org/en/latest/specifications/source-distribution-format/) or the GitHub repository.
+`csp-gateway` is written in Python and JavaScript. While prebuilt wheels are provided for end users, it is also straightforward to build `csp-gateway` from either the Python [source distribution](https://packaging.python.org/en/latest/specifications/source-distribution-format/) or the GitHub repository.
 
-## Table of Contents
-
-- [Table of Contents](#table-of-contents)
 - [Make commands](#make-commands)
 - [Prerequisites](#prerequisites)
 - [Clone](#clone)
@@ -45,7 +42,7 @@ cd csp-gateway
 Follow the instructions for [installing NodeJS](https://nodejs.org/en/download/package-manager/all) for your system. Once installed, you can [install `pnpm`](https://pnpm.io/installation) with:
 
 ```bash
-npm instal --global pnpm
+npm install --global pnpm
 ```
 
 ## Install Python dependencies
@@ -70,12 +67,13 @@ make build
 
 `csp-gateway` has linting and auto formatting.
 
-| Language   | Linter     | Autoformatter | Description |
-| :--------- | :--------- | :------------ | :---------- |
-| Python     | `ruff`     | `ruff`        | Style       |
-| Python     | `ruff`     | `ruff`        | Imports     |
-| JavaScript | `prettier` | `prettier`    | Style       |
-| Markdown   | `prettier` | `prettier`    | Style       |
+| Language   | Linter      | Autoformatter | Description |
+| :--------- | :---------- | :------------ | :---------- |
+| Python     | `ruff`      | `ruff`        | Style       |
+| Python     | `ruff`      | `ruff`        | Imports     |
+| JavaScript | `prettier`  | `prettier`    | Style       |
+| Markdown   | `mdformat`  | `mdformat`    | Style       |
+| Markdown   | `codespell` |               | Spelling    |
 
 **Python Linting**
 
@@ -103,7 +101,15 @@ make fix-js
 
 **Documentation Linting**
 
-We use `prettier` for our Markdown linting, so follow the above docs.
+```bash
+make lint-docs
+```
+
+**Documentation Autoformatting**
+
+```bash
+make fix-docs
+```
 
 ## Testing
 
