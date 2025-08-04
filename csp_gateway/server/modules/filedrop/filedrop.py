@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Any, Callable, Dict, List, Optional, TypeVar, get_args, get_origin
+from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, get_args, get_origin
 
 import csp
 from ccflow import BaseModel
@@ -27,7 +27,7 @@ class ReadFileDropConfiguration(BaseModel):
     """The configuration of a filedrop adapter for a directory and filetype"""
 
     channel_name: str = Field(description="Name of the channel to send the structs to")
-    filedrop_type: FileDropType = Field(description="The type of files to expect and accordingly read i.e. parquet, json, etc")
+    filedrop_type: Union[FileDropType, str] = Field(description="The type of files to expect and accordingly read i.e. parquet, json, etc")
     extensions: List[str] = Field(default=[], description="List of extensions to decide which files to read, empty list means all extensions")
     loader: Optional[Callable[[str], List[Any]]] = Field(default=None, description="custom loader for loading files into list of struct like data")
     deserializer: Optional[Callable[[Any], Any]] = Field(
@@ -43,7 +43,12 @@ class ReadFileDropConfiguration(BaseModel):
     )
 
     @model_validator(mode="after")
-    def check_custom_filedrop_type(self) -> "ReadFileDropConfiguration":
+    def check_filedrop_type(self) -> "ReadFileDropConfiguration":
+        if isinstance(self.filedrop_type, str):
+            try:
+                self.filedrop_type = FileDropType[self.filedrop_type]
+            except KeyError:
+                raise ValueError(f"{self.filedrop_type} is not a valid FileDropType")
         if self.filedrop_type == FileDropType.CUSTOM and self.loader is None:
             raise ValueError("loader must be set if filedrop_type is CUSTOM")
         return self
