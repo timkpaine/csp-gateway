@@ -143,7 +143,7 @@ We see that we are extending the example `demo.yaml` and setting the `port` valu
 
 What is the point of all this configuration? There are a number of key benefits.
 
-First, instantiation of applications is driven via config and overrideable/extendable via other configs and CLI.
+First, instantiation of applications is driven via config and overridable/extendable via other configs and CLI.
 You can easily provide a "base" application to be customized further by other configurations, something like an abstract class of an application configuration.
 You can extend/modify/overload arbitrarily nested objects and parameters via config file or CLI.
 

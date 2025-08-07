@@ -141,7 +141,7 @@ requires: Optional[ChannelSelection] = []
 
 `ChannelSelection` is a class to representing channel selection options for filtering channels based on inclusion and exclusion criteria.
 
-It is coercable from a python list, and has the following attributes:
+It is coercible from a python list, and has the following attributes:
 
 - **include** (`Optional[List[str]]`): A list of channel names to include in the selection.
 - **exclude** (`Set[str]`): A list of channel names to exclude from the selection.
