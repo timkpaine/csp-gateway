@@ -147,11 +147,9 @@ def test_basic(structs):
         dirpath = Path(dir)
         writer = Writer(data=[[1, json_writer, str(dirpath / "json_file1.json"), structs]])
         fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [
-                    ReadFileDropConfiguration(channel_name="fd_channel", filedrop_type=FileDropType.JSON),
-                ],
-            }
+            configs=[
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_channel", filedrop_type=FileDropType.JSON),
+            ]
         )
         gateway = MyGateway(
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -174,11 +172,9 @@ def test_list_of_structs(structs):
         dirpath = Path(dir)
         writer = Writer(data=[[1, json_writer, str(dirpath / "json_file1.json"), structs]])
         fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [
-                    ReadFileDropConfiguration(channel_name="fd_list_channel", filedrop_type=FileDropType.JSON),
-                ],
-            }
+            configs=[
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_list_channel", filedrop_type=FileDropType.JSON),
+            ]
         )
         gateway = MyGateway(
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -197,12 +193,10 @@ def test_multi_readers_single_channel_single_dir(structs, no_readers):
         dirpath = Path(dir)
         writer = Writer(data=[[1, json_writer, str(dirpath / "json_file1.json"), structs]])
         fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [
-                    ReadFileDropConfiguration(channel_name="fd_list_channel", filedrop_type=FileDropType.JSON),
-                ]
-                * no_readers,
-            }
+            configs=[
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_list_channel", filedrop_type=FileDropType.JSON),
+            ]
+            * no_readers,
         )
         gateway = MyGateway(
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -220,12 +214,10 @@ def test_multi_readers_multi_channel_single_directory(structs):
         dirpath = Path(dir)
         writer = Writer(data=[[1, json_writer, str(dirpath / "json_file1.json"), structs]])
         fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [
-                    ReadFileDropConfiguration(channel_name="fd_list_channel", filedrop_type=FileDropType.JSON),
-                    ReadFileDropConfiguration(channel_name="fd_list_channel_2", filedrop_type=FileDropType.JSON),
-                ],
-            }
+            configs=[
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_list_channel", filedrop_type=FileDropType.JSON),
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_list_channel_2", filedrop_type=FileDropType.JSON),
+            ]
         )
         gateway = MyGateway(
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -257,14 +249,10 @@ def test_single_channel_multi_dir(structs):
                 data=[[1, json_writer, str(dirpath1 / "json_file1.json"), structs], [0, json_writer, str(dirpath2 / "json_file2.json"), structs]]
             )
             fd_module = ReadFileDrop(
-                directory_configs={
-                    str(dirpath1): [
-                        ReadFileDropConfiguration(channel_name="fd_list_channel", filedrop_type=FileDropType.JSON),
-                    ],
-                    str(dirpath2): [
-                        ReadFileDropConfiguration(channel_name="fd_list_channel", filedrop_type=FileDropType.JSON),
-                    ],
-                }
+                configs=[
+                    ReadFileDropConfiguration(dir_path=dirpath1, channel_name="fd_list_channel", filedrop_type=FileDropType.JSON),
+                    ReadFileDropConfiguration(dir_path=dirpath2, channel_name="fd_list_channel", filedrop_type=FileDropType.JSON),
+                ]
             )
             gateway = MyGateway(
                 modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -293,14 +281,10 @@ def test_multi_channel_multi_dir(structs):
                 data=[[1, json_writer, str(dirpath1 / "json_file1.json"), structs], [0, json_writer, str(dirpath2 / "json_file2.json"), structs]]
             )
             fd_module = ReadFileDrop(
-                directory_configs={
-                    str(dirpath1): [
-                        ReadFileDropConfiguration(channel_name="fd_list_channel", filedrop_type=FileDropType.JSON),
-                    ],
-                    str(dirpath2): [
-                        ReadFileDropConfiguration(channel_name="fd_list_channel_2", filedrop_type=FileDropType.JSON),
-                    ],
-                }
+                configs=[
+                    ReadFileDropConfiguration(dir_path=dirpath1, channel_name="fd_list_channel", filedrop_type=FileDropType.JSON),
+                    ReadFileDropConfiguration(dir_path=dirpath2, channel_name="fd_list_channel_2", filedrop_type=FileDropType.JSON),
+                ]
             )
             gateway = MyGateway(
                 modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -337,11 +321,9 @@ def test_filetypes(structs, filetype_data):
         dirpath = Path(dir)
         writer = Writer(data=[[1, writer, str(dirpath / filename), structs]])
         fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [
-                    ReadFileDropConfiguration(channel_name="fd_channel", filedrop_type=filedrop_type),
-                ],
-            }
+            configs=[
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_channel", filedrop_type=filedrop_type),
+            ]
         )
         gateway = MyGateway(
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -358,11 +340,9 @@ def test_invalid_data(caplog):
             dirpath = Path(dir)
             writer = Writer(data=[[1, json_writer_bad, str(dirpath / "file.json"), structs]])
             fd_module = ReadFileDrop(
-                directory_configs={
-                    str(dirpath): [
-                        ReadFileDropConfiguration(channel_name="fd_channel", filedrop_type=FileDropType.JSON),
-                    ],
-                }
+                configs=[
+                    ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_channel", filedrop_type=FileDropType.JSON),
+                ]
             )
             gateway = MyGateway(
                 modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -380,11 +360,9 @@ def test_invalid_struct(caplog):
             dirpath = Path(dir)
             writer = Writer(data=[[1, json_writer, str(dirpath / "file.json"), structs]])
             fd_module = ReadFileDrop(
-                directory_configs={
-                    str(dirpath): [
-                        ReadFileDropConfiguration(channel_name="fd_channel", filedrop_type=FileDropType.JSON),
-                    ],
-                }
+                configs=[
+                    ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_channel", filedrop_type=FileDropType.JSON),
+                ]
             )
             gateway = MyGateway(
                 modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -409,11 +387,9 @@ def test_multiple_files(writer_data, filedata):
         dirpath = Path(dir)
         writer = Writer(data=[[fdata[0], writer_data[0], str(dirpath / fdata[1]), fdata[2]] for fdata in filedata])
         fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [
-                    ReadFileDropConfiguration(channel_name="fd_channel", filedrop_type=writer_data[1]),
-                ],
-            }
+            configs=[
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_channel", filedrop_type=writer_data[1]),
+            ]
         )
         gateway = MyGateway(
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -442,16 +418,15 @@ def test_config_options(structs):
         dirpath = Path(dir)
         writer = Writer(data=[[1, json_writer, str(dirpath / "json_file1.json"), structs]])
         fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [
-                    ReadFileDropConfiguration(
-                        channel_name="fd_channel",
-                        filedrop_type=FileDropType.JSON,
-                        subscribe_with_struct_timestamp=True,
-                        subscribe_with_struct_id=True,
-                    ),
-                ],
-            }
+            configs=[
+                ReadFileDropConfiguration(
+                    dir_path=dirpath,
+                    channel_name="fd_channel",
+                    filedrop_type=FileDropType.JSON,
+                    subscribe_with_struct_timestamp=True,
+                    subscribe_with_struct_id=True,
+                ),
+            ]
         )
         gateway = MyGateway(
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -470,12 +445,10 @@ def test_extensions():
             data=[[0.1, json_writer, str(dirpath / "json_file1.js1"), structs_1], [1, json_writer, str(dirpath / "json_file1.js2"), structs_2]]
         )
         fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [
-                    ReadFileDropConfiguration(channel_name="fd_list_channel", filedrop_type=FileDropType.JSON, extensions=[".js1"]),
-                    ReadFileDropConfiguration(channel_name="fd_list_channel_2", filedrop_type=FileDropType.JSON, extensions=[".js2"]),
-                ],
-            }
+            configs=[
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_list_channel", filedrop_type=FileDropType.JSON, extensions=[".js1"]),
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_list_channel_2", filedrop_type=FileDropType.JSON, extensions=[".js2"]),
+            ]
         )
         gateway = MyGateway(
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -503,11 +476,9 @@ def test_dict(structs):
         dirpath = Path(dir)
         writer = Writer(data=[[1, json_writer, str(dirpath / "json_file1.json"), structs]])
         fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [
-                    ReadFileDropConfiguration(channel_name="fd_dict_channel", filedrop_type=FileDropType.JSON),
-                ],
-            }
+            configs=[
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_dict_channel", filedrop_type=FileDropType.JSON),
+            ]
         )
         gateway = MyGateway(
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -525,11 +496,9 @@ def test_dict(structs):
         dirpath = Path(dir)
         writer = Writer(data=[[1, json_writer, str(dirpath / "json_file1.json"), structs]])
         fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [
-                    ReadFileDropConfiguration(channel_name="fd_dict_basket_channel", filedrop_type=FileDropType.JSON),
-                ],
-            }
+            configs=[
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_dict_basket_channel", filedrop_type=FileDropType.JSON),
+            ]
         )
         gateway = MyGateway(
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -571,11 +540,9 @@ def test_filedrop_type_custom(structs):
         dirpath = Path(dir)
         writer = Writer(data=[[1, custom_writer, str(dirpath / "json_file1.json"), structs]])
         fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [
-                    ReadFileDropConfiguration(channel_name="fd_channel", filedrop_type=FileDropType.CUSTOM, loader=custom_loader),
-                ],
-            }
+            configs=[
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_channel", filedrop_type=FileDropType.CUSTOM, loader=custom_loader),
+            ]
         )
         gateway = MyGateway(
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -615,11 +582,9 @@ def test_deserializer(structs):
         dirpath = Path(dir)
         writer = Writer(data=[[1, custom_writer, str(dirpath / "json_file1.json"), structs]])
         fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [
-                    ReadFileDropConfiguration(channel_name="fd_channel", filedrop_type=FileDropType.JSON, deserializer=deserializer),
-                ],
-            }
+            configs=[
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_channel", filedrop_type=FileDropType.JSON, deserializer=deserializer),
+            ]
         )
         gateway = MyGateway(
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -635,11 +600,9 @@ def test_fieldrop_type_as_str():
         dirpath = Path(dir)
         writer = Writer(data=[[1, json_writer, str(dirpath / "json_file1.json"), structs]])
         fd_module = ReadFileDrop(
-            directory_configs={
-                str(dirpath): [
-                    ReadFileDropConfiguration(channel_name="fd_channel", filedrop_type="JSON"),
-                ],
-            }
+            configs=[
+                ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_channel", filedrop_type="JSON"),
+            ]
         )
         gateway = MyGateway(
             modules=[writer, fd_module, AddChannelsToGraphOutput()],
@@ -649,9 +612,58 @@ def test_fieldrop_type_as_str():
         match_data([d[1] for d in out["fd_channel"]], structs)
 
     with pytest.raises(ValueError):
-        ReadFileDropConfiguration(channel_name="fd_channel", filetype_data="NOT_A_TYPE")
+        ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_channel", filetype_data="NOT_A_TYPE")
 
     with pytest.raises(ValueError):
-        ReadFileDropConfiguration(channel_name="fd_channel", filetype_data="CUSTOM")
+        ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_channel", filetype_data="CUSTOM")
     with pytest.raises(ValueError):
-        ReadFileDropConfiguration(channel_name="fd_channel", filetype_data=FileDropType.CUSTOM, loader=None)
+        ReadFileDropConfiguration(dir_path=dirpath, channel_name="fd_channel", filetype_data=FileDropType.CUSTOM, loader=None)
+
+
+def test_invalid_channels():
+    class MyFDGatewayChannels(FDGatewayChannels):
+        my_bad_dict_channel: Dict[str, str] = None
+        my_bad_list_channel: List[str] = None
+        my_bad_simple_channel: str = None
+
+    def dynamic_keys(self):
+        return {MyFDGatewayChannels.my_bad_dict_channel: ["a", "b", "c"]}
+
+    with tempfile.TemporaryDirectory(dir=".") as dir:
+        fd_module = ReadFileDrop(
+            configs=[
+                ReadFileDropConfiguration(dir_path=Path(dir), channel_name="my_bad_dict_channel", filedrop_type="JSON"),
+            ]
+        )
+        gateway = MyGateway(
+            modules=[fd_module, AddChannelsToGraphOutput()],
+            channels=MyFDGatewayChannels(),
+        )
+        with pytest.raises(ValueError, match=r".*should be of the form Dict\[KeyType, TsType\].*"):
+            csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
+
+    with tempfile.TemporaryDirectory(dir=".") as dir:
+        fd_module = ReadFileDrop(
+            configs=[
+                ReadFileDropConfiguration(dir_path=Path(dir), channel_name="my_bad_list_channel", filedrop_type="JSON"),
+            ]
+        )
+        gateway = MyGateway(
+            modules=[fd_module, AddChannelsToGraphOutput()],
+            channels=MyFDGatewayChannels(),
+        )
+        with pytest.raises(ValueError, match=r".*should be of the form List\[TsType\].*"):
+            csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))
+
+    with tempfile.TemporaryDirectory(dir=".") as dir:
+        fd_module = ReadFileDrop(
+            configs=[
+                ReadFileDropConfiguration(dir_path=Path(dir), channel_name="my_bad_simple_channel", filedrop_type="JSON"),
+            ]
+        )
+        gateway = MyGateway(
+            modules=[fd_module, AddChannelsToGraphOutput()],
+            channels=MyFDGatewayChannels(),
+        )
+        with pytest.raises(Exception, match=r".*Channel type cannot be handled.*"):
+            csp.run(gateway.graph, realtime=True, endtime=timedelta(seconds=5))

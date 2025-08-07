@@ -71,18 +71,16 @@ if __name__ == "__main__":
 
     print("Waiting for files in ./json_fd/ & ./parquet_fd/")
     fd_module = ReadFileDrop(
-        directory_configs={
-            "json_fd": [
-                ReadFileDropConfiguration(channel_name="data", filedrop_type=FileDropType.JSON),
-                ReadFileDropConfiguration(channel_name="list_data", filedrop_type=FileDropType.JSON),
-                ReadFileDropConfiguration(channel_name="dict_data", filedrop_type=FileDropType.JSON),
-            ],
-            "parquet_fd": [
-                ReadFileDropConfiguration(channel_name="data", filedrop_type=FileDropType.PARQUET),
-                ReadFileDropConfiguration(channel_name="list_data", filedrop_type=FileDropType.PARQUET),
-                ReadFileDropConfiguration(channel_name="dict_data", filedrop_type=FileDropType.PARQUET),
-            ],
-        }
+        configs=[
+            # JSON
+            ReadFileDropConfiguration(dir_path="json_fd", channel_name="data", filedrop_type=FileDropType.JSON),
+            ReadFileDropConfiguration(dir_path="json_fd", channel_name="list_data", filedrop_type=FileDropType.JSON),
+            ReadFileDropConfiguration(dir_path="json_fd", channel_name="dict_data", filedrop_type=FileDropType.JSON),
+            # PARQUET
+            ReadFileDropConfiguration(dir_path="parquet_fd", channel_name="data", filedrop_type=FileDropType.PARQUET),
+            ReadFileDropConfiguration(dir_path="parquet_fd", channel_name="list_data", filedrop_type=FileDropType.PARQUET),
+            ReadFileDropConfiguration(dir_path="parquet_fd", channel_name="dict_data", filedrop_type=FileDropType.PARQUET),
+        ],
     )
 
     gateway = Gateway(

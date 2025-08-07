@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, get_args, get_origin
 
 import csp
@@ -26,6 +27,7 @@ log = logging.getLogger(__name__)
 class ReadFileDropConfiguration(BaseModel):
     """The configuration of a filedrop adapter for a directory and filetype"""
 
+    dir_path: Path = Field(description="Directory to monitor for new files")
     channel_name: str = Field(description="Name of the channel to send the structs to")
     filedrop_type: Union[FileDropType, str] = Field(description="The type of files to expect and accordingly read i.e. parquet, json, etc")
     extensions: List[str] = Field(default=[], description="List of extensions to decide which files to read, empty list means all extensions")
@@ -61,9 +63,7 @@ K = TypeVar("K")
 class ReadFileDrop(GatewayModule):
     """The module to read data from files dropped in specific directories and send them as structs to specific channels"""
 
-    directory_configs: Dict[str, List[ReadFileDropConfiguration]] = Field(
-        description="Mapping of directories to a list of ReadFileDropConfiguration, for that directory in the filedrop module"
-    )
+    configs: List[ReadFileDropConfiguration] = Field(description="List of configs for the directories to monitor")
 
     @csp.node
     def handle_list_basket(self, data: csp.ts[List[T]], list_size: int) -> csp.OutputBasket(List[csp.ts[T]], shape="list_size"):
@@ -78,51 +78,45 @@ class ReadFileDrop(GatewayModule):
     def connect(self, channels: GatewayChannels):
         channel_data = {}
         channel_basket_types = {}
-        channel_base_types = {}
-        for dir, configs in self.directory_configs.items():
+        for config in self.configs:
             # ensure that directories exist
-            os.makedirs(dir, exist_ok=True)
-            for config in configs:
-                channel_data[config.channel_name] = []
-        for dir, configs in self.directory_configs.items():
-            for config in configs:
-                context = {
-                    "force_new_id": not config.subscribe_with_struct_id,
-                    "force_new_timestamp": not config.subscribe_with_struct_timestamp,
-                }
-                adapter_config = FileDropAdapterConfiguration(
-                    dir_path=dir,
-                    filedrop_type=config.filedrop_type,
-                    extensions=config.extensions,
-                    type_adapter_args=context,
-                    loader=config.loader,
-                    deserializer=config.deserializer,
-                )
-                channel_type = channels.get_outer_type(config.channel_name)
-                if isTsType(channel_type):
-                    non_ts_type = channel_type.typ
-                    channel_basket_types[config.channel_name] = ""
+            os.makedirs(config.dir_path, exist_ok=True)
+            channel_data[config.channel_name] = []
+        for config in self.configs:
+            context = {
+                "force_new_id": not config.subscribe_with_struct_id,
+                "force_new_timestamp": not config.subscribe_with_struct_timestamp,
+            }
+            adapter_config = FileDropAdapterConfiguration(
+                dir_path=str(config.dir_path),
+                filedrop_type=config.filedrop_type,
+                extensions=config.extensions,
+                type_adapter_args=context,
+                loader=config.loader,
+                deserializer=config.deserializer,
+            )
+            channel_type = channels.get_outer_type(config.channel_name)
+            if isTsType(channel_type):
+                non_ts_type = channel_type.typ
+                channel_basket_types[config.channel_name] = ""
+            else:
+                normalized_type = ContainerTypeNormalizer.normalize_type(channel_type)
+                if get_origin(normalized_type) is list:
+                    inner_type = get_args(normalized_type)[0]
+                    if not isTsType(inner_type):
+                        raise ValueError(f"Channel type for {config.channel_name} should be of the form List[TsType], got: {channel_type}")
+                    non_ts_type = List[inner_type.typ]
+                    channel_basket_types[config.channel_name] = "list"
+                elif get_origin(normalized_type) is dict:
+                    key_type, inner_type = get_args(normalized_type)
+                    if not isTsType(inner_type):
+                        raise ValueError(f"Channel type for {config.channel_name} should be of the form Dict[KeyType, TsType], got: {channel_type}")
+                    non_ts_type = Dict[key_type, inner_type.typ]
+                    channel_basket_types[config.channel_name] = "dict"
                 else:
-                    normalized_type = ContainerTypeNormalizer.normalize_type(channel_type)
-                    if get_origin(normalized_type) is list:
-                        inner_type = get_args(normalized_type)[0]
-                        if not isTsType(inner_type):
-                            raise ValueError(f"Channel type for {config.channel_name} should be of the form List[TsType], got: {channel_type}")
-                        non_ts_type = List[inner_type.typ]
-                        channel_basket_types[config.channel_name] = "list"
-                    elif get_origin(normalized_type) is dict:
-                        key_type, inner_type = get_args(normalized_type)
-                        if not isTsType(inner_type):
-                            raise ValueError(
-                                f"Channel type for {config.channel_name} should be of the form Dict[KeyType, TsType], got: {channel_type}"
-                            )
-                        non_ts_type = Dict[key_type, inner_type.typ]
-                        channel_basket_types[config.channel_name] = "dict"
-                    else:
-                        raise Exception(f"Channel type cannot be handled: {channel_type}")
-                channel_base_types[config.channel_name] = non_ts_type
-                data = filedrop_adapter_def(config=adapter_config, ts_typ=non_ts_type)
-                channel_data[config.channel_name].append(data)
+                    raise Exception(f"Channel type cannot be handled: {channel_type}")
+            data = filedrop_adapter_def(config=adapter_config, ts_typ=non_ts_type)
+            channel_data[config.channel_name].append(data)
         for channel_name, data_list in channel_data.items():
             data = csp.flatten(data_list)
             if channel_basket_types[channel_name] == "list":
