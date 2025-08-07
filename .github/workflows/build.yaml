@@ -85,7 +85,7 @@ jobs:
       run: make develop-js
 
     - name: Download wheels
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: dist
 
@@ -130,7 +130,7 @@ jobs:
         version: 3.11
 
     - name: Download wheels
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: dist
 
