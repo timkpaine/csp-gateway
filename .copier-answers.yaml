@@ -1,0 +1,13 @@
+# Changes here will be overwritten by Copier
+_commit: 2d0c192
+_src_path: https://github.com/python-project-templates/base.git
+add_docs: false
+add_extension: js
+add_wiki: true
+email: OpenSource@point72.com
+github: Point72
+project_description: csp-gateway is a framework for building high-performance streaming
+    applications
+project_name: csp gateway
+python_version_primary: '3.9'
+team: Point72, L.P.
