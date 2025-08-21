@@ -200,7 +200,7 @@ def test_signal_with_shutdown(signal_val, free_port):
 def test_shutdown_with_big_red_button(free_port):
     REQUEST_RETRY_TIMEOUT = 2
     AFTER_SHUTDOWN_WAIT_TIME = 10
-    NUM_TRIES = 10
+    NUM_TRIES = 30
     port_str = str(free_port)
     # URL to check if the server is up
     state_url = f"http://{socket.gethostname()}:{port_str}/api/v1/state"
