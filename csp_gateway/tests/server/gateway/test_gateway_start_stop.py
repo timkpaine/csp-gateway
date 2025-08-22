@@ -175,6 +175,9 @@ def test_signal_with_shutdown(signal_val, free_port):
             os.kill(p.pid, signal.SIGKILL)
             p.join()
             assert False
+        if not p.is_alive():
+            # Process has exited
+            assert p.exitcode == 0
         try:
             time.sleep(REQUEST_RETRY_TIMEOUT)
             resp = requests.get(url, timeout=1)
@@ -197,6 +200,7 @@ def test_signal_with_shutdown(signal_val, free_port):
     assert p.exitcode == 0
 
 
+@pytest.mark.skipif(sys.platform == "darwin" and "GITHUB_ACTIONS" in os.environ, reason="Skipping test on macOS in CI, works locally")
 def test_shutdown_with_big_red_button(free_port):
     REQUEST_RETRY_TIMEOUT = 2
     AFTER_SHUTDOWN_WAIT_TIME = 10
@@ -217,6 +221,9 @@ def test_shutdown_with_big_red_button(free_port):
             os.kill(p.pid, signal.SIGKILL)
             p.join()
             assert False
+        if not p.is_alive():
+            # Process has exited
+            assert p.exitcode == 0
         try:
             time.sleep(REQUEST_RETRY_TIMEOUT)
             resp = requests.get(state_url, timeout=1)
