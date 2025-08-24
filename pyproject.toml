@@ -23,6 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 dynamic = ["dependencies"]
@@ -183,11 +184,15 @@ exclude = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["csp_gateway"]
+<<<<<<< before updating
 exclude = [
     "/docs",
     "/examples",
     "/js"
 ]
+=======
+exclude = ["/js"]
+>>>>>>> after updating
 
 [tool.hatch.build.hooks.hatch-js]
 path = "js"
