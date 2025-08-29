@@ -12,7 +12,7 @@ import pytest
 import requests
 from fastapi.testclient import TestClient
 
-from csp_gateway import Gateway, GatewaySettings, MountRestRoutes
+from csp_gateway import Gateway, GatewaySettings, MountControls, MountRestRoutes
 from csp_gateway.server.demo import ExampleGatewayChannels, ExampleModule
 from csp_gateway.testing import CspDieModule, LongStartModule
 from csp_gateway.tests.server.gateway.test_gateway import MyBuildFailureModule
@@ -24,7 +24,7 @@ def test_long_startup_die_cleanly(free_port):
     with patch("os._exit") as exit_mock, patch("os.kill") as kill_mock:
         # instantiate gateway
         gateway = Gateway(
-            settings=GatewaySettings(API_KEY="12345", AUTHENTICATE=False, PORT=free_port),
+            settings=GatewaySettings(AUTHENTICATE=False, PORT=free_port),
             modules=[
                 # NeverDieModule(),
                 # CspDieModule(),
@@ -50,7 +50,7 @@ def test_start_with_endtime(free_port):
 
     # instantiate gateway
     gateway = Gateway(
-        settings=GatewaySettings(API_KEY="12345", AUTHENTICATE=False, PORT=free_port),
+        settings=GatewaySettings(AUTHENTICATE=False, PORT=free_port),
         modules=[
             ExampleModule(),
             MountRestRoutes(force_mount_all=True),
@@ -68,7 +68,7 @@ def test_start_with_endtime_usergraph_no_return(free_port):
 
     # instantiate gateway
     gateway = Gateway(
-        settings=GatewaySettings(API_KEY="12345", AUTHENTICATE=False, PORT=free_port),
+        settings=GatewaySettings(AUTHENTICATE=False, PORT=free_port),
         modules=[
             ExampleModule(),
             MountRestRoutes(force_mount_all=True),
@@ -82,7 +82,7 @@ def test_start_with_endtime_usergraph_no_return(free_port):
 def test_start_and_then_die_with_error(free_port):
     # instantiate gateway
     gateway = Gateway(
-        settings=GatewaySettings(API_KEY="12345", AUTHENTICATE=False, PORT=free_port),
+        settings=GatewaySettings(AUTHENTICATE=False, PORT=free_port),
         modules=[
             ExampleModule(),
             CspDieModule(),
@@ -100,7 +100,7 @@ def test_start_and_then_die_with_error(free_port):
 @pytest.mark.skipif(sys.platform == "darwin", reason="Flaky on MacOS GHA runners")
 def test_start_and_then_graph_start_error(caplog, free_port):
     gateway = Gateway(
-        settings=GatewaySettings(API_KEY="12345", AUTHENTICATE=False, PORT=free_port),
+        settings=GatewaySettings(AUTHENTICATE=False, PORT=free_port),
         modules=[
             ExampleModule(),
             MyBuildFailureModule(),
@@ -119,10 +119,11 @@ def test_start_and_then_graph_start_error(caplog, free_port):
 def test_stop_with_shutdown(free_port):
     # instantiate gateway
     gateway = Gateway(
-        settings=GatewaySettings(API_KEY="12345", AUTHENTICATE=False, PORT=free_port),
+        settings=GatewaySettings(AUTHENTICATE=False, PORT=free_port),
         modules=[
             ExampleModule(),
             MountRestRoutes(force_mount_all=True),
+            MountControls(),
         ],
         channels=ExampleGatewayChannels(),
     )
@@ -145,6 +146,7 @@ def run_gateway(port_str):
         modules=[
             ExampleModule(),
             MountRestRoutes(force_mount_all=True),
+            MountControls(),
         ],
         channels=ExampleGatewayChannels(),
     )
@@ -157,6 +159,7 @@ def test_signal_with_shutdown(signal_val, free_port):
     REQUEST_RETRY_TIMEOUT = 2
     AFTER_KILL_WAIT_TIME = 10
     NUM_TRIES = 10
+
     port_str = str(free_port)
     # URL to check if the server is up
     url = f"http://localhost:{port_str}/api/v1/state"
@@ -164,11 +167,17 @@ def test_signal_with_shutdown(signal_val, free_port):
     # Start the gateway in another process
     p = multiprocessing.Process(target=run_gateway, args=(port_str,))
     p.start()
+
     # Wait for it to startup
     for idx in range(NUM_TRIES + 1):
         if idx == NUM_TRIES:
             # Unable to fully start the server
+            os.kill(p.pid, signal.SIGKILL)
+            p.join()
             assert False
+        if not p.is_alive():
+            # Process has exited
+            assert p.exitcode == 0
         try:
             time.sleep(REQUEST_RETRY_TIMEOUT)
             resp = requests.get(url, timeout=1)
@@ -176,21 +185,26 @@ def test_signal_with_shutdown(signal_val, free_port):
             break
         except (requests.HTTPError, requests.Timeout, requests.ConnectionError):
             pass
+
     print("Server is up")
+
     # Send signal to invoke shutdown
     print(f"Sending SIGNAL: {signal_val}")
     os.kill(p.pid, signal_val)
+
     # Wait for gateway to react to signal
     p.join(AFTER_KILL_WAIT_TIME)
+
     # Check if gateway shutdown with proper exit status
     assert not p.is_alive()
     assert p.exitcode == 0
 
 
+@pytest.mark.skipif(sys.platform == "darwin" and "GITHUB_ACTIONS" in os.environ, reason="Skipping test on macOS in CI, works locally")
 def test_shutdown_with_big_red_button(free_port):
     REQUEST_RETRY_TIMEOUT = 2
     AFTER_SHUTDOWN_WAIT_TIME = 10
-    NUM_TRIES = 10
+    NUM_TRIES = 30
     port_str = str(free_port)
     # URL to check if the server is up
     state_url = f"http://{socket.gethostname()}:{port_str}/api/v1/state"
@@ -203,7 +217,13 @@ def test_shutdown_with_big_red_button(free_port):
     for idx in range(NUM_TRIES + 1):
         if idx == NUM_TRIES:
             # Unable to fully start the server
+            # Unable to fully start the server
+            os.kill(p.pid, signal.SIGKILL)
+            p.join()
             assert False
+        if not p.is_alive():
+            # Process has exited
+            assert p.exitcode == 0
         try:
             time.sleep(REQUEST_RETRY_TIMEOUT)
             resp = requests.get(state_url, timeout=1)

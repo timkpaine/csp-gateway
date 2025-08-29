@@ -1,8 +1,10 @@
 import os
 import os.path
+from typing import Optional
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
+from hydra.core.hydra_config import HydraConfig
 
 try:
     # conditional on libmagic being installed on the machine
@@ -17,9 +19,14 @@ from csp_gateway.server.web import GatewayWebApp
 
 
 class MountOutputsFolder(GatewayModule):
+    dir: Optional[str] = None
+
     def connect(self, channels: GatewayChannels) -> None:
-        # NO-OP
-        ...
+        if self.dir is None:
+            if HydraConfig.initialized():
+                self.dir = os.path.abspath(os.path.join(HydraConfig.get().runtime.output_dir, "..", "..", ".."))
+            else:
+                self.dir = os.path.abspath(os.path.join(os.getcwd(), "outputs"))
 
     def rest(self, app: GatewayWebApp) -> None:
         app_router = app.get_router("app")
@@ -32,11 +39,10 @@ class MountOutputsFolder(GatewayModule):
             This endpoint is a small webpage for browsing the [hydra](https://github.com/facebookresearch/hydra)
             output logs and configuration settings of the running application.
             """
-            outputs_dir = os.path.join(os.getcwd(), "outputs")
-            file_or_dir = outputs_dir
+            file_or_dir = self.dir
             if full_path:
                 file_or_dir = os.path.join(file_or_dir, full_path)
-            if os.path.abspath(file_or_dir).startswith(outputs_dir) and os.path.exists(file_or_dir):
+            if os.path.abspath(file_or_dir).startswith(self.dir) and os.path.exists(file_or_dir):
                 if os.path.isdir(file_or_dir):
                     files = os.listdir(file_or_dir)
                     files_paths = sorted([f"{request.url._url}/{f}".replace("outputs//", "outputs/") for f in files])

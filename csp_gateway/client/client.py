@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, 
 
 from httpx import AsyncClient as httpx_AsyncClient, Response, get as GET, post as POST
 from jsonref import replace_refs
-from nest_asyncio import apply as applyAsyncioNexting
+from nest_asyncio import apply as applyAsyncioNesting
 from packaging import version
 from pydantic import Field, PrivateAttr, field_validator, model_validator
 
@@ -478,7 +478,7 @@ class BaseGatewayClient(BaseModel):
 
             try:
                 if self._event_loop.is_running():
-                    applyAsyncioNexting(self._event_loop)
+                    applyAsyncioNesting(self._event_loop)
                 while True:
                     callback(self._event_loop.run_until_complete(iterator.__anext__()))
             except StopAsyncIteration:

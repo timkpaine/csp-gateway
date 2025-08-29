@@ -10,7 +10,7 @@ Every `node` and `graph` can itself take a collection of ticking and non-ticking
 Let's say I want to create 2 version of the same graph:
 
 1. Read from kafka topic `abc`, perform calculation `1`, write to kafka topic `ghi`
-2. Read from kafka topic `abc`, perform calculation `2`, write to kafka topic `ghi`
+1. Read from kafka topic `abc`, perform calculation `2`, write to kafka topic `ghi`
 
 ```mermaid
 graph TB

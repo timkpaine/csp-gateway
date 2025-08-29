@@ -7,10 +7,10 @@
 
 <br />
 
-[![Build Status](https://github.com/Point72/csp-gateway/actions/workflows/build.yaml/badge.svg)](https://github.com/Point72/csp-gateway/actions/workflows/build.yaml)
-[![codecov](https://codecov.io/gh/point72/csp-gateway/branch/main/graph/badge.svg)](https://codecov.io/gh/point72/csp-gateway)
-[![License](https://img.shields.io/badge/license-Apache--2.0-green)](https://github.com/Point72/csp-gateway/LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/csp-gateway.svg?style=flat)](https://pypi.python.org/pypi/csp-gateway)
+[![Build Status](https://github.com/Point72/csp-gateway/actions/workflows/build.yaml/badge.svg?branch=main&event=push)](https://github.com/Point72/csp-gateway/actions/workflows/build.yaml)
+[![codecov](https://codecov.io/gh/Point72/csp-gateway/branch/main/graph/badge.svg)](https://codecov.io/gh/Point72/csp-gateway)
+[![License](https://img.shields.io/github/license/Point72/csp-gateway)](https://github.com/Point72/csp-gateway)
+[![PyPI](https://img.shields.io/pypi/v/csp-gateway.svg)](https://pypi.python.org/pypi/csp-gateway)
 
 ## Overview
 
