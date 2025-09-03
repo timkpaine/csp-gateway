@@ -10,6 +10,7 @@ from asyncio import (
     set_event_loop,
     wrap_future,
 )
+from copy import deepcopy
 from functools import lru_cache
 from json import JSONDecodeError
 from threading import Thread
@@ -612,6 +613,13 @@ class BaseGatewayClient(BaseModel):
                     else:
                         # ignore
                         ...
+
+    # Public Functions
+
+    @property
+    def openapi_spec(self):
+        self._initialize()
+        return deepcopy(self._openapi_spec)
 
     @abstractmethod
     def controls(self, field: str = "", data: Any = None, timeout: float = _DEFAULT_TIMEOUT) -> ResponseType: ...
