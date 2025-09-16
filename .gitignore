@@ -146,6 +146,7 @@ csp_gateway/extension
 # Jupyter
 .ipynb_checkpoints
 .autoversion
+Untitled*.ipynb
 !csp_gateway/extension/csp_gateway.json
 !csp_gateway/extension/install.json
 csp_gateway/nbextension

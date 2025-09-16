@@ -82,7 +82,7 @@ class MountAPIKeyMiddleware(GatewayModule):
             async def get_login_page(token: str = "", request: Request = None):
                 if token:
                     if token != "":
-                        return RedirectResponse(url=f"{app.settings.API_V1_STR}/auth/login?token={token}")
+                        return RedirectResponse(url=f"{app.settings.API_STR}/auth/login?token={token}")
                 return app.templates.TemplateResponse(
                     "login.html.j2",
                     {"request": request, "api_key_name": self._api_key_name},

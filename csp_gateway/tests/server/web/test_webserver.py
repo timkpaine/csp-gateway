@@ -439,9 +439,9 @@ class TestGatewayWebserver:
         gateway_client = GatewayClient(GatewayClientConfig(port=gateway.settings.PORT, authenticate=True, api_key="test"))
         self._wait_for_data(rest_client=rest_client)
         response_state = gateway_client.state()
-        assert sorted(list(gateway_client._openapi_spec.keys())) == ["components", "info", "openapi", "paths"]
-        assert "/api/v1/last/example" in gateway_client._openapi_spec["paths"].keys()
-        assert "/api/v1/last/example_list" in gateway_client._openapi_spec["paths"].keys()
+        assert sorted(list(gateway_client.openapi_spec.keys())) == ["components", "info", "openapi", "paths"]
+        assert "/api/v1/last/example" in gateway_client.openapi_spec["paths"].keys()
+        assert "/api/v1/last/example_list" in gateway_client.openapi_spec["paths"].keys()
         assert response_state == ["example"]
 
         for route in ["example", "example_list"]:
