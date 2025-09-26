@@ -6,6 +6,7 @@ import CLIENT_WASM from "@finos/perspective-viewer/dist/wasm/perspective-viewer.
 import "@finos/perspective-workspace";
 import "@finos/perspective-viewer-datagrid";
 import "@finos/perspective-viewer-d3fc";
+import "perspective-summary";
 
 const perspective_init_promise = Promise.all([
   perspective.init_server(fetch(SERVER_WASM)),
