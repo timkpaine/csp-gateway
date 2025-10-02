@@ -45,7 +45,7 @@ develop = [
     "pytest-asyncio",
     "pytest-cov",
     "python-magic",
-    "ruff>=0.9,<0.13",
+    "ruff>=0.9,<0.14",
     "twine",
     "wheel",
     # modules
