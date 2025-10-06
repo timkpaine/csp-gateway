@@ -111,6 +111,7 @@ async function compile_css() {
   const css = builder1.compile().get("index.css");
 
   // write to extension
+  fs.writeFileSync("./lib/index.css", css);
   fs.writeFileSync("../csp_gateway/server/build/index.css", css);
 }
 
