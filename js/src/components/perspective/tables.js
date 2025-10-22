@@ -15,6 +15,7 @@ const perspective_init_promise = Promise.all([
 
 export const fetchTables = async () => {
   await perspective_init_promise;
+  const worker = await perspective.worker();
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const websocket = await perspective.websocket(
     `${protocol}//${window.location.host}/api/v1/perspective`,
@@ -23,9 +24,13 @@ export const fetchTables = async () => {
   const response = await fetch("/api/v1/perspective/tables");
   const schemas = await response.json();
   const table_names = [...Object.keys(schemas)];
-  const tables = await Promise.all(
+  const table_handles = await Promise.all(
     table_names.map((table_name) => websocket.open_table(table_name)),
   );
+  const views = await Promise.all(
+    table_handles.map((table_handle) => table_handle.view()),
+  );
+  const tables = await Promise.all(views.map((view) => worker.table(view)));
   const new_tables = {};
   table_names.forEach((table_name, index) => {
     new_tables[table_name] = {
