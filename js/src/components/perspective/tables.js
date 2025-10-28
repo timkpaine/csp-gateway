@@ -1,11 +1,11 @@
-import perspective from "@finos/perspective";
-import perspective_viewer from "@finos/perspective-viewer";
-import SERVER_WASM from "@finos/perspective/dist/wasm/perspective-server.wasm";
-import CLIENT_WASM from "@finos/perspective-viewer/dist/wasm/perspective-viewer.wasm";
+import perspective from "@perspective-dev/client";
+import perspective_viewer from "@perspective-dev/viewer";
+import SERVER_WASM from "@perspective-dev/server/dist/wasm/perspective-server.wasm";
+import CLIENT_WASM from "@perspective-dev/viewer/dist/wasm/perspective-viewer.wasm";
 
-import "@finos/perspective-workspace";
-import "@finos/perspective-viewer-datagrid";
-import "@finos/perspective-viewer-d3fc";
+import "@perspective-dev/workspace";
+import "@perspective-dev/viewer-datagrid";
+import "@perspective-dev/viewer-d3fc";
 import "perspective-summary";
 
 const perspective_init_promise = Promise.all([

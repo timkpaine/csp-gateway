@@ -8,21 +8,24 @@ importers:
 
   .:
     dependencies:
-      '@finos/perspective':
-        specifier: ~3.8.0
-        version: 3.8.0
-      '@finos/perspective-viewer':
-        specifier: ~3.8.0
-        version: 3.8.0
-      '@finos/perspective-viewer-d3fc':
-        specifier: ~3.8.0
-        version: 3.8.0(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)
-      '@finos/perspective-viewer-datagrid':
-        specifier: ~3.8.0
-        version: 3.8.0
-      '@finos/perspective-workspace':
-        specifier: ~3.8.0
-        version: 3.8.0
+      '@perspective-dev/client':
+        specifier: ~4.0.0
+        version: 4.0.0
+      '@perspective-dev/server':
+        specifier: ~4.0.0
+        version: 4.0.0
+      '@perspective-dev/viewer':
+        specifier: ~4.0.0
+        version: 4.0.0
+      '@perspective-dev/viewer-d3fc':
+        specifier: ~4.0.0
+        version: 4.0.0(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)
+      '@perspective-dev/viewer-datagrid':
+        specifier: ~4.0.0
+        version: 4.0.0
+      '@perspective-dev/workspace':
+        specifier: ~4.0.0
+        version: 4.0.0
       perspective-summary:
         specifier: ~0.1.0
         version: 0.1.0(@finos/perspective-viewer@3.8.0)(@finos/perspective@3.8.0)
@@ -332,17 +335,8 @@ packages:
   '@finos/perspective-esbuild-plugin@3.2.1':
     resolution: {integrity: sha512-6EqacFm5rGA0EtzD2p9RuxtVLEci9AEC4NPiOCpqFdgxxX8Msv8LlL7Ml3opxyaEeKpndVsLFdOD5U+PNaaa+A==}
 
-  '@finos/perspective-viewer-d3fc@3.8.0':
-    resolution: {integrity: sha512-uxgzgwnEY1VvrJ5EE+hZHELbhfNFrvpAR28i2GMIXqjDv2ce3TkTOgNZKyKF67yPxG+RW1as4M+npAZieWHF1g==}
-
-  '@finos/perspective-viewer-datagrid@3.8.0':
-    resolution: {integrity: sha512-iqe4DDXYvb2jW9PQrRSliicFvhMe36OlGjZUgouQJrtuQSlgqTWQFsp9/4k8TTnhhgVhOyVfkSjX7bykXfSuvw==}
-
   '@finos/perspective-viewer@3.8.0':
     resolution: {integrity: sha512-u5dtQw4NzlbMOPZgvi+Tr1p0ZDFoYLne9tV99yEGIEqhQFWG3Ke2RL/562RjDm7o2Vk/nPHP+K9RkF/9KceBMg==}
-
-  '@finos/perspective-workspace@3.8.0':
-    resolution: {integrity: sha512-bcL/eiRJvy6XxM+VoxBkGu84tERhSlpC2TnPAUmuYP88CS7mS7uW5JnaHTkHYJ4IQjFSAOqIGMblZdhnXsvFiA==}
 
   '@finos/perspective@3.8.0':
     resolution: {integrity: sha512-9pot9YJq1RDdIRJlffp97ktbd0Sxk74mnoSOcf6U/luWceyEnfceQYHwJqUPR1IMNb9H1ZC6NQTbU4WRUT3hAQ==}
@@ -397,6 +391,24 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@perspective-dev/client@4.0.0':
+    resolution: {integrity: sha512-n3IHMIU+WeraAxAcyBMG/Wipegm8PBcDL3+haZecriBvV4v+7EzNvZd8l6pQNbYa+ah5eD2BCgmvZ8Mg/dxUug==}
+
+  '@perspective-dev/server@4.0.0':
+    resolution: {integrity: sha512-S25Mr+cgRomU9aDiplXUj2gImuYZFXUUfytLdJC+f9iipFqX3MqFUCPI4jEzb1xTUnP3Fzg9xzs8p1SymHOF9g==}
+
+  '@perspective-dev/viewer-d3fc@4.0.0':
+    resolution: {integrity: sha512-kmPLTJxfbuhStp5speTCplx/SSK+sybgukIcIcZ5SQu4zkLea17u9KZjAxley1gDK5MQZNYhW07z5/thIm5xyQ==}
+
+  '@perspective-dev/viewer-datagrid@4.0.0':
+    resolution: {integrity: sha512-iLeSSOHbByVCORY/SZ2C6oN/Z6428037z6tAIfxR7CL1XzPOcoLqIzuUYc4H3dpLnc2jT6j7X8bNUX/YXN4IXw==}
+
+  '@perspective-dev/viewer@4.0.0':
+    resolution: {integrity: sha512-qUpOhh7FFmUXZdnMOHa4J8sA2aVww6/JICBUVlwI9xJjvUOTo2MHWmQYmGyakYMnOCIRmL5b6KFKsHOryK7uzA==}
+
+  '@perspective-dev/workspace@4.0.0':
+    resolution: {integrity: sha512-OzMJG7O32PrI9wPWtHfimNQM8VcQ/8r+zR7JtG19elnQUEcC3b7VlIDhK/ePzVsciLotYR9X253ep5rFS+efoA==}
 
   '@prospective.co/procss@0.1.17':
     resolution: {integrity: sha512-jZCbEji9gTgJIJ41a0VQQV8GARUNKp9ils8/6347fbNkGBtA3cRwhQfRAxnqc0dhyo6pTSjMSflqop5ToIiSwQ==}
@@ -479,8 +491,8 @@ packages:
     resolution: {integrity: sha512-bIomtDF5KGpdogkLd9VspvFzk9KfpyyGlS8YFVZl7TGPBHL5snIOnxeshwVgPteQ9b4Eydl+pVbIyE1DcvCWgQ==}
     engines: {node: '>=10'}
 
-  chroma-js@1.4.1:
-    resolution: {integrity: sha512-jTwQiT859RTFN/vIf7s+Vl/Z2LcMrvMv3WUFmd/4u76AdlFC0NTNgqEEFPcRiHmAswPsMiQEDZLM8vX8qXpZNQ==}
+  chroma-js@3.1.2:
+    resolution: {integrity: sha512-IJnETTalXbsLx1eKEgx19d5L6SRM7cH4vINw/99p/M11HCuXGRWL+6YmCm7FWFGIo6dtWuQoQi1dc5yQ7ESIHg==}
 
   color-convert@1.9.3:
     resolution: {integrity: sha512-QfAUtd+vFdAtFQcC8CCyYt1fYWxSqAiK2cSD6zDB8N3cpsEBAvRxp9zOGg6G/SHHJYAT88/az/IuDGALsNVbGg==}
@@ -1695,70 +1707,10 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@finos/perspective-viewer-d3fc@3.8.0(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)':
-    dependencies:
-      '@d3fc/d3fc-chart': 5.1.9(d3-array@3.2.4)(d3-path@3.1.0)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-selection@3.0.0)(d3-shape@3.2.0)
-      '@d3fc/d3fc-element': 6.2.0
-      '@finos/perspective': 3.8.0
-      '@finos/perspective-viewer': 3.8.0
-      chroma-js: 1.4.1
-      d3: 7.9.0
-      d3-array: 3.2.4
-      d3-selection: 3.0.0
-      d3-svg-legend: 2.25.6
-      d3fc: 15.2.13(d3-array@3.2.4)(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-selection@3.0.0)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)
-      gradient-parser: 1.0.2
-    transitivePeerDependencies:
-      - bufferutil
-      - d3-brush
-      - d3-dispatch
-      - d3-fetch
-      - d3-path
-      - d3-random
-      - d3-scale
-      - d3-scale-chromatic
-      - d3-shape
-      - d3-time
-      - d3-zoom
-      - debug
-      - supports-color
-      - utf-8-validate
-
-  '@finos/perspective-viewer-datagrid@3.8.0':
-    dependencies:
-      '@finos/perspective': 3.8.0
-      '@finos/perspective-viewer': 3.8.0
-      chroma-js: 1.4.1
-      regular-table: 0.6.8
-    transitivePeerDependencies:
-      - bufferutil
-      - debug
-      - supports-color
-      - utf-8-validate
-
   '@finos/perspective-viewer@3.8.0':
     dependencies:
       '@finos/perspective': 3.8.0
       pro_self_extracting_wasm: 0.0.9
-    transitivePeerDependencies:
-      - bufferutil
-      - debug
-      - supports-color
-      - utf-8-validate
-
-  '@finos/perspective-workspace@3.8.0':
-    dependencies:
-      '@finos/perspective': 3.8.0
-      '@finos/perspective-viewer': 3.8.0
-      '@lumino/algorithm': 2.0.3
-      '@lumino/commands': 2.3.2
-      '@lumino/coreutils': 2.2.1
-      '@lumino/domutils': 2.0.3
-      '@lumino/messaging': 2.0.3
-      '@lumino/signaling': 2.1.4
-      '@lumino/virtualdom': 2.0.3
-      '@lumino/widgets': 2.7.1
-      lodash: 4.17.21
     transitivePeerDependencies:
       - bufferutil
       - debug
@@ -1851,6 +1803,91 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.19.1
 
+  '@perspective-dev/client@4.0.0':
+    dependencies:
+      '@perspective-dev/server': 4.0.0
+      pro_self_extracting_wasm: 0.0.9
+      stoppable: 1.1.0
+      ws: 8.18.3
+    transitivePeerDependencies:
+      - bufferutil
+      - debug
+      - supports-color
+      - utf-8-validate
+
+  '@perspective-dev/server@4.0.0': {}
+
+  '@perspective-dev/viewer-d3fc@4.0.0(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)':
+    dependencies:
+      '@d3fc/d3fc-chart': 5.1.9(d3-array@3.2.4)(d3-path@3.1.0)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-selection@3.0.0)(d3-shape@3.2.0)
+      '@d3fc/d3fc-element': 6.2.0
+      '@perspective-dev/client': 4.0.0
+      '@perspective-dev/viewer': 4.0.0
+      chroma-js: 3.1.2
+      d3: 7.9.0
+      d3-array: 3.2.4
+      d3-color: 3.1.0
+      d3-selection: 3.0.0
+      d3-svg-legend: 2.25.6
+      d3fc: 15.2.13(d3-array@3.2.4)(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-selection@3.0.0)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)
+      gradient-parser: 1.0.2
+    transitivePeerDependencies:
+      - bufferutil
+      - d3-brush
+      - d3-dispatch
+      - d3-fetch
+      - d3-path
+      - d3-random
+      - d3-scale
+      - d3-scale-chromatic
+      - d3-shape
+      - d3-time
+      - d3-zoom
+      - debug
+      - supports-color
+      - utf-8-validate
+
+  '@perspective-dev/viewer-datagrid@4.0.0':
+    dependencies:
+      '@perspective-dev/client': 4.0.0
+      '@perspective-dev/viewer': 4.0.0
+      chroma-js: 3.1.2
+      regular-table: 0.6.8
+    transitivePeerDependencies:
+      - bufferutil
+      - debug
+      - supports-color
+      - utf-8-validate
+
+  '@perspective-dev/viewer@4.0.0':
+    dependencies:
+      '@perspective-dev/client': 4.0.0
+      pro_self_extracting_wasm: 0.0.9
+    transitivePeerDependencies:
+      - bufferutil
+      - debug
+      - supports-color
+      - utf-8-validate
+
+  '@perspective-dev/workspace@4.0.0':
+    dependencies:
+      '@lumino/algorithm': 2.0.3
+      '@lumino/commands': 2.3.2
+      '@lumino/coreutils': 2.2.1
+      '@lumino/domutils': 2.0.3
+      '@lumino/messaging': 2.0.3
+      '@lumino/signaling': 2.1.4
+      '@lumino/virtualdom': 2.0.3
+      '@lumino/widgets': 2.7.1
+      '@perspective-dev/client': 4.0.0
+      '@perspective-dev/viewer': 4.0.0
+      lodash: 4.17.21
+    transitivePeerDependencies:
+      - bufferutil
+      - debug
+      - supports-color
+      - utf-8-validate
+
   '@prospective.co/procss@0.1.17': {}
 
   '@sindresorhus/merge-streams@2.3.0': {}
@@ -1939,7 +1976,7 @@ snapshots:
 
   chownr@2.0.0: {}
 
-  chroma-js@1.4.1: {}
+  chroma-js@3.1.2: {}
 
   color-convert@1.9.3:
     dependencies:

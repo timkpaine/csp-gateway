@@ -60,47 +60,47 @@ async function compile_css() {
   add(
     builder1,
     "perspective-viewer-pro.css",
-    "@finos/perspective-viewer/dist/css/pro.css",
+    "@perspective-dev/viewer/dist/css/pro.css",
   );
   add(
     builder1,
     "perspective-viewer-pro-dark.css",
-    "@finos/perspective-viewer/dist/css/pro-dark.css",
+    "@perspective-dev/viewer/dist/css/pro-dark.css",
   );
   add(
     builder1,
     "perspective-viewer-monokai.css",
-    "@finos/perspective-viewer/dist/css/monokai.css",
+    "@perspective-dev/viewer/dist/css/monokai.css",
   );
   add(
     builder1,
     "perspective-viewer-vaporwave.css",
-    "@finos/perspective-viewer/dist/css/vaporwave.css",
+    "@perspective-dev/viewer/dist/css/vaporwave.css",
   );
   add(
     builder1,
     "perspective-viewer-dracula.css",
-    "@finos/perspective-viewer/dist/css/dracula.css",
+    "@perspective-dev/viewer/dist/css/dracula.css",
   );
   add(
     builder1,
     "perspective-viewer-gruvbox.css",
-    "@finos/perspective-viewer/dist/css/gruvbox.css",
+    "@perspective-dev/viewer/dist/css/gruvbox.css",
   );
   add(
     builder1,
     "perspective-viewer-gruvbox-dark.css",
-    "@finos/perspective-viewer/dist/css/gruvbox-dark.css",
+    "@perspective-dev/viewer/dist/css/gruvbox-dark.css",
   );
   add(
     builder1,
     "perspective-viewer-solarized.css",
-    "@finos/perspective-viewer/dist/css/solarized.css",
+    "@perspective-dev/viewer/dist/css/solarized.css",
   );
   add(
     builder1,
     "perspective-viewer-solarized-dark.css",
-    "@finos/perspective-viewer/dist/css/solarized-dark.css",
+    "@perspective-dev/viewer/dist/css/solarized-dark.css",
   );
   add(
     builder1,
@@ -128,10 +128,10 @@ async function build_all() {
   // await cp_to_paths("./src/style/*.css");
   await cp_to_paths("./src/html/*.html");
   await cp_to_paths(
-    "node_modules/@finos/perspective/dist/wasm/perspective-server.wasm",
+    "node_modules/@perspective-dev/server/dist/wasm/perspective-server.wasm",
   );
   await cp_to_paths(
-    "node_modules/@finos/perspective-viewer/dist/wasm/perspective-viewer.wasm",
+    "node_modules/@perspective-dev/viewer/dist/wasm/perspective-viewer.wasm",
   );
 
   /* Compile and copy css */

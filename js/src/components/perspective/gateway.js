@@ -1,4 +1,4 @@
-import { version } from "@finos/perspective/package.json";
+import { version } from "@perspective-dev/client/package.json";
 
 export const getDefaultViewerConfig = (tableName, schema, theme = "light") => {
   const viewer_config = {
