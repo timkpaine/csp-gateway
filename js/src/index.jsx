@@ -31,20 +31,24 @@ export default function App(props) {
   /**
    * Layout
    */
-  const [layouts, changeLayouts] = useState({ Default: {} });
+  const [layouts, changeLayouts] = useState({});
   useEffect(() => {
-    getServerDefinedLayouts().then((serverLayouts) => {
-      const newLayouts = {
-        active: "Default",
-        ...layouts,
-        ...serverLayouts,
-        ...getCustomLayout(),
-      };
-
-      if (JSON.stringify(newLayouts) !== JSON.stringify(layouts)) {
-        changeLayouts(newLayouts);
-      }
-    });
+    // fetch server defined layouts and merge with
+    // default layout derived from tables.
+    // Then set the active to be default
+    if (layouts.Default) {
+      getServerDefinedLayouts().then((serverLayouts) => {
+        const newLayouts = {
+          active: "Default",
+          ...layouts,
+          ...serverLayouts,
+          ...getCustomLayout(),
+        };
+        if (JSON.stringify(newLayouts) !== JSON.stringify(layouts)) {
+          changeLayouts(newLayouts);
+        }
+      });
+    }
   }, [layouts]);
 
   /**

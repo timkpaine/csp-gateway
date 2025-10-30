@@ -16,7 +16,8 @@ export function Workspace(props) {
   const { processTables } = props;
 
   const workspace = useRef(null);
-  let prevLayouts = useRef({ ...layouts, active: "Default" });
+  const [workspaceReady, setWorkspaceReady] = useState(false);
+  let prevLayouts = useRef({ ...layouts });
   let layoutUpdate = useRef(false);
 
   // restore layout when it changes
@@ -24,8 +25,11 @@ export function Workspace(props) {
     (async () => {
       if (
         workspace.current &&
+        workspaceReady &&
         layouts &&
-        Object.keys(layouts[layouts.active] || {}).length > 0
+        layouts.active &&
+        Object.keys(layouts[layouts.active] || {}).length > 0 &&
+        layoutUpdate.current == false
       ) {
         if (
           prevLayouts.current.active !== layouts.active &&
@@ -54,21 +58,21 @@ export function Workspace(props) {
         }
       }
     })();
-  }, [layouts]);
+  }, [layouts, workspaceReady]);
 
   // setup tables
   useEffect(() => {
     if (workspace.current) {
       fetchTables().then((tables) => {
         // load tables into perspective workspace
-        const to_restore = getDefaultWorkspaceLayout();
+        const defaultLayout = getDefaultWorkspaceLayout();
 
         // handle theme
         const theme = getCurrentTheme();
 
         // handle tables
         if (processTables) {
-          processTables(to_restore, tables, workspace.current, theme);
+          processTables(defaultLayout, tables, workspace.current, theme);
         } else {
           const sortedTables = Object.keys(tables);
           sortedTables.sort();
@@ -76,8 +80,8 @@ export function Workspace(props) {
             const { table, schema } = tables[tableName];
             workspace.current.addTable(tableName, table);
             const generated_id = `${tableName.toUpperCase()}_GENERATED_${index + 1}`;
-            to_restore.detail.main.widgets.push(generated_id);
-            to_restore.viewers[generated_id] = getDefaultViewerConfig(
+            defaultLayout.detail.main.widgets.push(generated_id);
+            defaultLayout.viewers[generated_id] = getDefaultViewerConfig(
               tableName,
               schema,
               theme,
@@ -89,37 +93,40 @@ export function Workspace(props) {
         hideLoader();
 
         // restore
-        workspace.current.restore(to_restore).then(() => {
-          // setup new default layout
-          prevLayouts = { ...layouts, Default: to_restore, active: "Default" };
-          changeLayouts(prevLayouts);
-
-          // handle light/dark theme
-          workspace.current.addEventListener(
-            "workspace-new-view",
-            async (event) => {
-              const { widget } = event.detail;
-              event.preventDefault();
-              event.stopPropagation();
-              const theme = getCurrentTheme();
-              if (!layoutUpdate.current) {
-                if (theme === "dark") {
-                  // console.log("calling restore dark from workspace-new-view");
-                  await widget.restore({
-                    theme: "Pro Dark",
-                    sort: [["timestamp", "desc"]],
-                  });
-                } else {
-                  // console.log("calling restore light from workspace-new-view");
-                  await widget.restore({
-                    theme: "Pro Light",
-                    sort: [["timestamp", "desc"]],
-                  });
-                }
-              }
-            },
-          );
+        workspace.current.restore({}).then(() => {
+          setWorkspaceReady(true);
         });
+
+        // setup new default layout
+        // NOTE: order matters here, if server defines default we want that to clobber
+        // our generated default
+        if (layouts.Default === undefined) {
+          changeLayouts({ Default: defaultLayout, ...layouts });
+        }
+
+        // handle light/dark theme
+        workspace.current.addEventListener(
+          "workspace-new-view",
+          async (event) => {
+            const { widget } = event.detail;
+            event.preventDefault();
+            event.stopPropagation();
+            const theme = getCurrentTheme();
+            if (!layoutUpdate.current) {
+              if (theme === "dark") {
+                await widget.restore({
+                  theme: "Pro Dark",
+                  sort: [["timestamp", "desc"]],
+                });
+              } else {
+                await widget.restore({
+                  theme: "Pro Light",
+                  sort: [["timestamp", "desc"]],
+                });
+              }
+            }
+          },
+        );
       });
     }
   }, []);
