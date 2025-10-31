@@ -1,4 +1,4 @@
-`csp-gateway` provides an automatically generated UI based on React and [Perspective](https://perspective.finos.org).
+`csp-gateway` provides an automatically generated UI based on React and [Perspective](https://perspective-dev.github.io/).
 
 > [!NOTE]
 > To enable the UI, ensure you run your [`Gateway`](Overview#Gateway) with `ui=True` and include the `MountPerspectiveTables` module.
@@ -6,7 +6,7 @@
 ## Perspective
 
 Perspective is an interactive analytics and data visualization component, which is especially well-suited for large and/or streaming datasets.
-See the [Perspective Documentation](https://perspective.finos.org/guide/) (and the media section in particular) for more information on how to use Perspective.
+See the [Perspective Documentation](https://perspective-dev.github.io/guide/) (and the media section in particular) for more information on how to use Perspective.
 
 ## Top Bar
 

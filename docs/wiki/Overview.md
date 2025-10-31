@@ -4,7 +4,7 @@ It is is composed of four major components:
 
 - Engine: [csp](https://github.com/point72/csp), a streaming, complex event processor core
 - API: [FastAPI](https://fastapi.tiangolo.com) REST/WebSocket API
-- UI: [Perspective](https://perspective.finos.org) and React based frontend with automatic table and chart visualizations
+- UI: [Perspective](https://perspective-dev.github.io/) and React based frontend with automatic table and chart visualizations
 - Configuration: [ccflow](https://github.com/point72/ccflow), a [Pydantic](https://docs.pydantic.dev/latest/)/[Hydra](https://hydra.cc) based extensible, composeable dependency injection and configuration framework
 
 ## Table of Contents
@@ -209,6 +209,6 @@ At this point, we have a modular streaming graph-based application complete with
 
 - [API](API) for more information on the integrated OpenAPI-compatible REST API, and the streaming Websocket API
 - [Client](Client) for more information on the provided Python client
-- [UI](UI) for more information on the [Perspective](https://perspective.finos.org)-based React frontend
+- [UI](UI) for more information on the [Perspective](https://perspective-dev.github.io/)-based React frontend
 - [Configuration](Configuration) for more information about driving your application completely from yaml-based configuration
 - Check out the much more complicated [Omnibus Example](https://github.com/Point72/csp-gateway/blob/main/csp_gateway/server/demo/omnibus.py)
