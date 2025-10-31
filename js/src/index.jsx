@@ -1,6 +1,12 @@
-import React, { useEffect, useRef, useState } from "react";
-import { getOpenApi } from "./common";
-import { Header, Footer, Settings, Workspace } from "./components";
+import React, { useEffect, useState } from "react";
+import { getOpenApi, hideLoader as hideDefaultLoader } from "./common";
+import {
+  Header,
+  Footer,
+  Loader as DefaultLoader,
+  Settings,
+  Workspace,
+} from "./components";
 import {
   toggleTheme,
   setupStoredOrDefaultTheme,
@@ -20,6 +26,7 @@ export default function App(props) {
     overrideSettingsButtons,
     extraSettingsButtons,
     shutdown,
+    hideLoader,
   } = props;
 
   /**
@@ -67,11 +74,16 @@ export default function App(props) {
     setLeftDrawerOpen((prevState) => !prevState);
   };
 
+  let Loader = props.loader || DefaultLoader;
+
   /**
    * Return nodes
    */
   return (
     <div id="main" className="container">
+      <div id="loader">
+        <Loader />
+      </div>
       <Header
         headerLogo={headerLogo}
         openapi={openapi}
@@ -87,6 +99,7 @@ export default function App(props) {
         changeLayouts={changeLayouts}
         processTables={processTables}
         theme={theme}
+        hideLoader={hideLoader || hideDefaultLoader}
       />
       <Settings
         openapi={openapi}

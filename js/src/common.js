@@ -7,7 +7,7 @@ export const changeLayoutConfigName = (newName) => {
 
 export const hideLoader = () => {
   setTimeout(() => {
-    const progress = document.getElementById("progress");
+    const progress = document.getElementById("loader");
     progress.setAttribute("style", "display:none;");
   }, 3000);
 };
