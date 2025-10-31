@@ -12,7 +12,7 @@ export function Footer(props) {
       </div>
       <div className="footer-meta">
         <a
-          href="https://github.com/finos/perspective"
+          href="https://github.com/perspective-dev/perspective"
           target="blank"
           className="footer-link"
         >
@@ -20,7 +20,10 @@ export function Footer(props) {
         </a>
         <p>
           Built with{" "}
-          <a href="https://github.com/finos/perspective" target="blank">
+          <a
+            href="https://github.com/perspective-dev/perspective"
+            target="blank"
+          >
             Perspective
           </a>
         </p>

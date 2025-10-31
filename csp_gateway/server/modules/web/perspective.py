@@ -1,14 +1,14 @@
 import asyncio
 from datetime import date, datetime, timedelta
-from importlib.metadata import version
 from io import BytesIO
 from logging import getLogger
 from typing import (
     Dict,
+    Literal,
     Optional,
     Set,
     TypeVar,
-    Union,  # noqa: F401 used in ExcludedColumns as a string.
+    Union,
 )
 
 import csp
@@ -119,11 +119,20 @@ ExcludedColumns = TypeAliasType("ExcludedColumns", "Union[Set[str], Dict[str, Un
 class MountPerspectiveTables(GatewayModule):
     requires: Optional[ChannelSelection] = []
 
-    route: str = "/perspective"
     tables: ChannelSelection = Field(default_factory=ChannelSelection)
-    limits: Dict[str, int] = {}
-    indexes: Dict[str, Optional[str]] = {}
-    layouts: Dict[str, str] = {}
+    limits: Dict[str, int] = Field(
+        description="Dict mapping table name to [perspective limit](https://perspective-dev.github.io/guide/explanation/table/options.html)",
+        default={},
+    )
+    indexes: Dict[str, Optional[str]] = Field(
+        description="Dict mapping table name to [perspective index](https://perspective-dev.github.io/guide/explanation/table/options.html)",
+        default={},
+    )
+    architecture: Dict[str, Literal["server", "client-server"]] = Field(
+        description="Dict mapping table name to [perspective data architecture](https://perspective-dev.github.io/guide/explanation/architecture.html), default is client-server",
+        default={},
+    )
+    layouts: Dict[str, str] = Field(default={})
     update_interval: timedelta = Field(default=timedelta(seconds=2))
     default_index: Optional[str] = Field(None, description="Default index field for all tables, i.e. 'id'")
     perspective_field: str = Field(
@@ -146,6 +155,7 @@ class MountPerspectiveTables(GatewayModule):
         ),
     )
 
+    _route: str = "/perspective"
     _server: Server = PrivateAttr(default=None)
     _client: Client = PrivateAttr(default=None)
 
@@ -288,18 +298,18 @@ class MountPerspectiveTables(GatewayModule):
         api_router: APIRouter = app.get_router("api")
 
         # Mount the perspective websocket handler
-        api_router.add_api_websocket_route(self.route, websocket_handler)
+        api_router.add_api_websocket_route(self._route, websocket_handler)
 
         # add route to fetch table names
         @api_router.get(
-            "{}/{}".format(self.route, "tables"),
+            "{}/{}".format(self._route, "tables"),
             responses=get_default_responses(),
             response_model=Dict[str, Dict[str, str]],
             tags=["Utility"],
         )
         async def get_perspective_table_names() -> Dict[str, Dict[str, str]]:
             """
-            This endpoint exposes the served [perspective](https://github.com/finos/perspective) table names and schemas.
+            This endpoint exposes the served [perspective](https://github.com/perspective-dev/perspective) table names and schemas.
 
             It can be used for `perspective`-based dashboards to build interactive visualization,
             such as the one provided as an example for the `csp-gateway` project.
@@ -314,17 +324,35 @@ class MountPerspectiveTables(GatewayModule):
 
         # add route to fetch layouts
         @api_router.get(
-            "{}/{}".format(self.route, "layouts"),
+            "{}/{}".format(self._route, "layouts"),
             responses=get_default_responses(),
             response_model=Dict[str, str],
             tags=["Utility"],
         )
         async def get_perspective_layouts() -> Dict[str, str]:
             """
-            This endpoint exposes saved [perspective](https://github.com/finos/perspective) workspace layouts.
+            This endpoint exposes saved [perspective](https://github.com/perspective-dev/perspective) workspace layouts.
             These layouts can be configured server side to be provided to all clients.
             """
             return self._layouts
+
+        # add route to fetch layouts
+        @api_router.get(
+            "{}/{}".format(self._route, "meta"),
+            responses=get_default_responses(),
+            response_model=Dict[str, Dict[str, Union[str, int]]],
+            tags=["Utility"],
+        )
+        async def get_perspective_meta() -> Dict[str, Dict[str, Union[str, int]]]:
+            """
+            This endpoint exposes perspective meta information, including limits,
+            indexes, and architecture.
+            """
+            return {
+                "limit": self.limits,
+                "index": self.indexes,
+                "architecture": self.architecture,
+            }
 
     def run_perspective(self):
         """Launch the perspective threads"""
@@ -338,7 +366,3 @@ class MountPerspectiveTables(GatewayModule):
             ),
         )
         psp_load_thread.start()
-
-        if version("perspective-python") < "3.7.0":
-            psp_process_thread = get_thread(target=perspective_thread, args=(self._client,))
-            psp_process_thread.start()
