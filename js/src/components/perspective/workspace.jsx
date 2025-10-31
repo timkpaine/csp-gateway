@@ -3,7 +3,6 @@ import { getDefaultViewerConfig } from "./gateway";
 import { fetchTables } from "./tables";
 import { getDefaultWorkspaceLayout } from "./layout";
 import { getCurrentTheme } from "./theme";
-import { hideLoader } from "../../common";
 
 export function Workspace(props) {
   // standard attributes
@@ -13,7 +12,7 @@ export function Workspace(props) {
   const { changeLayouts } = props;
 
   // any overrides to process tables with custom logic
-  const { processTables } = props;
+  const { processTables, hideLoader } = props;
 
   const workspace = useRef(null);
   const [workspaceReady, setWorkspaceReady] = useState(false);
