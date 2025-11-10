@@ -50,6 +50,8 @@ if typing.TYPE_CHECKING:
     from csp_gateway.server.gateway import Gateway
 
 
+__all__ = ("GatewayWebApp",)
+
 build_files_dir = path.abspath(path.join(path.dirname(__file__), "..", "build"))
 static_files_dir = build_files_dir
 images_files_dir = path.join(build_files_dir, "img")
@@ -486,6 +488,3 @@ class GatewayWebApp(object):
             self.gateway._shutdown(user_initiated=True)
         except Exception:
             self.gateway._shutdown(user_initiated=False)
-
-
-__all__ = ["GatewayWebApp"]

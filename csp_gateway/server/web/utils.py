@@ -2,6 +2,11 @@ from typing import Any, Callable, Coroutine, Dict, Union
 
 from fastapi.exceptions import RequestErrorModel
 
+__all__ = (
+    "Error404",
+    "get_default_responses",
+)
+
 NoArgsNoReturnFuncT = Callable[[], None]
 NoArgsNoReturnAsyncFuncT = Callable[[], Coroutine[Any, Any, None]]
 NoArgsNoReturnDecorator = Callable[[Union[NoArgsNoReturnFuncT, NoArgsNoReturnAsyncFuncT]], NoArgsNoReturnAsyncFuncT]
