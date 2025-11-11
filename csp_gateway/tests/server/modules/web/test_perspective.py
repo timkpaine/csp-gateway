@@ -1,5 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
+from unittest.mock import MagicMock
 
 import csp
 import numpy as np
@@ -10,7 +11,15 @@ from csp.typing import Numpy1DArray
 from perspective import Server
 from pydantic import Field
 
-from csp_gateway import Gateway, GatewayChannels, GatewayStruct, MountPerspectiveTables, create_pyarrow_table, psp_schema_to_arrow_schema
+from csp_gateway import (
+    Gateway,
+    GatewayChannels,
+    GatewayModule,
+    GatewayStruct,
+    MountPerspectiveTables,
+    create_pyarrow_table,
+    psp_schema_to_arrow_schema,
+)
 from csp_gateway.testing.harness import GatewayTestHarness
 from csp_gateway.utils.struct import GatewayStructMixins
 
@@ -18,6 +27,7 @@ from csp_gateway.utils.struct import GatewayStructMixins
 class MyTestEnum(Enum):
     a = Enum.auto()
     b = Enum.auto()
+    c = Enum.auto()
 
 
 class MyTestSubStruct(GatewayStruct):
@@ -54,6 +64,27 @@ class MyTestOptionalStruct(GatewayStruct):
 
 class MyPyArrowStruct(GatewayStruct):
     d: date
+
+
+class GWC(GatewayChannels):
+    test_channel: ts[MyTestStruct] = None
+    list_channel: ts[List[MyTestStruct]] = None
+    dict_channel: Dict[str, ts[MyTestStruct]] = None
+    dict_enum_channel: Dict[MyTestEnum, ts[MyTestStruct]] = None
+    index_channel: ts[MyTestStruct] = None
+    limit_channel: ts[MyTestStruct] = None
+    exclude_channel: ts[MyTestStruct] = None
+
+    my_perspective: Server = Field(default_factory=Server)
+
+
+class GWCUnused(GatewayChannels):
+    a: ts[MyTestStruct] = None
+    b: ts[MyTestStruct] = None
+    c: ts[[MyTestStruct]] = None
+    d: ts[[MyTestStruct]] = None
+    e: Dict[MyTestEnum, ts[MyTestStruct]] = None
+    f: Dict[MyTestEnum, ts[MyTestStruct]] = None
 
 
 def test_inherited_container_annotation_schema():
@@ -368,24 +399,6 @@ def test_pyarrow_conversion():
     assert df.head()["timestamp"][0] is None
 
 
-class ExampleEnum(Enum):
-    A = 1
-    B = 2
-    C = 3
-
-
-class GWC(GatewayChannels):
-    test_channel: ts[MyTestStruct] = None
-    list_channel: ts[List[MyTestStruct]] = None
-    dict_channel: Dict[str, ts[MyTestStruct]] = None
-    dict_enum_channel: Dict[ExampleEnum, ts[MyTestStruct]] = None
-    index_channel: ts[MyTestStruct] = None
-    limit_channel: ts[MyTestStruct] = None
-    exclude_channel: ts[MyTestStruct] = None
-
-    my_perspective: Server = Field(default_factory=Server)
-
-
 @pytest.mark.parametrize("use_external_perspective", [True, False])
 def test_MountPerspectiveTables(use_external_perspective):
     module = MountPerspectiveTables(
@@ -414,13 +427,13 @@ def test_MountPerspectiveTables(use_external_perspective):
         h.send(GWC.test_channel, o)
         h.send(GWC.list_channel, [o])
         h.send(GWC.dict_channel, {"test_key": o})
-        h.send(GWC.dict_enum_channel, {ExampleEnum.A: o})
+        h.send(GWC.dict_enum_channel, {MyTestEnum.a: o})
         h.send(GWC.limit_channel, o)
         h.send(GWC.index_channel, o)
     h.assert_ticked(GWC.test_channel, 10)
     h.assert_ticked(GWC.list_channel, 10)
     h.assert_ticked((GWC.dict_channel, "test_key"), 10)
-    h.assert_ticked((GWC.dict_enum_channel, ExampleEnum.A), 10)
+    h.assert_ticked((GWC.dict_enum_channel, MyTestEnum.a), 10)
     h.assert_ticked(GWC.limit_channel, 10)
     h.assert_ticked(GWC.index_channel, 10)
 
@@ -513,3 +526,31 @@ def test_MountPerspectiveTables_exclude_columns(exclude_columns):
     assert table_len(GWC.list_channel) == 1
     assert table_len(GWC.dict_channel) == 1
     assert table_len(GWC.exclude_channel) == 1
+
+
+def test_exclude_unused_tables():
+    channels = GWCUnused()
+    psp_module = MountPerspectiveTables()
+
+    class MyTestModule(GatewayModule):
+        def connect(self, channels):
+            channels.set_channel(GWCUnused.a, csp.const(MyTestStruct()))
+            channels.set_channel(GWCUnused.c, csp.const([MyTestStruct()]))
+            channels.set_channel(GWCUnused.e, csp.const(MyTestStruct()), MyTestEnum.a)
+
+    gateway = Gateway(modules=[psp_module, MyTestModule()], channels=channels)
+
+    # Build gateway - this will wire unused channels with null_ts
+    csp.run(gateway.graph, starttime=datetime(2023, 1, 1), endtime=timedelta(5))
+
+    # Mock out startup
+    gateway.output = MagicMock()
+    gateway.graph_build_failed = False
+    gateway.running = True
+    gateway.output.is_alive.return_value = True
+
+    # Build web to run perspective table pruning
+    gateway._build_web(ui=True, timeout=1, _in_test=True)
+
+    # Assert that tables were pruned
+    assert psp_module._unused_tables == ["b", "d", "f"]
