@@ -684,7 +684,7 @@ class TestGatewayWebserver:
             "example",
             "example_list",
             "my_custom_table",
-            "never_ticks",
+            # "never_ticks",  # NOTE: never_ticks has no data, so table is omitted
             "str_basket",
         ]
 

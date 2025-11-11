@@ -63,10 +63,6 @@ class ChannelsFactory(BaseModel, Generic[ChannelsType]):
             with channels._connection_context(node):
                 node.connect(channels)
 
-                # Connect to web app if it exists
-                if self.web_app:  # type: ignore[attr-defined]
-                    node.rest(self.web_app)  # type: ignore[attr-defined]
-
         # Now wire in the signals
         # first pass is for any baskets
         for (field, _indexer), push_adapter in channels._send_channels.items():

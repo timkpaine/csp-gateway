@@ -4,6 +4,7 @@ from io import BytesIO
 from logging import getLogger
 from typing import (
     Dict,
+    List,
     Literal,
     Optional,
     Set,
@@ -120,6 +121,7 @@ class MountPerspectiveTables(GatewayModule):
     requires: Optional[ChannelSelection] = []
 
     tables: ChannelSelection = Field(default_factory=ChannelSelection)
+    _unused_tables: Optional[List[str]] = PrivateAttr(default_factory=list)
 
     limits: Dict[str, int] = Field(
         description="Dict mapping table name to [perspective limit](https://perspective-dev.github.io/guide/explanation/table/options.html)",
@@ -298,7 +300,7 @@ class MountPerspectiveTables(GatewayModule):
             csp.schedule_alarm(alarm, self.update_interval, True)
 
     def _get_tables(self) -> Dict[str, Dict[str, str]]:
-        all_tables = {table_name: None for table_name in self._client.get_hosted_table_names()}
+        all_tables = {table_name: None for table_name in self._client.get_hosted_table_names() if table_name not in self._unused_tables}
         for table_name in all_tables:
             table = self._client.open_table(table_name)
             schema = table.schema()
@@ -312,7 +314,19 @@ class MountPerspectiveTables(GatewayModule):
             all_tables[table_name] = table.size()
         return all_tables
 
+    def _check_unused_tables(self, channels: GatewayChannels) -> None:
+        for table, key in channels._null_ts:
+            # NOTE: if only a single key is not bound, we consider the table
+            # in-use since we flatten the keys
+            # TODO: if all keys are unused, we could consider the table unused
+            if key is not None or table in self._unused_tables:
+                continue
+            self._unused_tables.append(table)
+
     def rest(self, app: GatewayWebApp) -> None:
+        # NOTE: We use an internal API here
+        self._check_unused_tables(object.__getattribute__(app.gateway, "channels"))
+
         async def websocket_handler(websocket: WebSocket) -> None:
             handler = PerspectiveStarletteHandler(perspective_server=self._server, websocket=websocket)
             try:
@@ -362,7 +376,7 @@ class MountPerspectiveTables(GatewayModule):
         @api_router.get(
             "{}/{}".format(self._route, "meta"),
             responses=get_default_responses(),
-            response_model=Dict[str, Union[None, int, str, Dict[str, Union[str, int]], Dict[str, Dict[str, str]]]],
+            response_model=Dict[str, Union[None, int, str, Dict[str, Union[str, int]], Dict[str, Dict[str, str]], List[str]]],
             tags=["Utility"],
         )
         async def get_perspective_meta():
@@ -380,6 +394,7 @@ class MountPerspectiveTables(GatewayModule):
                 "layouts": self.layouts,
                 "default_layout": self.default_layout,
                 "tables": self._get_tables(),
+                "unused_tables": self._unused_tables,
                 "table_sizes": self._get_table_sizes(),
             }
 

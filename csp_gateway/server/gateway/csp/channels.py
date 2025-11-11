@@ -228,6 +228,11 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
 
     _feedback_count: int = PrivateAttr(default=0)
 
+    # Track unused channels
+    # NOTE: this is private for now, only used by perspective module.
+    # Might be public in the future.
+    _null_ts: List[Tuple[str, Optional[str]]] = PrivateAttr(default_factory=list)
+
     def dynamic_keys(self) -> Optional[Dict[str, List[Any]]]:
         """Define dynamic dictionary keys by field, driven by data from the channels."""
         ...
@@ -358,14 +363,22 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
                             list_of_channels_per_key[key].append((module, edge))
 
                     # now finally bind on a per-key basis
+                    any_bound: bool = False
                     for (
                         key,
                         list_of_edges_and_modules,
                     ) in list_of_channels_per_key.items():
                         if list_of_edges_and_modules:
+                            # providers, bind normally
                             self._bind_delayed_channel(field, list_of_edges_and_modules, indexer=key)
+                            any_bound = True
                         else:
+                            # no providers, bind to null ts
                             self._delayed_channels[field][key].bind(csp.null_ts(get_dict_basket_value_type(tstype)))
+                            self._null_ts.append((field, str(key)))
+                    if not any_bound:
+                        # if nothing was bound, indicate as well
+                        self._null_ts.append((field, None))
 
                 elif is_list_basket(tstype):
                     # TODO
@@ -382,16 +395,26 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
                 tstype = self.get_outer_type(k)
                 value_type = get_dict_basket_value_type(tstype)
                 optional_field = k in all_optional_channels
-                for key, value in ((x, y) for x, y in v.items() if y.nodedef is _UnsetNodedef):
-                    if optional_field:
-                        # bind to null ts since optional
-                        value.bind(csp.null_ts(value_type))
+                any_bound = False
+                for key, value in v.items():
+                    if value.nodedef is _UnsetNodedef:
+                        if optional_field:
+                            # bind to null ts since optional
+                            value.bind(csp.null_ts(value_type))
+                            self._null_ts.append((k, str(key)))
+                        else:
+                            raise NoProviderException("Nothing provides required node: {}-{}".format(k, key))
                     else:
-                        raise NoProviderException("Nothing provides required node: {}-{}".format(k, key))
+                        any_bound = True
+                if not any_bound:
+                    # if nothing was bound, indicate as well
+                    self._null_ts.append((k, None))
+
             elif v.nodedef is _UnsetNodedef:
                 if k in all_optional_channels:
                     # bind to null ts since optional
                     v.bind(csp.null_ts(v.tstype.typ))
+                    self._null_ts.append((k, None))
                 else:
                     raise NoProviderException("Nothing provides required node: {}, required by {}".format(k, who_requires[k]))
 
