@@ -9,23 +9,23 @@ importers:
   .:
     dependencies:
       '@perspective-dev/client':
-        specifier: ~4.1.1
-        version: 4.1.1
+        specifier: ~4.2.0
+        version: 4.2.0
       '@perspective-dev/server':
-        specifier: ~4.1.1
-        version: 4.1.1
+        specifier: ~4.2.0
+        version: 4.2.0
       '@perspective-dev/viewer':
-        specifier: ~4.1.1
-        version: 4.1.1
+        specifier: ~4.2.0
+        version: 4.2.0
       '@perspective-dev/viewer-d3fc':
-        specifier: ~4.1.1
-        version: 4.1.1(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)
+        specifier: ~4.2.0
+        version: 4.2.0(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)
       '@perspective-dev/viewer-datagrid':
-        specifier: ~4.1.1
-        version: 4.1.1
+        specifier: ~4.2.0
+        version: 4.2.0
       '@perspective-dev/workspace':
-        specifier: ~4.1.1
-        version: 4.1.1
+        specifier: ~4.2.0
+        version: 4.2.0
       perspective-summary:
         specifier: ~0.1.0
         version: 0.1.0(@finos/perspective-viewer@3.8.0)(@finos/perspective@3.8.0)
@@ -392,23 +392,23 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@perspective-dev/client@4.1.1':
-    resolution: {integrity: sha512-xTxSwFL5/67MBFfOQUi9VXZ+rOWex6Z18QWBu3xiM674fVU1T/awTDvw/SUGvUXxECb3WARFeegZubLFfGRQaA==}
+  '@perspective-dev/client@4.2.0':
+    resolution: {integrity: sha512-Gb9RFOoKnGAJDR0rZA9OBC8CY3Sv3zsEJfrmUhmnFWC21erk66DhppFXKYm3ggU2ob/yhCNA/yWMUv4n8OBqVQ==}
 
-  '@perspective-dev/server@4.1.1':
-    resolution: {integrity: sha512-YDoW1MO4EmZc5lHpBImCIE62T6sNVTaclB/9VBEeEy7GaHC5BUJZUEHUMHqqVoUZinLWP/fcE5tC88MBbf+kNQ==}
+  '@perspective-dev/server@4.2.0':
+    resolution: {integrity: sha512-eK5YRPb53Ocnsqm15cnv4dMXyYK0168gk7SOxK2SpwD1w3ohLA6XpY1bpphmlmRBRNVCll5WISAThIZIIl0J4A==}
 
-  '@perspective-dev/viewer-d3fc@4.1.1':
-    resolution: {integrity: sha512-RT1VMy7N/mVA6R328nWmHKlUgNzBaUWKvbWW2AzIYPNzziF6SlvRkYcnNLTjwtkH+31XcZgzjoZ0AU8LRnwKUw==}
+  '@perspective-dev/viewer-d3fc@4.2.0':
+    resolution: {integrity: sha512-ry/H3K+VHgQPV73Gb/Z+5yYK0cbSKlVhm6dQz7eLCsbb9vCZm+HCOeUkdMnejSKFvpDDGlwN/E7niJvKT4/BzQ==}
 
-  '@perspective-dev/viewer-datagrid@4.1.1':
-    resolution: {integrity: sha512-TV9ro+7fQiLsWKyxUT3ReyGixXf8HlawhRA7LTGS6eCBkMWo39e5WQWcRVSAFlb2NlEYecy1wfpEbj8ibVj9ww==}
+  '@perspective-dev/viewer-datagrid@4.2.0':
+    resolution: {integrity: sha512-8WAPgjMgrI6YnM5HniUBcRzhVVfignpnt46wypAX3+a3JB6cYSx+T+F/P9rnb/QjFGIcnmbI9GjURVdrUhiNHQ==}
 
-  '@perspective-dev/viewer@4.1.1':
-    resolution: {integrity: sha512-eNhcxt73reKiU94iB0q+gng6obY13KmVEfgRdHu7Zs5qcIup9Yuer+YpujC1dvvAblEXjbnGgaMMLHaKjJCeww==}
+  '@perspective-dev/viewer@4.2.0':
+    resolution: {integrity: sha512-vs+LvrsM3E09RKBYPLTXNA7xvDUvNLaSDy+GxQPH/f/t6oZBOsORp1uQLrbeH7NZItKWtjmEkeLizh1lsnwkSQ==}
 
-  '@perspective-dev/workspace@4.1.1':
-    resolution: {integrity: sha512-nTQs8/eSPzSsZCzifcCE214Q2FKcZWS2Z/9T/cO2L5yxZRaF9mlBr/Ke0AMMg7ybhWv8JD7YKYmZrb+InUjyyQ==}
+  '@perspective-dev/workspace@4.2.0':
+    resolution: {integrity: sha512-d5YNEGJnDzMQNCd+jNw3LUdCPW42tHa2vvUsUyynTSZJqDORwvXk3+7oDFCNewMgY28PZiiZCwhxGDNLx+WBFA==}
 
   '@prospective.co/procss@0.1.17':
     resolution: {integrity: sha512-jZCbEji9gTgJIJ41a0VQQV8GARUNKp9ils8/6347fbNkGBtA3cRwhQfRAxnqc0dhyo6pTSjMSflqop5ToIiSwQ==}
@@ -454,8 +454,8 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
-  bn.js@5.2.2:
-    resolution: {integrity: sha512-v2YAxEmKaBLahNwE1mjp4WON6huMNeuDvagFZW+ASCuA/ku0bXR9hSMw0XpiqMoA3+rmnyck/tPRSFQkoC9Cuw==}
+  bn.js@5.2.3:
+    resolution: {integrity: sha512-EAcmnPkxpntVL+DS7bO1zhcZNvCkxqtkd0ZY53h06GNQ3DEkkGZ/gKgmDv6DdZQGj9BgfSPKtJJ7Dp1GPP8f7w==}
 
   brace-expansion@1.1.12:
     resolution: {integrity: sha512-9T9UjW3r0UW5c1Q7GTwllptXwhvYmEzFhzMfZ9H7FQWt+uZePjZPjBP/W1ZEyZ1twGWom5/56TF4lPcqjnDHcg==}
@@ -1075,8 +1075,8 @@ packages:
     engines: {node: '>=4'}
     hasBin: true
 
-  minimatch@3.1.2:
-    resolution: {integrity: sha512-J7p63hRiAjw1NDEww1W7i37+ByIrOWO5XQQAzZ3VOcL0PNybwpfmV/N05zFAzwQ9USyEcX6t3UO+K5aqBQOIHw==}
+  minimatch@3.1.3:
+    resolution: {integrity: sha512-M2GCs7Vk83NxkUyQV1bkABc4yxgz9kILhHImZiBPAZ9ybuvCb0/H7lEl5XvIg3g+9d4eNotkZA5IWwYl0tibaA==}
 
   minimist@1.2.8:
     resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
@@ -1208,8 +1208,8 @@ packages:
     resolution: {integrity: sha512-95/dZfLmlGc/6Xp7gqvRBgXF8M+osw/Xtalz1U/Va8MpSC1TiR7rM4lEvAs1p/q4v/EZk6bow3tKEclbMGsSFQ==}
     hasBin: true
 
-  qs@6.14.1:
-    resolution: {integrity: sha512-4EK3+xJl8Ts67nLYNwqw/dsFVnCf+qR7RgXSK9jEEm9unao3njwMDdmsdvoKBKHzxd7tCYz5e5M+SnMjdtXGQQ==}
+  qs@6.15.0:
+    resolution: {integrity: sha512-mAZTtNCeetKMH+pSjrb76NAM8V9a05I9aBZOHztWy/UqcJdQYNsf59vrRKWnojAT9Y+GbIvoTBC++CPHqpDBhQ==}
     engines: {node: '>=0.6'}
 
   queue-microtask@1.2.3:
@@ -1246,8 +1246,8 @@ packages:
     resolution: {integrity: sha512-dYqgNSZbDwkaJ2ceRd9ojCGjBq+mOm9LmtXnAnEGyHhN/5R7iDW2TRw3h+o/jCFxus3P2LfWIIiwowAjANm7IA==}
     engines: {node: '>= 0.4'}
 
-  regular-table@0.8.0:
-    resolution: {integrity: sha512-J0MnudDsbIkPQ5cW0Xo0DV/vb+kPr7R74I4oN++tM+KBssRKnbwvJSzczLmpsboXg6gNBbJI8zTVwk78NZX8pg==}
+  regular-table@0.8.1:
+    resolution: {integrity: sha512-+HZgc1CFER+M5dFhsL5MYEU6WKRhLwxRT85h7OCJM0kfuZiYZBi2kSH4/HRc4aCNGiczQbp1EvuEhTgjSdBl7w==}
     engines: {node: '>=16'}
 
   requires-port@1.0.0:
@@ -1401,7 +1401,7 @@ packages:
   tar@6.2.1:
     resolution: {integrity: sha512-DZ4yORTwrbTj/7MZYq2w+/ZFdI6OZ/f9SFHR+71gIVUZhOQPHzVCLpvRnPgyaMpfWxxk/4ONva3GQSyNIKRv6A==}
     engines: {node: '>=10'}
-    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exhorbitant rates) by contacting i@izs.me
+    deprecated: Old versions of tar are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   to-regex-range@5.0.1:
     resolution: {integrity: sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==}
@@ -1809,9 +1809,9 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@perspective-dev/client@4.1.1':
+  '@perspective-dev/client@4.2.0':
     dependencies:
-      '@perspective-dev/server': 4.1.1
+      '@perspective-dev/server': 4.2.0
       pro_self_extracting_wasm: 0.0.9
       stoppable: 1.1.0
       ws: 8.19.0
@@ -1821,14 +1821,14 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@perspective-dev/server@4.1.1': {}
+  '@perspective-dev/server@4.2.0': {}
 
-  '@perspective-dev/viewer-d3fc@4.1.1(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)':
+  '@perspective-dev/viewer-d3fc@4.2.0(d3-brush@3.0.0)(d3-dispatch@3.0.1)(d3-fetch@3.0.1)(d3-path@3.1.0)(d3-random@3.0.1)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-shape@3.2.0)(d3-time@3.1.0)(d3-zoom@3.0.0)':
     dependencies:
       '@d3fc/d3fc-chart': 5.1.9(d3-array@3.2.4)(d3-path@3.1.0)(d3-scale-chromatic@3.1.0)(d3-scale@4.0.2)(d3-selection@3.0.0)(d3-shape@3.2.0)
       '@d3fc/d3fc-element': 6.2.0
-      '@perspective-dev/client': 4.1.1
-      '@perspective-dev/viewer': 4.1.1
+      '@perspective-dev/client': 4.2.0
+      '@perspective-dev/viewer': 4.2.0
       chroma-js: 3.2.0
       d3: 7.9.0
       d3-array: 3.2.4
@@ -1853,21 +1853,21 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@perspective-dev/viewer-datagrid@4.1.1':
+  '@perspective-dev/viewer-datagrid@4.2.0':
     dependencies:
-      '@perspective-dev/client': 4.1.1
-      '@perspective-dev/viewer': 4.1.1
+      '@perspective-dev/client': 4.2.0
+      '@perspective-dev/viewer': 4.2.0
       chroma-js: 3.2.0
-      regular-table: 0.8.0
+      regular-table: 0.8.1
     transitivePeerDependencies:
       - bufferutil
       - debug
       - supports-color
       - utf-8-validate
 
-  '@perspective-dev/viewer@4.1.1':
+  '@perspective-dev/viewer@4.2.0':
     dependencies:
-      '@perspective-dev/client': 4.1.1
+      '@perspective-dev/client': 4.2.0
       pro_self_extracting_wasm: 0.0.9
     transitivePeerDependencies:
       - bufferutil
@@ -1875,7 +1875,7 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@perspective-dev/workspace@4.1.1':
+  '@perspective-dev/workspace@4.2.0':
     dependencies:
       '@lumino/algorithm': 2.0.4
       '@lumino/commands': 2.3.3
@@ -1885,7 +1885,7 @@ snapshots:
       '@lumino/signaling': 2.1.5
       '@lumino/virtualdom': 2.0.4
       '@lumino/widgets': 2.7.4
-      '@perspective-dev/client': 4.1.1
+      '@perspective-dev/client': 4.2.0
       lodash: 4.17.23
     transitivePeerDependencies:
       - bufferutil
@@ -1936,7 +1936,7 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  bn.js@5.2.2: {}
+  bn.js@5.2.3: {}
 
   brace-expansion@1.1.12:
     dependencies:
@@ -2711,7 +2711,7 @@ snapshots:
 
   leb128@0.0.5:
     dependencies:
-      bn.js: 5.2.2
+      bn.js: 5.2.3
       buffer-pipe: 0.0.3
 
   load-json-file@4.0.0:
@@ -2736,7 +2736,7 @@ snapshots:
 
   mime@1.6.0: {}
 
-  minimatch@3.1.2:
+  minimatch@3.1.3:
     dependencies:
       brace-expansion: 1.1.12
 
@@ -2776,7 +2776,7 @@ snapshots:
       chalk: 2.4.2
       cross-spawn: 6.0.6
       memorystream: 0.3.1
-      minimatch: 3.1.2
+      minimatch: 3.1.3
       pidtree: 0.3.1
       read-pkg: 3.0.0
       shell-quote: 1.8.3
@@ -2860,7 +2860,7 @@ snapshots:
       - debug
       - supports-color
 
-  qs@6.14.1:
+  qs@6.15.0:
     dependencies:
       side-channel: 1.1.0
 
@@ -2907,7 +2907,7 @@ snapshots:
       gopd: 1.2.0
       set-function-name: 2.0.2
 
-  regular-table@0.8.0: {}
+  regular-table@0.8.1: {}
 
   requires-port@1.0.0: {}
 
@@ -3140,7 +3140,7 @@ snapshots:
 
   union@0.5.0:
     dependencies:
-      qs: 6.14.1
+      qs: 6.15.0
 
   url-join@4.0.1: {}
 

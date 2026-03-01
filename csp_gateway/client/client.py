@@ -8,6 +8,7 @@ from asyncio import (
     new_event_loop,
     run_coroutine_threadsafe,
     set_event_loop,
+    wait_for,
     wrap_future,
 )
 from copy import deepcopy
@@ -231,8 +232,8 @@ class GatewayClientConfig(BaseModel):
     host: str = "localhost"
     port: Optional[int] = Field(default=8000, ge=1, le=65535, description="Port number for the gateway server")
     api_route: str = "/api/v1"
-    authenticate: bool = False
     api_key: str = ""
+    bearer_token: Optional[str] = None
     return_type: ReturnType = Field(
         default=ReturnType.Raw,
         description="Determines how REST request responses should be returned. Options: 'raw' (JSON dict), 'pandas' (DataFrame), 'polars' (DataFrame), 'struct' (original type), 'wrapper' (ResponseWrapper object).",
@@ -250,13 +251,13 @@ class GatewayClientConfig(BaseModel):
     def validate_config(self):
         if self.port is not None and self.port < 1:
             raise ValueError("Port must be a positive integer")
-        if self.api_key and not self.authenticate:
-            raise ValueError("API key must be provided if authentication is enabled")
         if self.host.startswith("http"):
             # Switch protocol to host
             protocol, host = self.host.split("://")
             self.__dict__["protocol"] = protocol
             self.__dict__["host"] = host
+        if self.bearer_token and self.api_key:
+            raise ValueError("Cannot provide both bearer_token and api_key. Choose one authentication method.")
         return self
 
     def __hash__(self):
@@ -398,6 +399,19 @@ class BaseGatewayClient(BaseModel):
     # server configuration
     config: GatewayClientConfig = Field(default_factory=GatewayClientConfig)
 
+    http_args: Dict[str, Any] = Field(
+        default=dict(follow_redirects=True), description="Additional arguments to pass to httpx requests (e.g., headers, auth, etc.)"
+    )
+
+    # Additional initialization for bearer_token
+    def __init__(self, config: GatewayClientConfig = None, **kwargs) -> None:
+        # Exists for compatibility with positional argument instantiation
+        if config is None:
+            config = GatewayClientConfig()
+        if kwargs:
+            config = GatewayClientConfig(**{**config.model_dump(exclude_unset=True), **kwargs})
+        super().__init__(config=config)
+
     # openapi configureation
     _initialized: bool = PrivateAttr(default=False)
     _openapi_spec: Dict[Any, Any] = PrivateAttr(default=None)
@@ -419,16 +433,14 @@ class BaseGatewayClient(BaseModel):
     _event_loop: Optional[AbstractEventLoop] = PrivateAttr(default=None)
     _event_loop_thread: Optional[Thread] = PrivateAttr(default=None)
 
-    def __init__(self, config: GatewayClientConfig = None, **kwargs) -> None:
-        # Exists for compatibility with positional argument instantiation
-        if config is None:
-            config = GatewayClientConfig()
-        if kwargs:
-            config = GatewayClientConfig(**{**config.model_dump(exclude_unset=True), **kwargs})
-        super().__init__(config=config)
-
     @model_validator(mode="after")
     def validate_client(self):
+        # Set Authorization header if bearer_token is provided
+        if self.config.bearer_token:
+            headers = self.http_args.get("headers", {}).copy()
+            headers["Authorization"] = f"Bearer {self.config.bearer_token}"
+            self.http_args["headers"] = headers
+
         if self._event_loop is None:
             self._event_loop = _get_or_new_event_loop()
 
@@ -456,8 +468,13 @@ class BaseGatewayClient(BaseModel):
     def _initialize(self) -> None:
         if not self._initialized:
             # grab openapi spec
+            openapi_url = f"{_host(self.config)}/openapi.json"
+            openapi_params = {"token": self.config.api_key} if self.config.api_key else None
             self._openapi_spec: Dict[Any, Any] = replace_refs(
-                cast(Dict[Any, Any], GET(f"{_host(self.config)}/openapi.json")).json(),
+                cast(
+                    Dict[Any, Any],
+                    GET(openapi_url, params=openapi_params, **self.http_args),
+                ).json(),
             )
 
             # collect mounted routes
@@ -496,9 +513,11 @@ class BaseGatewayClient(BaseModel):
 
     def _buildroute(self, route: str) -> str:
         url = f"{_host(self.config)}{self._buildpath(route)}"
-        if self.config.authenticate:
-            return url, {"token": self.config.api_key}
-        return url, {}
+        # If using api_key (not bearer_token), add as query param
+        extra_params = {}
+        if self.config.api_key:
+            extra_params["token"] = self.config.api_key
+        return url, extra_params
 
     def _api_path_and_route(self, route: str) -> str:
         return self.config.api_route + "/" + route
@@ -509,10 +528,11 @@ class BaseGatewayClient(BaseModel):
             host = host.replace("http://", "ws://")
         elif host.startswith("https://"):
             host = host.replace("https://", "wss://")
-        if self.config.authenticate:
-            auth = f"?token={self.config.api_key}"
-        else:
-            auth = ""
+        # If using api_key (not bearer_token), add as query param
+        auth = ""
+        if self.config.api_key:
+            sep = "&" if "?" in host else "?"
+            auth = f"{sep}token={self.config.api_key}"
         return f"{host}{self.config.api_route}/{route}{auth}"
 
     def _handle_response(self, resp: Response, route: str) -> ResponseType:
@@ -554,7 +574,7 @@ class BaseGatewayClient(BaseModel):
     ) -> ResponseType:
         params = params or {}
         resolved_route, extra_params = self._buildroute(route)
-        return self._handle_response(GET(resolved_route, params={**params, **extra_params}, timeout=timeout), route=route)
+        return self._handle_response(GET(resolved_route, params={**params, **extra_params}, timeout=timeout, **self.http_args), route=route)
 
     async def _getasync(
         self,
@@ -565,7 +585,9 @@ class BaseGatewayClient(BaseModel):
         params = params or {}
         resolved_route, extra_params = self._buildroute(route)
         async with httpx_AsyncClient() as client:
-            return self._handle_response(await client.get(resolved_route, params={**params, **extra_params}, timeout=timeout), route=route)
+            return self._handle_response(
+                await client.get(resolved_route, params={**params, **extra_params}, timeout=timeout, **self.http_args), route=route
+            )
 
     def _post(
         self,
@@ -576,7 +598,9 @@ class BaseGatewayClient(BaseModel):
     ) -> ResponseType:
         params = params or {}
         resolved_route, extra_params = self._buildroute(route)
-        return self._handle_response(POST(resolved_route, params={**params, **extra_params}, json=data, timeout=timeout), route=route)
+        return self._handle_response(
+            POST(resolved_route, params={**params, **extra_params}, json=data, timeout=timeout, **self.http_args), route=route
+        )
 
     async def _postasync(
         self,
@@ -589,26 +613,28 @@ class BaseGatewayClient(BaseModel):
         resolved_route, extra_params = self._buildroute(route)
         async with httpx_AsyncClient() as client:
             return self._handle_response(
-                await client.post(resolved_route, params={**params, **extra_params}, json=data, timeout=timeout), route=route
+                await client.post(resolved_route, params={**params, **extra_params}, json=data, timeout=timeout, **self.http_args), route=route
             )
 
     def _stream(
         self,
         channels: Optional[List[Union[str, Tuple[str, str]]]] = None,
         callback: Callable = None,
+        timeout: Optional[float] = None,
     ):
         if callback:
-            async_generator = self._streamAsync(channels=channels)
-            iterator = async_generator.__aiter__()
+            it = aiter(self._streamAsync(channels=channels))
 
-            async def wait_for_aio_fut(aio_fut):
-                return await aio_fut
+            async def get_next():
+                if timeout is not None:
+                    return await wait_for(anext(it), timeout=timeout)
+                return await anext(it)
 
             try:
                 if self._event_loop.is_running():
                     applyAsyncioNesting(self._event_loop)
                 while True:
-                    callback(self._event_loop.run_until_complete(iterator.__anext__()))
+                    callback(self._event_loop.run_until_complete(get_next()))
             except StopAsyncIteration:
                 return
 
@@ -774,7 +800,7 @@ class BaseGatewayClient(BaseModel):
     def state(self, field: str = "", timeout: float = _DEFAULT_TIMEOUT, query: Optional[Query] = None) -> ResponseType: ...
 
     @abstractmethod
-    def stream(self, channels: Optional[List[Union[str, Tuple[str, str]]]] = None): ...
+    def stream(self, channels: Optional[List[Union[str, Tuple[str, str]]]] = None, timeout: Optional[float] = None): ...
 
     # NOTE: sync version
     # def stream(self, channels: List[str] = None, callback: Callable = None):
@@ -860,7 +886,7 @@ class SyncGatewayClientMixin:
             self.config.return_type = old_return_type
         return res
 
-    def stream(self, channels: Optional[List[Union[str, Tuple[str, str]]]] = None, callback: Callable = None):
+    def stream(self, channels: Optional[List[Union[str, Tuple[str, str]]]] = None, callback: Callable = None, timeout: Optional[float] = None):
         """Stream data from specified channels with optional key filtering for dict baskets.
 
         Establishes a synchronous streaming connection to receive real-time updates from the specified channels.
@@ -871,8 +897,11 @@ class SyncGatewayClientMixin:
                     each entry can be either a string (channel name) or a tuple of
                     (channel_name, key) to subscribe only to a specific key in a dict basket.
             callback: A function that will be called with each received message.
+            timeout: Optional timeout in seconds for receiving messages. If no message is received
+                    within this time, asyncio.TimeoutError is raised. Useful for detecting dead
+                    connections when the server sends regular heartbeats.
         """
-        self._stream(channels=channels, callback=callback)
+        self._stream(channels=channels, callback=callback, timeout=timeout)
 
     def publish(self, field: str, data: Union[Dict[str, Any], List[Any]], key: Optional[str] = None):
         """Publish data to a channel or specific key within a dict basket channel.
@@ -1047,7 +1076,7 @@ class AsyncGatewayClientMixin:
         params = None if query is None else {"query": query.model_dump_json()}
         return await self._getasync("{}/{}".format("state", field), timeout=timeout, params=params)
 
-    async def stream(self, channels: List[Union[str, Tuple[str, str]]] = None):
+    async def stream(self, channels: List[Union[str, Tuple[str, str]]] = None, timeout: Optional[float] = None):
         """Stream data from specified channels with optional key filtering for dict baskets.
 
         Establishes an asynchronous streaming connection to receive real-time updates from the specified channels.
@@ -1057,12 +1086,26 @@ class AsyncGatewayClientMixin:
             channels: A list of channel names to subscribe to. For dict basket channels,
                     each entry can be either a string (channel name) or a tuple of
                     (channel_name, key) to subscribe only to a specific key in a dict basket.
+            timeout: Optional timeout in seconds for receiving messages. If no message is received
+                    within this time, asyncio.TimeoutError is raised. Useful for detecting dead
+                    connections when the server sends regular heartbeats.
 
         Yields:
             Data messages received from the subscribed channels.
+
+        Raises:
+            asyncio.TimeoutError: If timeout is set and no message is received within the timeout period.
         """
-        async for data in self._streamAsync(channels=channels):
-            yield data
+        if timeout is None:
+            async for data in self._streamAsync(channels=channels):
+                yield data
+        else:
+            it = aiter(self._streamAsync(channels=channels))
+            while True:
+                try:
+                    yield await wait_for(anext(it), timeout=timeout)
+                except StopAsyncIteration:
+                    break
 
     async def publish(self, field: str, data: Union[Dict[str, Any], List[Any]], key: Optional[str] = None):
         """Publish data to a channel or specific key within a dict basket channel.

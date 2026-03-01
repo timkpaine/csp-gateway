@@ -17,12 +17,12 @@
     "prepack": "pnpm run build"
   },
   "dependencies": {
-    "@perspective-dev/client": "~4.1.1",
-    "@perspective-dev/server": "~4.1.1",
-    "@perspective-dev/viewer": "~4.1.1",
-    "@perspective-dev/viewer-d3fc": "~4.1.1",
-    "@perspective-dev/viewer-datagrid": "~4.1.1",
-    "@perspective-dev/workspace": "~4.1.1",
+    "@perspective-dev/client": "~4.2.0",
+    "@perspective-dev/server": "~4.2.0",
+    "@perspective-dev/viewer": "~4.2.0",
+    "@perspective-dev/viewer-d3fc": "~4.2.0",
+    "@perspective-dev/viewer-datagrid": "~4.2.0",
+    "@perspective-dev/workspace": "~4.2.0",
     "perspective-summary": "~0.1.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
