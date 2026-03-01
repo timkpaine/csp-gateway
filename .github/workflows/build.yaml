@@ -55,7 +55,7 @@ jobs:
     - name: Make dist
       run: make dist
 
-    - uses: actions/upload-artifact@v6
+    - uses: actions/upload-artifact@v7
       with:
         name: dist
         path: dist
@@ -87,7 +87,7 @@ jobs:
       run: make develop-js
 
     - name: Download wheels
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: dist
 
@@ -97,13 +97,8 @@ jobs:
     - name: Test
       run: make coverage
 
-<<<<<<< before updating
     - name: Upload test results (Python)
-      uses: actions/upload-artifact@v6
-=======
-    - name: Upload test results
       uses: actions/upload-artifact@v7
->>>>>>> after updating
       with:
         name: test-results-${{ matrix.os }}-${{ matrix.python-version }}
         path: '**/junit.xml'
@@ -128,16 +123,8 @@ jobs:
       matrix:
         wheel: ["", "client"]
 
-<<<<<<< before updating
     steps:
     - uses: actions/checkout@v6
-=======
-    - uses: actions/upload-artifact@v7
-      with:
-        name: dist-${{matrix.os}}
-        path: dist
-      if: matrix.os == 'ubuntu-latest'
->>>>>>> after updating
 
     - name: Set up Python
       uses: actions-ext/python/setup@main
@@ -145,7 +132,7 @@ jobs:
         version: 3.11
 
     - name: Download wheels
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@v8
       with:
         name: dist
 
