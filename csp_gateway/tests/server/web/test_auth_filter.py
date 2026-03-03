@@ -4,7 +4,6 @@ from datetime import timedelta
 
 import csp
 import pytest
-from ccflow import PyObjectPath
 from csp import ts
 from fastapi.testclient import TestClient
 
@@ -19,6 +18,7 @@ from csp_gateway import (
 )
 from csp_gateway.server.middleware.api_key_external import MountExternalAPIKeyMiddleware
 from csp_gateway.server.middleware.auth_filter import AuthFilterMiddleware
+from csp_gateway.testing.mock_validators import mock_api_key_validator_by_user
 
 
 # Test struct with a "user" field for filtering
@@ -47,16 +47,6 @@ class UserDataModule(GatewayModule):
     def connect(self, channels: UserDataChannels):
         data = self.produce_data(csp.timer(interval=timedelta(seconds=0.1), value=True))
         channels.set_channel("user_data", data)
-
-
-def mock_validator(api_key: str, settings, module) -> dict:
-    """Mock validator that returns identity with user field."""
-    users = {
-        "alice_key": {"user": "alice", "role": "admin"},
-        "bob_key": {"user": "bob", "role": "viewer"},
-        "charlie_key": {"user": "charlie", "role": "viewer"},
-    }
-    return users.get(api_key)
 
 
 class TestAuthFilterMiddleware:
@@ -140,12 +130,11 @@ class TestAuthFilterMiddlewareIntegration:
     @pytest.fixture(scope="class")
     def filter_gateway(self, free_port):
         """Create a gateway with auth filtering enabled."""
-        validator_path = PyObjectPath("csp_gateway.tests.server.web.test_auth_filter:mock_validator")
         gateway = Gateway(
             modules=[
                 UserDataModule(),
                 MountRestRoutes(force_mount_all=True),
-                MountExternalAPIKeyMiddleware(external_validator=validator_path),
+                MountExternalAPIKeyMiddleware(external_validator=mock_api_key_validator_by_user),
                 AuthFilterMiddleware(filter_fields=["user"]),
             ],
             channels=UserDataChannels(),
@@ -442,12 +431,11 @@ class TestIdentityCacheIntegration:
     @pytest.fixture(scope="class")
     def cached_gateway(self, free_port):
         """Create a gateway with identity cache enabled."""
-        validator_path = PyObjectPath("csp_gateway.tests.server.web.test_auth_filter:mock_validator")
         gateway = Gateway(
             modules=[
                 UserDataModule(),
                 MountRestRoutes(force_mount_all=True),
-                MountExternalAPIKeyMiddleware(external_validator=validator_path),
+                MountExternalAPIKeyMiddleware(external_validator=mock_api_key_validator_by_user),
                 AuthFilterMiddleware(
                     filter_fields=["user"],
                     identity_cache_channels=ChannelSelection(include=["user_data"]),
@@ -575,12 +563,11 @@ class TestSendValidationIntegration:
 
     @pytest.fixture(scope="class")
     def send_validated_gateway(self, free_port):
-        validator_path = PyObjectPath("csp_gateway.tests.server.web.test_auth_filter:mock_validator")
         gateway = Gateway(
             modules=[
                 UserDataModule(),
                 MountRestRoutes(force_mount_all=True),
-                MountExternalAPIKeyMiddleware(external_validator=validator_path),
+                MountExternalAPIKeyMiddleware(external_validator=mock_api_key_validator_by_user),
                 AuthFilterMiddleware(
                     filter_fields=["user"],
                     send_validation_channels=ChannelSelection(include=["user_data"]),
@@ -686,12 +673,11 @@ class TestNextFilteringIntegration:
 
     @pytest.fixture(scope="class")
     def next_filtered_gateway(self, free_port):
-        validator_path = PyObjectPath("csp_gateway.tests.server.web.test_auth_filter:mock_validator")
         gateway = Gateway(
             modules=[
                 UserDataModule(),
                 MountRestRoutes(force_mount_all=True),
-                MountExternalAPIKeyMiddleware(external_validator=validator_path),
+                MountExternalAPIKeyMiddleware(external_validator=mock_api_key_validator_by_user),
                 AuthFilterMiddleware(
                     filter_fields=["user"],
                     next_filter_channels=ChannelSelection(include=["user_data"]),
