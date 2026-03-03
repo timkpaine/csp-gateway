@@ -1,10 +1,12 @@
 import { CUSTOM_LAYOUT_CONFIG_NAME } from "../../common";
 
+/** Read custom layout from localStorage */
 export const getCustomLayout = () => {
   const possibleLayout = window.localStorage.getItem(CUSTOM_LAYOUT_CONFIG_NAME);
   return possibleLayout ? { "Custom Layout": JSON.parse(possibleLayout) } : {};
 };
 
+/** Persist custom layout to localStorage */
 export const saveCustomLayout = (layout) => {
   window.localStorage.setItem(
     CUSTOM_LAYOUT_CONFIG_NAME,
@@ -12,7 +14,8 @@ export const saveCustomLayout = (layout) => {
   );
 };
 
-export const getServerDefinedLayouts = async () => {
+/** Fetch server-defined layouts from the gateway API */
+export const getServerLayouts = async () => {
   const data = await fetch(
     `${window.location.protocol}//${window.location.host}/api/v1/perspective/layouts`,
   );
@@ -28,7 +31,8 @@ export const getServerDefinedLayouts = async () => {
   return json;
 };
 
-export const getDefaultWorkspaceLayout = () => ({
+/** Build an empty workspace layout shell that tables can be added into */
+export const buildEmptyLayout = () => ({
   sizes: [1],
   detail: {
     main: {

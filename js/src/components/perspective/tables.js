@@ -56,6 +56,5 @@ export const fetchTables = async () => {
     return acc;
   }, {});
 
-  // return { worker, tables: new_tables };
-  return { worker: websocket, tables: new_tables };
+  return { worker, websocket, tables: new_tables };
 };

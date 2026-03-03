@@ -6,6 +6,7 @@ export const getDefaultViewerConfig = (tableName, schema, theme = "light") => {
     table: tableName,
     sort: [["timestamp", "desc"]],
     theme: theme === "dark" ? "Pro Dark" : "Pro Light",
+    plugin_config: { edit_mode: "SELECT_REGION" },
     version,
   };
 
