@@ -1,5 +1,8 @@
 """Tests for AuthFilterMiddleware."""
 
+import json
+import socket
+import time
 from datetime import timedelta
 
 import csp
@@ -259,8 +262,6 @@ class TestWebSocketFiltering:
         message = '{"channel": "test", "data": [{"user": "alice", "data": "visible"}, {"user": "bob", "data": "hidden"}]}'
         filtered = await middleware.filter_websocket_data(message, ws)
 
-        import json
-
         parsed = json.loads(filtered)
         assert len(parsed["data"]) == 1
         assert parsed["data"][0]["user"] == "alice"
@@ -463,8 +464,6 @@ class TestIdentityCacheIntegration:
 
     def test_cached_last_returns_user_data(self, cached_client: TestClient):
         """Test that /last returns only data for the authenticated user."""
-        import time
-
         # Wait for some data to be generated
         time.sleep(0.5)
 
@@ -555,8 +554,6 @@ class TestSendValidationIntegration:
 
     @pytest.fixture(scope="class")
     def free_port(self):
-        import socket
-
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(("", 0))
             return s.getsockname()[1]
@@ -665,8 +662,6 @@ class TestNextFilteringIntegration:
 
     @pytest.fixture(scope="class")
     def free_port(self):
-        import socket
-
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(("", 0))
             return s.getsockname()[1]
