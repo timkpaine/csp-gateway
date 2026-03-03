@@ -12,6 +12,8 @@ import {
   getServerLayouts,
   getCustomLayout,
   saveCustomLayout,
+  getUrlLayout,
+  setUrlLayout,
 } from "./layout";
 import { getCurrentTheme, getViewerTheme } from "./theme";
 
@@ -128,12 +130,25 @@ export const Workspace = forwardRef(function Workspace(
       if (websocket !== worker) {
         await ws.load(websocket);
       }
-      await ws.restore(applyThemeToLayout(allLayouts["Default"]));
+      // 5. Restore: prefer URL layout (shared link), otherwise use Default
+      const urlLayout = await getUrlLayout();
+      if (urlLayout) {
+        await ws.restore(applyThemeToLayout(urlLayout));
+      } else {
+        await ws.restore(applyThemeToLayout(allLayouts["Default"]));
+      }
 
       // 6. Update React state (for header dropdown, etc.)
       setLayouts(allLayouts);
-      setActiveLayoutName("Default");
+      setActiveLayoutName(urlLayout ? null : "Default");
       initializedRef.current = true;
+
+      // 7. Sync layout to URL on every workspace change
+      ws.addEventListener("workspace-layout-update", async () => {
+        if (!initializedRef.current) return;
+        const config = await ws.save();
+        setUrlLayout(config);
+      });
 
       onReady?.();
     })();
