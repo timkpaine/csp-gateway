@@ -96,7 +96,7 @@ server = [
     "janus",
     "omegaconf",
     "orjson",
-    "perspective-python>=4.2,<4.3",
+    "perspective-python>=4.3,<4.4",
     "psutil",
     "pyarrow",
     "pydantic>=2",

@@ -27,7 +27,6 @@ from csp_gateway import (
     GatewaySettings,
     GatewayStructMixins,
     IdType,
-    MountAPIKeyMiddleware,
     MountChannelsGraph,
     MountControls,
     MountOutputsFolder,
@@ -292,7 +291,7 @@ if __name__ == "__main__":
     # be instantiated directly as we do so here:
 
     # Setting authentication
-    settings = GatewaySettings(API_KEY="12345", AUTHENTICATE=False)
+    settings = GatewaySettings()
 
     # instantiate gateway
     gateway = Gateway(
@@ -322,8 +321,6 @@ if __name__ == "__main__":
             ),
             MountRestRoutes(force_mount_all=True),
             MountWebSocketRoutes(),
-            # For authentication
-            MountAPIKeyMiddleware(),
         ],
         channels=ExampleGatewayChannels(),
     )
