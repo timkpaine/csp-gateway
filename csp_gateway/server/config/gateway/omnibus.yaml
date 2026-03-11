@@ -53,11 +53,9 @@ gateway:
     - /modules/mount_perspective_tables
     - /modules/mount_rest_routes
     - /modules/mount_websocket_routes
-    # - /modules/mount_api_key_middleware
   channels:
     _target_: csp_gateway.server.demo.ExampleGatewayChannels
 
 hydra:
-#   searchpath:
   run:
     dir: outputs/${oc.env:HOSTNAME,localhost}_${hydra.job.name}/${now:%Y-%m-%d}/${now:%H-%M-%S}
