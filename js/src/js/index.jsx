@@ -24,13 +24,13 @@ export default function App(props) {
     hideLoader,
   } = props;
 
-  // ── OpenAPI ──
+  // OpenAPI
   const [openapi, setOpenApi] = useState(null);
   useEffect(() => {
     getOpenApi().then(setOpenApi);
   }, []);
 
-  // ── Theme ──
+  // Theme
   const [theme, setTheme] = useState(getInitialTheme);
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
@@ -40,14 +40,14 @@ export default function App(props) {
     });
   }, []);
 
-  // ── Workspace ref (for layout operations from header) ──
+  // Workspace ref (for layout operations from header)
   const workspaceRef = useRef(null);
 
-  // ── Loader ──
+  // Loader
   const doHideLoader = hideLoader || hideDefaultLoader;
   const onWorkspaceReady = useCallback(() => doHideLoader(), [doHideLoader]);
 
-  // ── Settings ──
+  // Settings
   const [settingsOpen, setSettingsOpen] = useState(false);
   const toggleSettings = useCallback(
     () => setSettingsOpen((prev) => !prev),

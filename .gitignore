@@ -123,7 +123,6 @@ index.md
 # JS
 js/coverage
 js/dist
-js/lib
 js/node_modules
 js/test-results
 js/playwright-report
@@ -152,3 +151,6 @@ ROADMAP.md
 AGENTS.md
 .github/hooks/sdlc.json
 .superpowers
+
+# JS Artifacts
+csp_gateway/server/build

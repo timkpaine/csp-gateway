@@ -2,6 +2,26 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./index";
 
+function isPerspectiveViewNotFoundError(error) {
+  const message = error?.message || String(error || "");
+  return message.includes("View not found");
+}
+
+// Perspective can reject stale view operations after a viewer is replaced
+// during rapid layout changes. The library treats this as a benign cancelled
+// render, but some paths still surface it as an unhandled browser error.
+window.addEventListener("unhandledrejection", (event) => {
+  if (isPerspectiveViewNotFoundError(event.reason)) {
+    event.preventDefault();
+  }
+});
+
+window.addEventListener("error", (event) => {
+  if (isPerspectiveViewNotFoundError(event.error || event.message)) {
+    event.preventDefault();
+  }
+});
+
 window.addEventListener("load", () => {
   const container = document.getElementById("gateway-root");
 
@@ -10,7 +30,11 @@ window.addEventListener("load", () => {
     const clicked = e.target.closest("perspective-viewer");
     if (!clicked) return;
     for (const v of document.querySelectorAll("perspective-viewer")) {
-      if (v !== clicked && v.getSelection()) v.setSelection();
+      try {
+        if (v !== clicked && v.getSelection()) v.setSelection();
+      } catch (err) {
+        console.warn("Failed to clear Perspective selection:", err);
+      }
     }
   });
 
