@@ -55,6 +55,14 @@ jobs:
     - name: Make dist
       run: make dist
 
+    - uses: actions-ext/python/test-wheel@main
+      with:
+        module: csp_gateway
+
+    - uses: actions-ext/python/test-sdist@main
+      with:
+        module: csp_gateway
+
     - uses: actions/upload-artifact@v7
       with:
         name: dist
@@ -92,7 +100,7 @@ jobs:
         name: dist
 
     - name: Install wheels
-      run: uv pip install `ls csp_gateway-*.whl`[develop]
+      run: uv pip install `ls csp_gateway-*.whl`[develop] --target .
 
     - name: Test
       run: make coverage

@@ -17,7 +17,7 @@ export function Header(props) {
     document.title = openapi.info.title;
   }
 
-  // ── Layout state from workspace ref ──
+  // Layout state from workspace ref
   const [layoutNames, setLayoutNames] = useState([]);
   const [activeLayout, setActiveLayout] = useState(null);
 
@@ -38,10 +38,10 @@ export function Header(props) {
   }, [workspaceRef]);
 
   const onLayoutChange = useCallback(
-    (e) => {
+    async (e) => {
       const name = e.target.value;
-      workspaceRef?.current?.setActiveLayout(name);
       setActiveLayout(name);
+      workspaceRef?.current?.setActiveLayout(name);
     },
     [workspaceRef],
   );

@@ -182,7 +182,6 @@ exclude = [
     "docs",
     "examples",
     "js/dist",
-    "js/lib",
     "js/node_modules",
 ]
 
