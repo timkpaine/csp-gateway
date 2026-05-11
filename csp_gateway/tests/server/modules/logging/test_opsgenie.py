@@ -117,11 +117,13 @@ class EventTestModule(GatewayModule):
 @mock.patch("opsgenie_sdk.HeartbeatApi.get_heartbeat")
 @mock.patch("opsgenie_sdk.HeartbeatApi.create_heartbeat")
 @mock.patch("opsgenie_sdk.HeartbeatApi.update_heartbeat")
+@mock.patch("opsgenie_sdk.HeartbeatApi.disable_heartbeat")
 @mock.patch.object(opsgenie_sdk.HeartbeatApi, "ping")
 @mock.patch("logging.Logger.trace")
 def test_opsgenie(
     mock_trace,
     mock_ping,
+    mock_disable_heartbeat,
     mock_update_heartbeat,
     mock_create_heartbeat,
     mock_get_heartbeat,
@@ -235,3 +237,64 @@ def test_opsgenie(
     assert update_heartbeat_kwargs["update_heartbeat_payload"].to_dict() == expected_payload.to_dict()
 
     assert mock_create_heartbeat.call_count == 0
+
+    # heartbeat should be disabled on shutdown
+    assert mock_disable_heartbeat.call_count == 1
+    disable_args = mock_disable_heartbeat.call_args_list[0].args
+    disable_kwargs = mock_disable_heartbeat.call_args_list[0].kwargs
+    assert disable_args == ("test_heartbeat",)
+    assert disable_kwargs == {"async_req": False, "_request_timeout": 5.0}
+
+
+@mock.patch("opsgenie_sdk.CreateHeartbeatPayload")
+@mock.patch("opsgenie_sdk.HeartbeatApi.get_heartbeat")
+@mock.patch("opsgenie_sdk.HeartbeatApi.create_heartbeat")
+@mock.patch("opsgenie_sdk.HeartbeatApi.update_heartbeat")
+@mock.patch("opsgenie_sdk.HeartbeatApi.disable_heartbeat")
+@mock.patch.object(opsgenie_sdk.HeartbeatApi, "ping")
+@mock.patch("logging.Logger.error")
+def test_opsgenie_disable_heartbeat_failure_is_logged(
+    mock_error,
+    mock_ping,
+    mock_disable_heartbeat,
+    mock_update_heartbeat,
+    mock_create_heartbeat,
+    mock_get_heartbeat,
+    mock_create_heartbeat_payload,
+):
+    """disable_heartbeat exceptions on shutdown should be logged but not raised."""
+    mock_ping_response = Mock()
+    mock_ping_response.ready.return_value = True
+    mock_ping_response.get.return_value = Mock(result="PONG - Heartbeat received")
+    mock_ping.return_value = mock_ping_response
+
+    mock_disable_heartbeat.side_effect = RuntimeError("opsgenie unreachable")
+
+    h = GatewayTestHarness(test_channels=["metric"])
+    gateway = Gateway(
+        modules=[
+            h,
+            EventTestModule(),
+            PublishOpsGenie(
+                ops_api_key="foo123",
+                ops_heartbeat_name="test_heartbeat",
+                ops_tags={"user": "test0123", "trading_area": "ABCD"},
+                ops_async_delay_sec=3.0,
+                metrics_channel="metric",
+            ),
+        ],
+        channels=EventTestChannels(),
+    )
+    h.delay(timedelta(seconds=1))
+    csp.run(
+        gateway.graph,
+        starttime=datetime.now(timezone.utc),
+        endtime=timedelta(seconds=2),
+    )
+
+    assert mock_disable_heartbeat.call_count == 1
+    mock_error.assert_any_call(
+        "Failed to disable heartbeat '%s' on shutdown: %s",
+        "test_heartbeat",
+        mock_disable_heartbeat.side_effect,
+    )

@@ -178,6 +178,17 @@ class PublishOpsGenie(GatewayModule):
             # init heartbeat object in synchronous mode
             self._init_heartbeat(heartbeat_api=s_heartbeat_api)
 
+        with csp.stop():
+            try:
+                s_heartbeat_api.disable_heartbeat(
+                    self.ops_heartbeat_name,
+                    async_req=False,
+                    _request_timeout=self.ops_sync_delay_sec,
+                )
+                log.info("Disabled heartbeat '%s' on shutdown", self.ops_heartbeat_name)
+            except Exception as e:
+                log.error("Failed to disable heartbeat '%s' on shutdown: %s", self.ops_heartbeat_name, e)
+
         if csp.ticked(data):
             for metric in data:
                 log.trace("Received metric %s", metric.metric)
