@@ -6,7 +6,6 @@ import CLIENT_WASM from "@perspective-dev/viewer/dist/wasm/perspective-viewer.wa
 import "@perspective-dev/workspace";
 import "@perspective-dev/viewer-datagrid";
 import "@perspective-dev/viewer-d3fc";
-import "perspective-summary";
 
 const perspective_init_promise = Promise.all([
   perspective.init_server(fetch(SERVER_WASM)),
