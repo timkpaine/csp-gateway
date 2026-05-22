@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, Generic, List, Optional, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, Generic, List, Optional, Set, Type, Union
 
 from ccflow import BaseModel
 from pydantic import Field, TypeAdapter, model_validator
@@ -43,11 +43,19 @@ class Module(BaseModel, Generic[ChannelsType], ABC):
         """
         Channels that this module dynamically adds to the gateway channels when this module is included into the gateway.
 
-        State for any of these channels is registered by calling
-        :meth:`GatewayChannels.set_state` from within :meth:`connect`.
-
         Returns:
             Dictionary keyed by channel name and type of the timeseries of the channel as values.
+        """
+        ...
+
+    def dynamic_state_channels(self) -> Optional[Set[str]]:
+        """The subset of :meth:`dynamic_channels` for which this module will also call
+        :meth:`GatewayChannels.set_state` from within :meth:`connect`.
+
+        Declaring a name here lets *other* modules call :meth:`GatewayChannels.get_state`
+        on the channel from their own ``connect`` regardless of the order in which modules
+        are connected; the returned state edge is bound to the real state node once the
+        owning module's ``connect`` calls ``set_state``.
         """
         ...
 

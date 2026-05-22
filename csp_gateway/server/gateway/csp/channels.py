@@ -254,6 +254,13 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     _state_requests: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
     # (alias, indexer) -> bound state Edge
     _state_edges: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
+    # (alias, indexer) -> DelayedEdge handed out by get_state for a state that has
+    # been declared (via Module.dynamic_state_channels) but not yet wired by set_state.
+    # The DelayedEdge is bound to the real state Edge once set_state runs, so modules
+    # may call get_state before the owning module's connect() runs.
+    _delayed_state_edges: Dict[Tuple[str, Optional[Union[str, int]]], DelayedEdge] = PrivateAttr(default_factory=dict)
+    # alias -> element type for pre-declared but not-yet-wired dynamic states.
+    _pending_state_element_types: Dict[str, type] = PrivateAttr(default_factory=dict)
     _last_requests: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
     _next_requests: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
     _send_channels: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
@@ -812,6 +819,10 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
             if (field, indexer) in self._state_edges:
                 return  # already wired
 
+        # If this was pre-declared via dynamic_state_channels, it is no longer pending
+        # once set_state is called for it.
+        self._pending_state_element_types.pop(field, None)
+
         self._states[field] = _StateSpec(source_field=field, keyby=keyby, indexer=indexer)
         self._wire_state_edge(field, edge, keyby, indexer)
 
@@ -847,28 +858,61 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
         named_on_request_node("QueryState<{}>".format(edge_type_name))(state_edge, trigger.out())
 
         self._state_requests[field, indexer] = trigger
-        self._state_edges[field, indexer] = state_edge
+        # If a DelayedEdge was previously handed out by get_state (because another module
+        # called get_state before this module's set_state), bind it now so the consumer's
+        # edge resolves to the real state node.
+        delayed = self._delayed_state_edges.get((field, indexer))
+        if delayed is not None:
+            delayed.bind(state_edge)
+            self._state_edges[field, indexer] = delayed
+        else:
+            self._state_edges[field, indexer] = state_edge
+
+    def _declare_dynamic_state(self, field: str, element_type: type) -> None:
+        """Pre-register a dynamically-created state channel so that :meth:`get_state`
+        for ``field`` returns a :class:`DelayedEdge` before the owning module's
+        ``connect`` calls :meth:`set_state`.
+
+        ``element_type`` is the unwrapped element type of the state (i.e. ``T`` for a
+        channel typed as either ``ts[T]`` or ``ts[List[T]]``). The eventual
+        :meth:`set_state` call provides ``keyby``/``indexer`` and binds the real state
+        edge into the previously-handed-out :class:`DelayedEdge`.
+        """
+        if field in self._states or field in self._pending_state_element_types:
+            return
+        self._pending_state_element_types[field] = element_type
 
     def get_state(self, field: str, indexer: Union[str, int] = None) -> Any:
         """Return the underlying state Edge for ``field`` (csp-graph use)."""
+        if (field, indexer) in self._state_edges:
+            return self._state_edges[field, indexer]
+        if field in self._pending_state_element_types:
+            # Pre-declared by Module.dynamic_state_channels but the owning module has
+            # not yet called set_state. Hand out a DelayedEdge that will be bound once
+            # set_state runs (order-independent across modules).
+            delayed = self._delayed_state_edges.get((field, indexer))
+            if delayed is None:
+                element_type = self._pending_state_element_types[field]
+                delayed = DelayedEdge(ts[State[element_type]])
+                delayed.__name__ = "s_{}".format(field)
+                self._delayed_state_edges[field, indexer] = delayed
+            return delayed
         if field not in self._states:
             raise NoProviderException("Unknown state: {}".format(field))
-        if (field, indexer) not in self._state_edges:
-            spec = self._states[field]
-            if spec.source_field is None:
-                raise NoProviderException("State '{}' (indexer={}) has not been wired yet".format(field, indexer))
-            # Lazily wire annotation-declared state on first access
-            tstype = self.get_outer_type(spec.source_field)
-            if is_dict_basket(tstype):
-                if spec.indexer is None:
-                    raise NotImplementedError(
-                        f"Annotation-declared state '{field}' on dict basket '{spec.source_field}' "
-                        f"requires an indexer (set indexer=... in State(...))"
-                    )
-                edge = self.get_channel(spec.source_field, indexer=spec.indexer)
-            else:
-                edge = self.get_channel(spec.source_field)
-            self._wire_state_edge(field, edge, spec.keyby, spec.indexer)
+        spec = self._states[field]
+        if spec.source_field is None:
+            raise NoProviderException("State '{}' (indexer={}) has not been wired yet".format(field, indexer))
+        # Lazily wire annotation-declared state on first access
+        tstype = self.get_outer_type(spec.source_field)
+        if is_dict_basket(tstype):
+            if spec.indexer is None:
+                raise NotImplementedError(
+                    f"Annotation-declared state '{field}' on dict basket '{spec.source_field}' requires an indexer (set indexer=... in State(...))"
+                )
+            edge = self.get_channel(spec.source_field, indexer=spec.indexer)
+        else:
+            edge = self.get_channel(spec.source_field)
+        self._wire_state_edge(field, edge, spec.keyby, spec.indexer)
         return self._state_edges[field, indexer]
 
     def _set_last(self, field: str, indexer: Union[str, int] = None) -> None:

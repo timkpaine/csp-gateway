@@ -3,7 +3,7 @@ import multiprocessing
 import time
 from datetime import datetime, timedelta
 from io import StringIO
-from typing import Annotated, Any, Callable, Dict, List, Optional, Type, Union
+from typing import Annotated, Any, Callable, Dict, List, Optional, Set, Type, Union
 
 import csp
 import numpy as np
@@ -758,6 +758,9 @@ class MySetModuleDynamicChannels(GatewayModule):
             self.scalar_channel_name: MyStruct,
         }
 
+    def dynamic_state_channels(self) -> Optional[Set[str]]:
+        return {self.scalar_channel_name, self.list_channel_name}
+
     def connect(self, channels: MyGatewayChannels) -> None:
         scalar_edge = csp.const(MyStruct(foo=1.0))
         list_edge = csp.const([MyStruct(foo=2.0), MyStruct(foo=3.0)])
@@ -860,6 +863,34 @@ def test_conflicting_dynamic_channels():
     )
     with pytest.raises(ValueError, match="Conflicting types for"):
         csp.build_graph(MyGateway(modules=[setter_1, setter_2], channels=MyGatewayChannels()).graph)
+
+
+@pytest.mark.parametrize("module_order", ["setter_first", "getter_first"])
+def test_dynamic_channels_state_module_order_independence(module_order):
+    """Cross-module get_state/set_state must work regardless of connect() order.
+
+    The setter module declares a dynamic channel and registers state on it from
+    inside connect(). The getter module calls get_state() on that name from
+    inside its own connect(). Whichever module's connect() runs first, the
+    getter must end up wired to the real state edge via DelayedEdge binding.
+    """
+    setter = MySetModuleDynamicChannels(
+        scalar_channel_name="my_dynamic_scalar_channel",
+        list_channel_name="my_dynamic_list_channel",
+    )
+    getter = MyGetModuleDynamicChannels(
+        scalar_channel_name="my_dynamic_scalar_channel",
+        list_channel_name="my_dynamic_list_channel",
+    )
+    modules = [setter, getter] if module_order == "setter_first" else [getter, setter]
+    gateway = MyGateway(modules=modules, channels=MyGatewayChannels())
+
+    out = csp.run(gateway.graph, starttime=datetime(2020, 1, 1), endtime=timedelta(1))
+    assert len(out["my_dynamic_scalar_channel"]) == 1
+    assert out["my_dynamic_scalar_channel"][0][1].foo == 1.0
+    assert len(out["my_dynamic_list_channel"]) == 1
+    assert len(out["s_my_dynamic_scalar_channel"]) == 1
+    assert len(out["s_my_dynamic_list_channel"]) == 2
 
 
 def test_dynamic_channels_same_static_properties():
