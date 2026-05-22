@@ -198,8 +198,7 @@ class ExampleModule(GatewayModule):
 
         # State accumulation via `set_state`
         channels.set_state(
-            data,
-            "example",
+            ExampleGatewayChannels.example,
             ("id",),
         )
 

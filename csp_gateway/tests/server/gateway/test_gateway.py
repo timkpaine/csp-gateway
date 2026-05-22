@@ -766,8 +766,8 @@ class MySetModuleDynamicChannels(GatewayModule):
         list_edge = csp.const([MyStruct(foo=2.0), MyStruct(foo=3.0)])
         channels.set_channel(self.scalar_channel_name, scalar_edge)
         channels.set_channel(self.list_channel_name, list_edge)
-        channels.set_state(scalar_edge, self.scalar_channel_name, keyby="id")
-        channels.set_state(list_edge, self.list_channel_name, keyby="id")
+        channels.set_state(self.scalar_channel_name, keyby="id")
+        channels.set_state(self.list_channel_name, keyby="id")
         if self.connect_channels_assertion:
             self.connect_channels_assertion(channels)
 

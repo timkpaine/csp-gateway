@@ -768,20 +768,36 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
 
     def set_state(
         self,
-        edge: Edge,
-        field: str,
+        field_or_edge: Union[Edge, str],
         keyby: Union[str, Tuple[str, ...]],
         indexer: Optional[Union[str, int]] = None,
     ) -> None:
-        """Register a state collection from a raw edge under ``field``.
+        """Register a state collection on a channel.
 
-        ``field`` is the name the state will be exposed as (parallel to
-        ``set_channel(field, edge, indexer)``). If ``field`` is already
-        registered, this is a no-op when ``keyby`` and ``indexer`` match;
-        otherwise a ``ValueError`` is raised.
+        The first argument may be either:
+
+        - a channel field name (``str``) — the edge is resolved via
+          :meth:`get_channel`, and the state is exposed under that field name;
+        - a csp ``Edge`` previously registered via :meth:`set_channel` — the
+          field name is recovered by reverse lookup of the registered edge.
+
+        ``keyby`` and ``indexer`` describe how ticks are accumulated. If the
+        state is already registered, this is a no-op when ``keyby``/``indexer``
+        match; otherwise a ``ValueError`` is raised.
         """
-        if not isinstance(edge, Edge):
-            raise TypeError("set_state expects a csp Edge as the first argument; got {}".format(type(edge)))
+        if isinstance(field_or_edge, str):
+            field = field_or_edge
+            edge = self.get_channel(field, indexer=indexer) if indexer is not None else self.get_channel(field)
+        elif isinstance(field_or_edge, Edge):
+            edge = field_or_edge
+            field = self._find_field_for_edge(edge)
+            if field is None:
+                raise ValueError(
+                    "set_state could not resolve a channel name from the given edge; "
+                    "register it via set_channel first, or pass the channel field name (str)."
+                )
+        else:
+            raise TypeError("set_state expects a channel field name (str) or a csp Edge as the first argument; got {}".format(type(field_or_edge)))
 
         keyby = _normalize_keyby(keyby)
         existing = self._states.get(field)
@@ -795,8 +811,20 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
             if (field, indexer) in self._state_edges:
                 return  # already wired
 
-        self._states[field] = _StateSpec(source_field=None, keyby=keyby, indexer=indexer)
+        self._states[field] = _StateSpec(source_field=field, keyby=keyby, indexer=indexer)
         self._wire_state_edge(field, edge, keyby, indexer)
+
+    def _find_field_for_edge(self, edge: Edge) -> Optional[str]:
+        """Reverse-lookup a channel field name for a previously-set edge."""
+        for field, providers in self._delayed_edge_providers.items():
+            for _module, provided in providers:
+                if provided is edge:
+                    return field
+                if isinstance(provided, dict):
+                    for v in provided.values():
+                        if v is edge:
+                            return field
+        return None
 
     def _wire_state_edge(
         self,

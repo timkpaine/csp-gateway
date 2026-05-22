@@ -44,8 +44,7 @@ class Mirror(GatewayModule):
 
     def connect(self, channels: ChannelsType):
         for channel, keyby in self.state_channels.items():
-            edge = channels.get_channel(channel)
-            channels.set_state(edge, channel, keyby)
+            channels.set_state(channel, keyby)
         # the requirements should be the same so
         # the channels context manager missing these updates
         # shouldn't matter
