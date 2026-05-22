@@ -75,6 +75,16 @@ def disable_duckdb_state() -> None:
     _USE_DUCKDB_STATE = False
 
 
+def _resolve_keyby_attr(record: Any, path: str) -> Any:
+    """Resolve a (possibly dotted) attribute path on ``record``, returning ``None`` if any segment is missing."""
+    obj = record
+    for segment in path.split("."):
+        if obj is None:
+            return None
+        obj = getattr(obj, segment, None)
+    return obj
+
+
 class StateType(CoreEnum):
     UNKNOWN = 0
     DEFAULT = 1
@@ -149,7 +159,7 @@ class DefaultState(BaseState):
 
         for subkey in self._keyby:
             # extract the key from the record
-            subkey_to_use = getattr(record, subkey, None)
+            subkey_to_use = _resolve_keyby_attr(record, subkey)
 
             if subkey == self._keyby[-1]:
                 # Put the element there if last
@@ -408,7 +418,7 @@ class DuckDBState(object):
             obj_id = None
             for subkey in self._keyby:
                 # extract the key from the record
-                subkey_to_use = getattr(record, subkey, None)
+                subkey_to_use = _resolve_keyby_attr(record, subkey)
 
                 if subkey == self._keyby[-1]:
                     if subkey_to_use not in place.keys():

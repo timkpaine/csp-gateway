@@ -97,7 +97,7 @@ test-py:  ## run python tests
 tests-py: test-py
 
 coverage-py:  ## run python tests and collect test coverage
-	python -m pytest -v csp_gateway/tests --cov=csp_gateway --cov-report term-missing --cov-report xml
+	python -m pytest -v csp_gateway/tests --junitxml=junit.xml --cov=csp_gateway --cov-report term-missing --cov-report xml
 
 .PHONY: test-js tests-js coverage-js
 test-js:  ## run js tests
