@@ -282,11 +282,11 @@ client.state().as_json()
 ```
 
 ```
-['example']
+['example', 'example_with_state', 'example_with_state_alternative', 'example_with_state_multiple']
 ```
 
 ```python
-client.state("example").as_pandas_df().tail()
+client.state("example_with_state").as_pandas_df().tail()
 
 # We note that there are a large number of columns in the above dataframe.
 # This is because `mapping` is a dict with different keys for eery row.
@@ -503,7 +503,7 @@ client.send(
     }
 )
 
-client.state("example").as_pandas_df().tail()
+client.state("example_with_state").as_pandas_df().tail()
 ```
 
 <div>

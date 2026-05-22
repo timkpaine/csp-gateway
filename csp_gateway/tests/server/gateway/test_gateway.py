@@ -3,7 +3,7 @@ import multiprocessing
 import time
 from datetime import datetime, timedelta
 from io import StringIO
-from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
+from typing import Annotated, Any, Callable, Dict, List, Optional, Set, Type, Union
 
 import csp
 import numpy as np
@@ -50,10 +50,8 @@ class MyGatewayChannels(GatewayChannels):
     my_static_dict: Dict[str, float] = {}
     my_static_list: List[str] = []
     my_static_dict_of_objects: Dict[str, Any] = {}
-    my_channel: ts[MyStruct] = None
-    s_my_channel: ts[State[MyStruct]] = None
-    my_list_channel: ts[List[MyStruct]] = None
-    s_my_list_channel: ts[State[MyStruct]] = None
+    my_channel: Annotated[ts[MyStruct], State(keyby="id")] = None
+    my_list_channel: Annotated[ts[List[MyStruct]], State(keyby="id")] = None
     my_enum_basket: Dict[MyEnum, ts[MyStruct]] = None
     my_str_basket: Dict[str, ts[MyStruct]] = None
     my_enum_basket_list: Dict[MyEnum, ts[List[MyStruct]]] = None
@@ -84,9 +82,7 @@ class MySetModule(GatewayModule):
             self.my_list_data,
         )
         channels.add_send_channel(MyGatewayChannels.my_channel)
-        channels.set_state(MyGatewayChannels.my_channel, "id")
         channels.add_send_channel(MyGatewayChannels.my_list_channel)
-        channels.set_state(MyGatewayChannels.my_list_channel, "id")
 
         channels.set_channel(MyGatewayChannels.my_array_channel, csp.const(np.array([1.0, 2.0])))
 
@@ -766,16 +762,12 @@ class MySetModuleDynamicChannels(GatewayModule):
         return {self.scalar_channel_name, self.list_channel_name}
 
     def connect(self, channels: MyGatewayChannels) -> None:
-        channels.set_channel(
-            self.scalar_channel_name,
-            csp.const(MyStruct(foo=1.0)),
-        )
-        channels.set_channel(
-            self.list_channel_name,
-            csp.const([MyStruct(foo=2.0), MyStruct(foo=3.0)]),
-        )
-        channels.set_state(self.scalar_channel_name, keyby="id")
-        channels.set_state(self.list_channel_name, keyby="id")
+        scalar_edge = csp.const(MyStruct(foo=1.0))
+        list_edge = csp.const([MyStruct(foo=2.0), MyStruct(foo=3.0)])
+        channels.set_channel(self.scalar_channel_name, scalar_edge)
+        channels.set_channel(self.list_channel_name, list_edge)
+        channels.set_state(scalar_edge, self.scalar_channel_name, keyby="id")
+        channels.set_state(list_edge, self.list_channel_name, keyby="id")
         if self.connect_channels_assertion:
             self.connect_channels_assertion(channels)
 
@@ -795,11 +787,11 @@ class MyGetModuleDynamicChannels(GatewayModule):
         )
         csp.add_graph_output(
             f"s_{self.scalar_channel_name}",
-            channels.get_channel(f"s_{self.scalar_channel_name}"),
+            channels.get_state(self.scalar_channel_name),
         )
         csp.add_graph_output(
             f"s_{self.list_channel_name}",
-            channels.get_channel(f"s_{self.list_channel_name}"),
+            channels.get_state(self.list_channel_name),
         )
 
 
@@ -990,9 +982,7 @@ def test_gateway_channels_fields_classmethod():
         "my_static_list",
         "my_static_dict_of_objects",
         "my_channel",
-        "s_my_channel",
         "my_list_channel",
-        "s_my_list_channel",
         "my_enum_basket",
         "my_str_basket",
         "my_enum_basket_list",

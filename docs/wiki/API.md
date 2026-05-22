@@ -32,10 +32,39 @@ As described in [Overview#Channels](Overview#Channels), the `csp-gateway` REST A
 
 ## State
 
-A `GatewayModule` can call `set_state` in its `connect` method to allow for this API to be available.
+State in `csp-gateway` exposes the accumulated history of a channel via the REST API as `/api/v1/state/<alias>`.
 State is collected by one or more instance attributes into an in-memory [DuckDB](https://duckdb.org/) instance.
 
-For example, suppose I have the following type:
+There are two ways to declare state on a channel:
+
+1. **Annotation** on the channel definition, using `State(keyby, alias=...)`:
+
+   ```python
+   from typing import Annotated
+   from csp_gateway import State, GatewayChannels, ts
+
+   class MyChannels(GatewayChannels):
+       # implicit alias "example_with_state" (matches the field name)
+       example_with_state: Annotated[ts[ExampleData], State(("id", "x"))] = None
+
+       # multiple state views on a single channel, each addressable by alias
+       example_multi: Annotated[
+           ts[ExampleData],
+           State(("id", "x")),                          # alias = "example_multi"
+           State(("id", "y"), alias="example_multi_alt"),
+       ] = None
+   ```
+
+1. **Imperative** call from a `GatewayModule`'s `connect` method:
+
+   ```python
+   def connect(self, channels: MyChannels):
+       edge = ...  # produce a csp.ts edge
+       channels.set_channel(MyChannels.example, edge)
+       channels.set_state(edge, "example_from_connect", ("id", "x", "z"))
+   ```
+
+For example, given:
 
 ```python
 class ExampleData(GatewayStruct):
@@ -44,12 +73,7 @@ class ExampleData(GatewayStruct):
     z: str
 ```
 
-If my `GatewayModule` called `set_state("example", ("x",))`, state would be collected as the last tick of `ExampleData` per each unique value of `x`. If called with `set_state("example", ("x", "y"))`, it would be collected as the last tick per each unique pair `x,y`, etc.
-
-> [!IMPORTANT]
->
-> This code and API will likely change a bit as we allow for more granular collection of records,
-> and expose more DuckDB functionality.
+Declaring `State(("x",))` collects the last tick of `ExampleData` per each unique value of `x`. Declaring `State(("x", "y"))` collects the last tick per each unique pair `(x, y)`, etc.
 
 ## Query
 
@@ -59,19 +83,19 @@ Here are some examples from the autodocumentation illustrating the use of filter
 
 ```raw
 # Filter only records where `record.x` == 5
-api/v1/state/example?query={"filters":[{"attr":"x","by":{"value":5,"where":"=="}}]}
+api/v1/state/example_with_state?query={"filters":[{"attr":"x","by":{"value":5,"where":"=="}}]}
 
 # Filter only records where `record.x` < 10
-/api/v1/state/example?query={"filters":[{"attr":"x","by":{"value":10,"where":"<"}}]}
+/api/v1/state/example_with_state?query={"filters":[{"attr":"x","by":{"value":10,"where":"<"}}]}
 
 # Filter only records where `record.timestamp` < "2023-03-30T14:45:26.394000"
-/api/v1/state/example?query={"filters":[{"attr":"timestamp","by":{"when":"2023-03-30T14:45:26.394000","where":"<"}}]}
+/api/v1/state/example_with_state?query={"filters":[{"attr":"timestamp","by":{"when":"2023-03-30T14:45:26.394000","where":"<"}}]}
 
 # Filter only records where `record.id` < `record.y`
-/api/v1/state/example?query={"filters":[{"attr":"id","by":{"attr":"y","where":"<"}}]}
+/api/v1/state/example_with_state?query={"filters":[{"attr":"id","by":{"attr":"y","where":"<"}}]}
 
 # Filter only records where `record.x` < 50 and `record.x` >= 30
-/api/v1/state/example?query={"filters":[{"attr":"x","by":{"value":50,"where":"<"}},{"attr":"x","by":{"value":30,"where":">="}}]}
+/api/v1/state/example_with_state?query={"filters":[{"attr":"x","by":{"value":50,"where":"<"}},{"attr":"x","by":{"value":30,"where":">="}}]}
 ```
 
 > [!IMPORTANT]
