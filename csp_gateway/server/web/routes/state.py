@@ -1,4 +1,5 @@
-from typing import Any, List, Optional, Set, Union, get_origin
+from inspect import cleandoc
+from typing import Any, List, Optional, Set, Tuple, Union, get_origin
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -20,6 +21,8 @@ def add_state_routes(
     field: str = "",
     model: Union[BaseModel, List[BaseModel]] = None,
     subroute_key: Any = None,
+    keyby: Tuple[str, ...] = (),
+    indexer: Optional[Union[str, int]] = None,
 ) -> None:
     if model and get_origin(model) is list:
         list_model = model
@@ -28,6 +31,13 @@ def add_state_routes(
 
     # Get the fully qualified type name for the description
     fq_type_name = get_fully_qualified_type_name(model)
+
+    keyby_lines = []
+    if keyby:
+        keyby_lines.append("**Keyed by:** ``{}``".format(", ".join(repr(k) for k in keyby)))
+    if indexer is not None:
+        keyby_lines.append("**Indexer:** ``{!r}``".format(indexer))
+    keyby_prefix = ("\n\n".join(keyby_lines) + "\n\n") if keyby_lines else ""
 
     if subroute_key:
         # Prune s_ from start
@@ -88,6 +98,7 @@ def add_state_routes(
             responses=get_default_responses(),
             response_model=list_model,  # type: ignore[valid-type]
             name="Get State {} by key".format(name_without_state),
+            description=keyby_prefix + cleandoc(get_state.__doc__ or ""),
             openapi_extra={"type_": fq_type_name} if fq_type_name else None,
         )(get_state)
 
@@ -167,6 +178,7 @@ def add_state_routes(
             responses=get_default_responses(),
             response_model=list_model,  # type: ignore[valid-type]
             name="Get State {}".format(name_without_state),
+            description=keyby_prefix + cleandoc(get_state.__doc__ or ""),
             openapi_extra={"type_": fq_type_name} if fq_type_name else None,
         )(get_state)
 

@@ -207,6 +207,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     _feedbacks: Dict[int, FeedbackOutputDef] = PrivateAttr(default_factory=dict)
 
     _state_requests: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
+    _state_keybys: Dict[Tuple[str, Optional[Union[str, int]]], Tuple[str, ...]] = PrivateAttr(default_factory=dict)
     _last_requests: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
     _next_requests: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
     _send_channels: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
@@ -732,6 +733,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
 
             # register the trigger
             self._state_requests[state_field, indexer] = trigger
+            self._state_keybys[state_field, indexer] = (keyby,) if isinstance(keyby, str) else tuple(keyby)
         else:
             # TODO
             raise NotImplementedError()
