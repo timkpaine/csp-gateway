@@ -396,7 +396,25 @@ class GatewayWebApp(object):
             model = self._get_field_pydantic_type(name_without_state)
             subroute_key = None
 
-        add_state_routes(api_router=api_router, field=field, model=model, subroute_key=subroute_key)
+        # Look up the keyby/indexer this state was registered with (if any),
+        # so we can surface it in the route's OpenAPI description.
+        keybys = self.gateway.channels._state_keybys
+        keyby = ()
+        indexer = None
+        for (registered_field, registered_indexer), registered_keyby in keybys.items():
+            if registered_field == field:
+                keyby = registered_keyby
+                indexer = registered_indexer
+                break
+
+        add_state_routes(
+            api_router=api_router,
+            field=field,
+            model=model,
+            subroute_key=subroute_key,
+            keyby=keyby,
+            indexer=indexer,
+        )
 
     def add_state_available_channels(self, fields: Optional[Set[str]] = None) -> None:
         api_router = self.get_router("state")
