@@ -413,7 +413,14 @@ class GatewayWebApp(object):
                 # Unwrap State[T] -> T for the response model
                 model = getattr(inner, "_typ", inner)
 
-        add_state_routes(api_router=api_router, field=field, model=model, subroute_key=subroute_key)
+        add_state_routes(
+            api_router=api_router,
+            field=field,
+            model=model,
+            subroute_key=subroute_key,
+            keyby=tuple(spec.keyby) if spec.keyby else (),
+            indexer=spec.indexer,
+        )
 
     def add_state_available_channels(self, fields: Optional[Set[str]] = None) -> None:
         api_router = self.get_router("state")

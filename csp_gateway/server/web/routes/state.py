@@ -1,4 +1,5 @@
-from typing import Any, List, Optional, Set, Union, get_origin
+from inspect import cleandoc
+from typing import Any, List, Optional, Set, Tuple, Union, get_origin
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -20,12 +21,17 @@ def add_state_routes(
     field: str = "",
     model: Union[BaseModel, List[BaseModel]] = None,
     subroute_key: Any = None,
+    keyby: Tuple[str, ...] = (),
+    indexer: Optional[Union[str, int]] = None,
 ) -> None:
     """Mount REST routes for a single state ``field``.
 
     The state mechanism is now name-based; there is no implicit ``s_`` prefix.
     Routes are exposed at ``/state/<field>`` (and a variant with ``_``
     replaced by ``-`` for URL friendliness).
+
+    ``keyby`` / ``indexer`` are surfaced in the route description so the
+    accumulation semantics are visible in the OpenAPI schema.
     """
     if model and get_origin(model) is list:
         list_model = model
@@ -33,6 +39,13 @@ def add_state_routes(
         list_model = List[model]
 
     fq_type_name = get_fully_qualified_type_name(model)
+
+    keyby_lines = []
+    if keyby:
+        keyby_lines.append("**Keyed by:** ``{}``".format(", ".join(repr(k) for k in keyby)))
+    if indexer is not None:
+        keyby_lines.append("**Indexer:** ``{!r}``".format(indexer))
+    keyby_prefix = ("\n\n".join(keyby_lines) + "\n\n") if keyby_lines else ""
 
     if subroute_key:
 
@@ -58,6 +71,7 @@ def add_state_routes(
             responses=get_default_responses(),
             response_model=list_model,  # type: ignore[valid-type]
             name="Get State {} by key".format(field),
+            description=keyby_prefix + cleandoc(get_state.__doc__ or ""),
             openapi_extra={"type_": fq_type_name} if fq_type_name else None,
         )(get_state)
 
@@ -111,6 +125,7 @@ def add_state_routes(
             responses=get_default_responses(),
             response_model=list_model,  # type: ignore[valid-type]
             name="Get State {}".format(field),
+            description=keyby_prefix + cleandoc(get_state.__doc__ or ""),
             openapi_extra={"type_": fq_type_name} if fq_type_name else None,
         )(get_state)
 
