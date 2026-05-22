@@ -226,8 +226,9 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
 
     State collections are declared via ``Annotated[ts[X], State(keyby=..., indexer=..., alias=...)]``
     on a channel field (auto-wired from the channel's edge), or registered at module
-    connect time via ``set_state(edge, alias, keyby, indexer=None)``. State collections
-    are exposed through the state part of the REST API and ``state``/``query`` helpers.
+    connect time via ``set_state(field_or_edge, keyby, indexer=None)``. State
+    collections are exposed through the state part of the REST API and
+    ``state``/``query`` helpers.
     """
 
     # Populated by ChannelsMetaclass from Annotated[ts[X], State(...)] markers.

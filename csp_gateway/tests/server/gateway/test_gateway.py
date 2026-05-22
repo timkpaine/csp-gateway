@@ -3,7 +3,7 @@ import multiprocessing
 import time
 from datetime import datetime, timedelta
 from io import StringIO
-from typing import Annotated, Any, Callable, Dict, List, Optional, Set, Type, Union
+from typing import Annotated, Any, Callable, Dict, List, Optional, Type, Union
 
 import csp
 import numpy as np
@@ -757,9 +757,6 @@ class MySetModuleDynamicChannels(GatewayModule):
             self.list_channel_name: List[MyStruct],
             self.scalar_channel_name: MyStruct,
         }
-
-    def dynamic_state_channels(self) -> Optional[Set[str]]:
-        return {self.scalar_channel_name, self.list_channel_name}
 
     def connect(self, channels: MyGatewayChannels) -> None:
         scalar_edge = csp.const(MyStruct(foo=1.0))
