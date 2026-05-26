@@ -9,6 +9,7 @@ from typing import (
     DefaultDict,
     Dict,
     List,
+    NamedTuple,
     Optional,
     Set,
     Tuple,
@@ -58,6 +59,24 @@ _NONE_TYPE = type(None)
 _CSP_ENGINE_CYCLE_TIMESTAMP_FIELD = "csp_engine_timestamp"
 
 log = getLogger(__name__)
+
+
+class _StateSpec(NamedTuple):
+    """Describes a state collection attached to a Channels instance.
+
+    ``source_field`` is the channel name whose edge feeds the state, or None
+    when the state was registered via ``set_state`` with a raw edge.
+    """
+
+    source_field: Optional[str]
+    keyby: Union[str, Tuple[str, ...]]
+    indexer: Optional[Union[str, int]] = None
+
+
+def _normalize_keyby(keyby: Union[str, Tuple[str, ...], list]) -> Tuple[str, ...]:
+    if isinstance(keyby, (list, tuple)):
+        return tuple(keyby)
+    return (keyby,)
 
 
 class _SnapshotModelBaseClass(BaseModel):
@@ -166,12 +185,29 @@ class ChannelsMetaclass(ModelMetaclass):
 
         _add_field_attributes(cls)
         ts_pydantic_field_types = {}
+        declared_states: Dict[str, _StateSpec] = {}
         for field_name, field_type in cls.model_fields.items():
             # Validate that timeseries types contain structs or list of structs
             outer_type = field_type.annotation
             ts_pydantic_field_type = _get_ts_pydantic_field_type(outer_type)
             if ts_pydantic_field_type is not None:
                 ts_pydantic_field_types[field_name] = ts_pydantic_field_type
+
+            # Collect State(...) annotation markers from Annotated metadata.
+            for meta in getattr(field_type, "metadata", ()):  # pydantic 2 FieldInfo.metadata
+                if isinstance(meta, State):
+                    alias = meta._meta_alias or field_name
+                    if alias in declared_states:
+                        raise ValueError(
+                            f"Duplicate state alias '{alias}' on {name}: already declared on field '{declared_states[alias].source_field}'"
+                        )
+                    declared_states[alias] = _StateSpec(
+                        source_field=field_name,
+                        keyby=_normalize_keyby(meta._meta_keyby),
+                        indexer=meta._meta_indexer,
+                    )
+
+        cls._declared_states = declared_states
 
         ts_pydantic_field_types[_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD] = (Optional[datetime], None)
         dynamic_pydantic_model = create_model("_snapshot_model", __base__=_SnapshotModelBaseClass, **ts_pydantic_field_types)
@@ -188,10 +224,16 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     The names of the channels match the names that are used via the different APIs, i.e. REST, WebSockets, Perspective, etc.
     It is expected that developers interact with channels through these APIs (or via get_channel/set_channel in csp).
 
-    Channels that begin with ``s_`` are "state" channels, meaning that they represent a collection of messages, typically
-    the last message grouped by some key (i.e. security id). These are not meant to be interacted with directly, but rather
-    through the "state" part of the REST API.
+    State collections are declared via ``Annotated[ts[X], State(keyby=..., indexer=..., alias=...)]``
+    on a channel field (auto-wired from the channel's edge), or registered at module
+    connect time via ``set_state(field_or_edge, keyby, indexer=None)``. State
+    collections are exposed through the state part of the REST API and
+    ``state``/``query`` helpers.
     """
+
+    # Populated by ChannelsMetaclass from Annotated[ts[X], State(...)] markers.
+    # alias -> _StateSpec(source_field, keyby, indexer)
+    _declared_states: Dict[str, _StateSpec] = {}
 
     model_config = dict(arbitrary_types_allowed=True)  # (for FeedbackOutputDef)
 
@@ -206,7 +248,19 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     _override_blocks: Dict[Any, Optional[datetime]] = PrivateAttr(default_factory=dict)
     _feedbacks: Dict[int, FeedbackOutputDef] = PrivateAttr(default_factory=dict)
 
+    # alias -> _StateSpec (annotation-declared and set_state-registered combined)
+    _states: Dict[str, _StateSpec] = PrivateAttr(default_factory=dict)
+    # (alias, indexer) -> ConcurrentFutureAdapter trigger
     _state_requests: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
+    # (alias, indexer) -> bound state Edge
+    _state_edges: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
+    # (alias, indexer) -> DelayedEdge handed out by get_state for a state that has
+    # been declared (via Module.dynamic_state_channels) but not yet wired by set_state.
+    # The DelayedEdge is bound to the real state Edge once set_state runs, so modules
+    # may call get_state before the owning module's connect() runs.
+    _delayed_state_edges: Dict[Tuple[str, Optional[Union[str, int]]], DelayedEdge] = PrivateAttr(default_factory=dict)
+    # alias -> element type for pre-declared but not-yet-wired dynamic states.
+    _pending_state_element_types: Dict[str, type] = PrivateAttr(default_factory=dict)
     _last_requests: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
     _next_requests: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
     _send_channels: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
@@ -232,6 +286,20 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     # NOTE: this is private for now, only used by perspective module.
     # Might be public in the future.
     _null_ts: List[Tuple[str, Optional[str]]] = PrivateAttr(default_factory=list)
+
+    def model_post_init(self, __context: Any) -> None:
+        # Seed instance state registry with class-level declarations from annotations.
+        for alias, spec in self.__class__._declared_states.items():
+            self._states[alias] = spec
+
+    @classmethod
+    def state_aliases(cls) -> List[str]:
+        """Return the list of state aliases declared on the class via annotations."""
+        return list(cls._declared_states.keys())
+
+    def all_state_aliases(self) -> List[str]:
+        """Return all known state aliases (declared + dynamically registered)."""
+        return list(self._states.keys())
 
     def dynamic_keys(self) -> Optional[Dict[str, List[Any]]]:
         """Define dynamic dictionary keys by field, driven by data from the channels."""
@@ -340,6 +408,9 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
                 who_requires_id[requires].add(id(module))
 
         if not self._finalized:
+            # Auto-wire state collections declared via annotations.
+            self._wire_declared_states()
+
             # first ensure everything is provided
             for (
                 field,
@@ -434,6 +505,29 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
             self._modules_connections_graph[field]["setters"] = [module for module in self._modules_connections_graph[field]["setters"]]
         self._finalized = True
         log.debug(f"Feedback count: {self._feedback_count}")
+
+    def _wire_declared_states(self) -> None:
+        for alias, spec in list(self._states.items()):
+            if spec.source_field is None:
+                continue  # registered via set_state, already wired
+            if (alias, spec.indexer) in self._state_edges:
+                continue
+
+            # Skip if no module provides this channel (e.g. all setters disabled)
+            if not self._delayed_edge_providers.get(spec.source_field):
+                continue
+
+            tstype = self.get_outer_type(spec.source_field)
+            if is_dict_basket(tstype):
+                if spec.indexer is None:
+                    raise NotImplementedError(
+                        f"Annotation-declared state '{alias}' on dict basket '{spec.source_field}' "
+                        f"requires an indexer (set indexer=... in State(...))"
+                    )
+                edge = self.get_channel(spec.source_field, indexer=spec.indexer)
+            else:
+                edge = self.get_channel(spec.source_field)
+            self._wire_state_edge(alias, edge, spec.keyby, spec.indexer)
 
     def _bind_delayed_channel(self, field, list_of_edges_and_modules, indexer=None):
         tstype = self.get_outer_type(field)
@@ -603,10 +697,6 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
         return getattr(self, field)
 
     @classmethod
-    def is_state_field(cls, field):
-        return field.startswith("s_")
-
-    @classmethod
     def get_outer_type(cls, field):
         return cls.model_fields[field].annotation
 
@@ -618,9 +708,6 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     ) -> None:
         # add to graph
         self._add_field_to_graph(field, self._module_being_attached, True, indexer)
-
-        # TODO fix ugly state field stuff
-        is_state_field = self.is_state_field(field)
 
         tstype = self.get_outer_type(field)
         if is_dict_basket(tstype):
@@ -668,7 +755,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
         else:
             edge_tstypes = [edge.tstype]  # type: ignore[union-attr]
 
-        if not all(edge_tstype == gateway_tstype for edge_tstype in edge_tstypes) and not is_state_field:
+        if not all(edge_tstype == gateway_tstype for edge_tstype in edge_tstypes):
             raise TypeError("Edge type incorrect for {}: should be {}, found {}".format(field, gateway_tstype, edge_tstypes[0]))
 
         module = self._module_being_attached
@@ -687,60 +774,146 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
         self._set_last(field)
         self._set_next(field)
 
-    def _ensure_state_field(self, field: str) -> str:
-        if not field.startswith("s_"):
-            return "s_{}".format(field)
-        return field
-
     def set_state(
         self,
-        field: str,
+        field_or_edge: Union[Edge, str],
         keyby: Union[str, Tuple[str, ...]],
-        indexer: Union[str, int] = None,
+        indexer: Optional[Union[str, int]] = None,
     ) -> None:
-        # grab state version of field
-        state_field = self._ensure_state_field(field)
+        """Register a state collection on a channel.
 
-        # Bail if already setup
-        if (state_field, indexer) in self._state_requests:
-            return
+        The first argument may be either:
 
-        # First ensure edge is constructed
-        edge = self.get_channel(field, indexer=indexer)
+        - a channel field name (``str``) — the edge is resolved via
+          :meth:`get_channel`, and the state is exposed under that field name;
+        - a csp ``Edge`` previously registered via :meth:`set_channel` — the
+          field name is recovered by reverse lookup of the registered edge.
 
-        # And ensure the state edge is constructed
-        self.get_state(state_field, indexer=indexer)
-
-        if isinstance(edge, Edge):
-            # instantiate state node
-            if get_origin(edge.tstype.typ) is list:
-                edge_type_name = get_args(edge.tstype.typ)[0].__name__
-                state_edge = build_track_state_node(csp.unroll(edge), keyby)
-            else:
-                edge_type_name = edge.tstype.typ.__name__
-                state_edge = build_track_state_node(edge, keyby)
-
-            state_edge.nodedef.__name__ = "State[{}]".format(edge_type_name)
-
-            # register for use inside other csp nodes
-            self.set_channel(state_field, state_edge, indexer=indexer)
-
-            # setup ad-hoc querying
-            trigger = ConcurrentFutureAdapter(name="RequestState<{}>".format(edge_type_name))
-
-            named_on_request_node("QueryState<{}>".format(edge_type_name))(state_edge, trigger.out())
-
-            # register the trigger
-            self._state_requests[state_field, indexer] = trigger
+        ``keyby`` and ``indexer`` describe how ticks are accumulated. If the
+        state is already registered, this is a no-op when ``keyby``/``indexer``
+        match; otherwise a ``ValueError`` is raised.
+        """
+        if isinstance(field_or_edge, str):
+            field = field_or_edge
+            edge = self.get_channel(field, indexer=indexer) if indexer is not None else self.get_channel(field)
+        elif isinstance(field_or_edge, Edge):
+            edge = field_or_edge
+            field = self._find_field_for_edge(edge)
+            if field is None:
+                raise ValueError(
+                    "set_state could not resolve a channel name from the given edge; "
+                    "register it via set_channel first, or pass the channel field name (str)."
+                )
         else:
-            # TODO
-            raise NotImplementedError()
+            raise TypeError("set_state expects a channel field name (str) or a csp Edge as the first argument; got {}".format(type(field_or_edge)))
+
+        keyby = _normalize_keyby(keyby)
+        existing = self._states.get(field)
+        if existing is not None:
+            if existing.keyby != keyby or existing.indexer != indexer:
+                raise ValueError(
+                    f"State '{field}' already registered with "
+                    f"keyby={existing.keyby!r}, indexer={existing.indexer!r}; "
+                    f"cannot redefine with keyby={keyby!r}, indexer={indexer!r}"
+                )
+            if (field, indexer) in self._state_edges:
+                return  # already wired
+
+        # If this was pre-declared via dynamic_state_channels, it is no longer pending
+        # once set_state is called for it.
+        self._pending_state_element_types.pop(field, None)
+
+        self._states[field] = _StateSpec(source_field=field, keyby=keyby, indexer=indexer)
+        self._wire_state_edge(field, edge, keyby, indexer)
+
+    def _find_field_for_edge(self, edge: Edge) -> Optional[str]:
+        """Reverse-lookup a channel field name for a previously-set edge."""
+        for field, providers in self._delayed_edge_providers.items():
+            for _module, provided in providers:
+                if provided is edge:
+                    return field
+                if isinstance(provided, dict):
+                    for v in provided.values():
+                        if v is edge:
+                            return field
+        return None
+
+    def _wire_state_edge(
+        self,
+        field: str,
+        edge: Edge,
+        keyby: Union[str, Tuple[str, ...]],
+        indexer: Optional[Union[str, int]],
+    ) -> None:
+        if get_origin(edge.tstype.typ) is list:
+            edge_type_name = get_args(edge.tstype.typ)[0].__name__
+            state_edge = build_track_state_node(csp.unroll(edge), keyby)
+        else:
+            edge_type_name = edge.tstype.typ.__name__
+            state_edge = build_track_state_node(edge, keyby)
+
+        state_edge.nodedef.__name__ = "State[{}]".format(edge_type_name)
+
+        trigger = ConcurrentFutureAdapter(name="RequestState<{}>".format(edge_type_name))
+        named_on_request_node("QueryState<{}>".format(edge_type_name))(state_edge, trigger.out())
+
+        self._state_requests[field, indexer] = trigger
+        # If a DelayedEdge was previously handed out by get_state (because another module
+        # called get_state before this module's set_state), bind it now so the consumer's
+        # edge resolves to the real state node.
+        delayed = self._delayed_state_edges.get((field, indexer))
+        if delayed is not None:
+            delayed.bind(state_edge)
+            self._state_edges[field, indexer] = delayed
+        else:
+            self._state_edges[field, indexer] = state_edge
+
+    def _declare_dynamic_state(self, field: str, element_type: type) -> None:
+        """Pre-register a dynamically-created state channel so that :meth:`get_state`
+        for ``field`` returns a :class:`DelayedEdge` before the owning module's
+        ``connect`` calls :meth:`set_state`.
+
+        ``element_type`` is the unwrapped element type of the state (i.e. ``T`` for a
+        channel typed as either ``ts[T]`` or ``ts[List[T]]``). The eventual
+        :meth:`set_state` call provides ``keyby``/``indexer`` and binds the real state
+        edge into the previously-handed-out :class:`DelayedEdge`.
+        """
+        if field in self._states or field in self._pending_state_element_types:
+            return
+        self._pending_state_element_types[field] = element_type
 
     def get_state(self, field: str, indexer: Union[str, int] = None) -> Any:
-        # grab state version of field
-        state_field = self._ensure_state_field(field)
-
-        return self.get_channel(state_field, indexer=indexer)
+        """Return the underlying state Edge for ``field`` (csp-graph use)."""
+        if (field, indexer) in self._state_edges:
+            return self._state_edges[field, indexer]
+        if field in self._pending_state_element_types:
+            # Pre-declared by Module.dynamic_state_channels but the owning module has
+            # not yet called set_state. Hand out a DelayedEdge that will be bound once
+            # set_state runs (order-independent across modules).
+            delayed = self._delayed_state_edges.get((field, indexer))
+            if delayed is None:
+                element_type = self._pending_state_element_types[field]
+                delayed = DelayedEdge(ts[State[element_type]])
+                delayed.__name__ = "s_{}".format(field)
+                self._delayed_state_edges[field, indexer] = delayed
+            return delayed
+        if field not in self._states:
+            raise NoProviderException("Unknown state: {}".format(field))
+        spec = self._states[field]
+        if spec.source_field is None:
+            raise NoProviderException("State '{}' (indexer={}) has not been wired yet".format(field, indexer))
+        # Lazily wire annotation-declared state on first access
+        tstype = self.get_outer_type(spec.source_field)
+        if is_dict_basket(tstype):
+            if spec.indexer is None:
+                raise NotImplementedError(
+                    f"Annotation-declared state '{field}' on dict basket '{spec.source_field}' requires an indexer (set indexer=... in State(...))"
+                )
+            edge = self.get_channel(spec.source_field, indexer=spec.indexer)
+        else:
+            edge = self.get_channel(spec.source_field)
+        self._wire_state_edge(field, edge, spec.keyby, spec.indexer)
+        return self._state_edges[field, indexer]
 
     def _set_last(self, field: str, indexer: Union[str, int] = None) -> None:
         # Bail if already setup
@@ -923,17 +1096,13 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
         return result
 
     def state(self, field: str, indexer: Union[str, int] = None, *, timeout=None) -> Any:
-        # grab state version of field
-        state_field = self._ensure_state_field(field)
+        self._check(field, self._state_requests, "state", indexer=indexer)
 
-        self._check(state_field, self._state_requests, "state", indexer=indexer)
-
-        # TODO checks for state tracking
         # TODO make sure not called from inside graph context
-        state_edge = self._state_requests[state_field, indexer]
+        trigger = self._state_requests[field, indexer]
 
         # trigger request for state into graph
-        future = state_edge.push_tick()
+        future = trigger.push_tick()
 
         # wait for result
         return future.result(timeout=timeout)

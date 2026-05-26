@@ -115,7 +115,14 @@ class ExampleGatewayChannels(GatewayChannels):
     example_list: ts[List[ExampleData]] = None
     never_ticks: ts[ExampleData] = None
 
-    s_example: ts[State[ExampleData]] = None
+    # State fields can be added via annotation or the `set_state` API in the module's `connect` method
+    example_with_state: Annotated[ts[ExampleData], State(("id", "x"))] = None
+    example_with_state_multiple: Annotated[
+        ts[ExampleData],
+        State(("id", "x")),
+        State(("id", "y"), alias="example_with_state_alternative"),
+    ] = None
+    # example: Set in connect with a different schema, to show flexibility of state definition
 
     basket: Dict[ExampleEnum, ts[ExampleData]] = None
     str_basket: Dict[str, ts[ExampleData]] = None
@@ -179,6 +186,8 @@ class ExampleModule(GatewayModule):
         # Channels set via `set_channel`
         channels.set_channel(ExampleGatewayChannels.example, data)
         channels.set_channel(ExampleGatewayChannels.example_list, data_list)
+        channels.set_channel(ExampleGatewayChannels.example_with_state, data)
+        channels.set_channel(ExampleGatewayChannels.example_with_state_multiple, data)
 
         # Generic channel for sending data from non-csp sources
         channels.add_send_channel(ExampleGatewayChannels.example)
@@ -187,8 +196,11 @@ class ExampleModule(GatewayModule):
         channels.add_send_channel(ExampleGatewayChannels.basket, ExampleEnum.C)
         channels.add_send_channel(ExampleGatewayChannels.basket)
 
-        # Rudimentary state accumulation via `set_state`
-        channels.set_state(ExampleGatewayChannels.example, "id")
+        # State accumulation via `set_state`
+        channels.set_state(
+            ExampleGatewayChannels.example,
+            ("id",),
+        )
 
         # Create some data streams for dict baskets
         data_a = self.subscribe(

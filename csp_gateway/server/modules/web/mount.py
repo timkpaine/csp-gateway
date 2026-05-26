@@ -91,7 +91,8 @@ class MountRestRoutes(GatewayModule):
 
     def _mount_state(self, app: GatewayWebApp) -> None:
         selection = ChannelSelection() if self.force_mount_all else self.mount_state
-        channels_set = set(selection.select_from(app.gateway.channels_model, state_channels=True))
+        # Use the instance so dynamically-registered set_state aliases are included.
+        channels_set = set(selection.select_from(app.gateway.channels, state_channels=True))
         seen_channels = set()
 
         # Bind every wire
@@ -110,7 +111,7 @@ class MountRestRoutes(GatewayModule):
 
             missing_channels = channels_set - seen_channels
             if missing_channels:
-                log.info(f"Requested channels missing state routes: {list(channel[2:] for channel in missing_channels)}")
+                log.info(f"Requested channels missing state routes: {list(missing_channels)}")
 
         app.add_state_available_channels(seen_channels)
 

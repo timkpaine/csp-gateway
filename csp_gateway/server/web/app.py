@@ -382,21 +382,45 @@ class GatewayWebApp(object):
         add_send_available_channels(api_router=api_router, fields=fields)
 
     def add_state_api(self, field: str) -> None:
+        """Mount REST routes for the given state ``field``.
+
+        ``field`` must be a known state name on the gateway's channels — either
+        declared via ``Annotated[..., State(...)]`` or registered dynamically
+        via ``set_state`` during a module's ``connect``.
+        """
         api_router = self.get_router("state")
 
-        # Prune s_ from start
-        name_without_state = field[2:]
+        spec = self.gateway.channels._states.get(field) or self.gateway.channels_model._declared_states.get(field)
+        if spec is None:
+            raise ValueError("Unknown state '{}' on {}".format(field, self.gateway.channels_model.__name__))
 
-        dict_basket = self._is_dict_basket_field(field=name_without_state)
-
-        if dict_basket:
-            dict_basket_key_type, model = dict_basket
-            subroute_key = dict_basket_key_type
+        if spec.source_field is not None:
+            dict_basket = self._is_dict_basket_field(field=spec.source_field)
+            if dict_basket:
+                dict_basket_key_type, model = dict_basket
+                # If the annotation pinned an indexer, expose as a non-keyed route on that one key.
+                subroute_key = None if spec.indexer is not None else dict_basket_key_type
+            else:
+                model = self._get_field_pydantic_type(spec.source_field)
+                subroute_key = None
         else:
-            model = self._get_field_pydantic_type(name_without_state)
+            # set_state-registered: source is a raw edge with a known type.
+            state_edge = self.gateway.channels._state_edges.get((field, spec.indexer))
+            model = None
             subroute_key = None
+            if state_edge is not None:
+                inner = state_edge.tstype.typ
+                # Unwrap State[T] -> T for the response model
+                model = getattr(inner, "_typ", inner)
 
-        add_state_routes(api_router=api_router, field=field, model=model, subroute_key=subroute_key)
+        add_state_routes(
+            api_router=api_router,
+            field=field,
+            model=model,
+            subroute_key=subroute_key,
+            keyby=tuple(spec.keyby) if spec.keyby else (),
+            indexer=spec.indexer,
+        )
 
     def add_state_available_channels(self, fields: Optional[Set[str]] = None) -> None:
         api_router = self.get_router("state")
