@@ -17,6 +17,7 @@ As described in [Overview#Channels](Overview#Channels), the `csp-gateway` REST A
 - **last** (`GET`, `/api/v1/last/<channel>`): Get the last tick of data on a channel
 - **next** (`GET`, `/api/v1/next/<channel>`): Wait for the next tick of data on a channel: **WARNING**: blocks, and can often be misused into race conditions
 - **state** (`GET`, `/api/v1/state/<channel>`): Get the accumulated state for any channel
+- **stage** (`POST`/`DELETE`/`PATCH`/`GET`/`PUT`, `/api/v1/stage/<channel>`): Manage staged structs on a channel before releasing them into the graph
 - **send** (`POST`, `/api/v1/send/<channel>`): Send a new datum as a tick into the running csp graph
 - **lookup** (`POST`, `/api/v1/lookup/<channel>/<gateway struct ID>`): Lookup an individual GatewayStruct by its required `id` field
 
@@ -101,6 +102,80 @@ api/v1/state/example_with_state?query={"filters":[{"attr":"x","by":{"value":5,"w
 > [!IMPORTANT]
 >
 > This code and API will likely change a bit as we expose more DuckDB functionality.
+
+## Staging
+
+Staging in `csp-gateway` allows you to accumulate structs into named "staging areas" on a channel before atomically releasing them into the graph. This is useful for batch preparation workflows where you want to assemble a group of items and then release them all at once.
+
+Staging is exposed via the REST API under `/api/v1/stage/<channel>`.
+
+There are two ways to enable staging on a channel:
+
+1. **Annotation** on the channel definition, using `Stage()`:
+
+   ```python
+   from typing import Annotated
+   from csp_gateway import Stage, GatewayChannels, ts
+
+   class MyChannels(GatewayChannels):
+       orders: Annotated[ts[OrderData], Stage()] = None
+   ```
+
+1. **Imperative** call from a `GatewayModule`'s `connect` method:
+
+   ```python
+   def connect(self, channels: MyChannels):
+       channels.set_channel(MyChannels.orders, edge)
+       channels.set_stage(MyChannels.orders)
+   ```
+
+### REST Endpoints
+
+| Method   | Endpoint                  | Description                                       |
+| -------- | ------------------------- | ------------------------------------------------- |
+| `GET`    | `/api/v1/stage/`          | List channels that have staging enabled           |
+| `POST`   | `/api/v1/stage/<channel>` | Add a struct to staging (or create empty staging) |
+| `DELETE` | `/api/v1/stage/<channel>` | Remove struct(s) from staging                     |
+| `PATCH`  | `/api/v1/stage/<channel>` | Release staged structs into the channel           |
+| `GET`    | `/api/v1/stage/<channel>` | List active staging IDs                           |
+| `PUT`    | `/api/v1/stage/<channel>` | Look up contents of staging area(s)               |
+
+All endpoints accept an optional `id` query parameter to target specific staging areas:
+
+- **No `id` param**: operate on the latest staging area (or all, depending on the method)
+- **`id=`** (empty string): operate on all staging areas
+- **`id=abc,def`**: operate on specific staging area(s) by ID
+
+### Lifecycle
+
+1. **Create** a new staging area: `POST /api/v1/stage/<channel>` with no body
+1. **Add** structs: `POST /api/v1/stage/<channel>?id=<staging_id>` with a JSON body
+1. **Review** contents: `PUT /api/v1/stage/<channel>?id=<staging_id>`
+1. **Release** into the graph: `PATCH /api/v1/stage/<channel>?id=<staging_id>`
+
+Released structs are pushed into the CSP graph as individual ticks on the channel. Released staging areas remain accessible via `PUT` (lookup) for historical reference, but no longer appear in `GET` (list).
+
+### Examples
+
+```bash
+# List channels with staging enabled
+curl http://localhost:8000/api/v1/stage/
+
+# Create an empty staging area
+curl -X POST http://localhost:8000/api/v1/stage/orders
+# Returns: {"<staging_id>": []}
+
+# Add a struct to the latest staging
+curl -X POST http://localhost:8000/api/v1/stage/orders \
+  -H "Content-Type: application/json" \
+  -d '{"symbol": "AAPL", "quantity": 10, "price": 190.5}'
+
+# Look up contents of all staging areas (including released)
+curl -X PUT http://localhost:8000/api/v1/stage/orders
+
+# Release a specific staging into the graph
+curl -X PATCH "http://localhost:8000/api/v1/stage/orders?id=<staging_id>"
+```
 
 ## Websockets
 

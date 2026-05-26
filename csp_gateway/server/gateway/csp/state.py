@@ -537,12 +537,27 @@ def get_duckdb_schema_struct(cls: Struct) -> Tuple[Dict, bool]:
     return (new_type_info, use_duckdb)
 
 
-# NOTE: For runtime state instances, always use the State[<typ>] API.
-# State() called directly (with no parameterized typ) is the annotation
-# marker form used in `Annotated[ts[X], State(keyby=..., indexer=..., alias=...)]`.
-class State(BaseState):
-    # Annotation metadata. Set on every instance; consumed by ChannelsMetaclass
-    # when this State is found in a field's Annotated metadata.
+# NOTE: For runtime state instances, always use the _StateManager[<typ>] API.
+# State() called directly is the annotation marker form used in
+# `Annotated[ts[X], State(keyby=..., indexer=..., alias=...)]`.
+# State[T] is sugar that delegates to _StateManager[T] for backward compatibility.
+
+
+class State:
+    """Annotation marker for declaring state on a channel.
+
+    Usage::
+
+        class MyChannels(GatewayChannels):
+            orders: Annotated[ts[OrderStruct], State(keyby=("id", "x"))] = None
+
+    This is equivalent to calling ``channels.set_state("orders", ("id", "x"))``
+    in the module's ``connect`` method.
+
+    For backward compatibility, ``State[T]`` delegates to ``_StateManager[T]``
+    to create runtime state instances.
+    """
+
     _meta_keyby: Union[Tuple[str, ...], str] = ("id",)
     _meta_indexer: Optional[Union[str, int]] = None
     _meta_alias: Optional[str] = None
@@ -553,21 +568,25 @@ class State(BaseState):
         indexer: Optional[Union[str, int]] = None,
         alias: Optional[str] = None,
     ) -> None:
-        """Initialize a State.
-
-        When ``self._typ`` is set (via ``State[T](...)``), this constructs a runtime
-        state collection and dispatches to the appropriate backend. Otherwise the
-        instance is treated as an annotation marker and only retains its metadata.
-        """
-        # Always retain annotation metadata.
         self._meta_keyby = keyby
         self._meta_indexer = indexer
         self._meta_alias = alias
 
+
+class _StateManager(BaseState, State):
+    """Runtime state container that dispatches to DefaultState or DuckDBState.
+
+    Use via ``_StateManager[T](keyby=...)`` to create a parameterized instance.
+    Inherits from State so that ``isinstance(mgr, State)`` is True.
+    """
+
+    def __init__(
+        self,
+        keyby: Union[Tuple[str, ...], str] = ("id",),
+    ) -> None:
         typ = getattr(self, "_typ", None)
         if typ is None:
-            # Annotation-marker form; no runtime backend needed.
-            return
+            raise TypeError("_StateManager must be parameterized with a type: _StateManager[MyStruct](keyby=...)")
 
         global _USE_DUCKDB_STATE
         if _USE_DUCKDB_STATE and isinstance(typ, type) and issubclass(typ, Struct):
@@ -613,18 +632,22 @@ class State(BaseState):
     @classmethod
     @lru_cache()
     def __class_getitem__(cls: type, typ: type) -> Any:
-        new_cls = type("State[{}]".format(typ.__name__), (State,), {})
+        new_cls = type("_StateManager[{}]".format(typ.__name__), (_StateManager,), {})
         new_cls._typ = typ
         return new_cls
+
+
+# Attach __class_getitem__ to State for backward-compat: State[T] -> _StateManager[T]
+State.__class_getitem__ = classmethod(lru_cache()(lambda cls, typ: _StateManager[typ]))  # type: ignore[attr-defined]
 
 
 def build_track_state_node(edge: Any, keyby: Union[str, Tuple[str, ...]]) -> Any:
     @csp.node
     def _track_state_node(  # type: ignore[no-untyped-def]
         ts: ts[edge.tstype.typ], keyby: object
-    ) -> ts[State[edge.tstype.typ]]:
+    ) -> ts[_StateManager[edge.tstype.typ]]:
         with csp.state():
-            s_tracker = State[edge.tstype.typ](keyby)
+            s_tracker = _StateManager[edge.tstype.typ](keyby)
         if csp.ticked(ts):
             s_tracker.insert(ts)
             csp.output(s_tracker)
