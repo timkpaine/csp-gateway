@@ -27,9 +27,6 @@ permissions:
 
 jobs:
   build:
-<<<<<<< before updating
-    runs-on: ubuntu-latest
-=======
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -37,7 +34,6 @@ jobs:
         os: [ubuntu-latest]
         python-version: ["3.11"]
         node-version: [22.x]
->>>>>>> after updating
 
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -50,12 +46,7 @@ jobs:
     - name: Set up NodeJS
       uses: actions-ext/node/setup@main
       with:
-<<<<<<< before updating
-        version: 22.x
-        pnpm_version: '11'
-=======
         version: ${{ matrix.node-version }}
->>>>>>> after updating
 
     - name: Install dependencies
       run: make develop
