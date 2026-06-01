@@ -13,7 +13,7 @@ on:
   pull_request:
     branches:
       - main
-      - v3 
+      - v3
   workflow_dispatch:
 
 concurrency:
@@ -27,7 +27,13 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.11"]
+        node-version: [22.x]
 
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -40,7 +46,7 @@ jobs:
     - name: Set up NodeJS
       uses: actions-ext/node/setup@main
       with:
-        version: 22.x
+        version: ${{ matrix.node-version }}
 
     - name: Install dependencies
       run: make develop
