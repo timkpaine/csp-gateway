@@ -38,6 +38,8 @@ from .routes import (
     add_next_routes,
     add_send_available_channels,
     add_send_routes,
+    add_stage_available_channels,
+    add_stage_routes,
     add_state_available_channels,
     add_state_routes,
 )
@@ -124,6 +126,7 @@ class GatewayWebApp(object):
             "lookup": APIRouter(),
             "next": APIRouter(),
             "send": APIRouter(),
+            "stage": APIRouter(),
             "state": APIRouter(),
         }
 
@@ -280,6 +283,12 @@ class GatewayWebApp(object):
             dependencies=self._middlewares,
         )
         api_router.include_router(
+            self.get_router("stage"),
+            prefix="/stage",
+            tags=["Stage"],
+            dependencies=self._middlewares,
+        )
+        api_router.include_router(
             self.get_router("state"),
             prefix="/state",
             tags=["State"],
@@ -410,7 +419,7 @@ class GatewayWebApp(object):
             subroute_key = None
             if state_edge is not None:
                 inner = state_edge.tstype.typ
-                # Unwrap State[T] -> T for the response model
+                # Unwrap _StateManager[T] -> T for the response model
                 model = getattr(inner, "_typ", inner)
 
         add_state_routes(
@@ -425,6 +434,16 @@ class GatewayWebApp(object):
     def add_state_available_channels(self, fields: Optional[Set[str]] = None) -> None:
         api_router = self.get_router("state")
         add_state_available_channels(api_router=api_router, fields=fields)
+
+    def add_stage_api(self, field: str) -> None:
+        """Mount REST routes for staging on a channel."""
+        api_router = self.get_router("stage")
+        model = self._get_field_pydantic_type(field)
+        add_stage_routes(api_router=api_router, field=field, model=model)
+
+    def add_stage_available_channels(self, fields: Optional[Set[str]] = None) -> None:
+        api_router = self.get_router("stage")
+        add_stage_available_channels(api_router=api_router, fields=fields)
 
     def add_controls_api(self, field: str) -> None:
         api_router = self.get_router("controls")

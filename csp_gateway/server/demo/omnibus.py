@@ -33,6 +33,7 @@ from csp_gateway import (
     MountPerspectiveTables,
     MountRestRoutes,
     MountWebSocketRoutes,
+    Stage,
     State,
 )
 from csp_gateway.server.config import load_gateway
@@ -127,6 +128,9 @@ class ExampleGatewayChannels(GatewayChannels):
     basket: Dict[ExampleEnum, ts[ExampleData]] = None
     str_basket: Dict[str, ts[ExampleData]] = None
 
+    # Staging can be added via annotation or the `set_stage` API in the module's `connect` method
+    example_with_stage: Annotated[ts[ExampleData], Stage()] = None
+
     # FIXME
     # basket_list: Dict[ExampleEnum, ts[[ExampleData]]] = None
     # NOTE: this second one is not populated with data so will 404
@@ -188,6 +192,7 @@ class ExampleModule(GatewayModule):
         channels.set_channel(ExampleGatewayChannels.example_list, data_list)
         channels.set_channel(ExampleGatewayChannels.example_with_state, data)
         channels.set_channel(ExampleGatewayChannels.example_with_state_multiple, data)
+        channels.set_channel(ExampleGatewayChannels.example_with_stage, data)
 
         # Generic channel for sending data from non-csp sources
         channels.add_send_channel(ExampleGatewayChannels.example)
@@ -201,6 +206,9 @@ class ExampleModule(GatewayModule):
             ExampleGatewayChannels.example,
             ("id",),
         )
+
+        # Staging via `set_stage` — enables stage_add/remove/release/list/lookup APIs
+        channels.set_stage(ExampleGatewayChannels.example)
 
         # Create some data streams for dict baskets
         data_a = self.subscribe(

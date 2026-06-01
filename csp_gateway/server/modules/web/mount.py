@@ -19,6 +19,7 @@ class MountRestRoutes(GatewayModule):
     mount_last: ChannelSelection = Field(default_factory=ChannelSelection, description="Channels to mount for last operations. Defaults to all")
     mount_next: ChannelSelection = Field(default_factory=ChannelSelection, description="Channels to mount for next operations. Defaults to all")
     mount_send: ChannelSelection = Field(default_factory=ChannelSelection, description="Channels to mount for send operations. Defaults to all")
+    mount_stage: ChannelSelection = Field(default_factory=ChannelSelection, description="Channels to mount for stage operations. Defaults to all")
     mount_state: ChannelSelection = Field(default_factory=ChannelSelection, description="Channels to mount for state operations. Defaults to all")
     mount_lookup: ChannelSelection = Field(default_factory=ChannelSelection, description="Channels to mount for lookup operations. Defaults to all")
 
@@ -39,6 +40,7 @@ class MountRestRoutes(GatewayModule):
         self._mount_last(app)
         self._mount_next(app)
         self._mount_send(app)
+        self._mount_stage(app)
         self._mount_state(app)
         self._mount_lookup(app)
 
@@ -88,6 +90,19 @@ class MountRestRoutes(GatewayModule):
                 log.info(f"Requested channels missing send routes are: {list(missing_channels)}")
 
         app.add_send_available_channels(seen_channels)
+
+    def _mount_stage(self, app: GatewayWebApp) -> None:
+        staged_channels = set(app.gateway.channels.staged_channels())
+        if not staged_channels:
+            return
+
+        seen_channels = set()
+        for channel in staged_channels:
+            if channel not in seen_channels:
+                seen_channels.add(channel)
+                app.add_stage_api(channel)
+
+        app.add_stage_available_channels(seen_channels)
 
     def _mount_state(self, app: GatewayWebApp) -> None:
         selection = ChannelSelection() if self.force_mount_all else self.mount_state
