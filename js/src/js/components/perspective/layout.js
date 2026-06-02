@@ -14,6 +14,28 @@ export const saveCustomLayout = (layout) => {
   );
 };
 
+/**
+ * Strip transient fields from a layout so it is theme/mode-agnostic.
+ * Fields like `theme` are re-applied on restore based on the user's current
+ * settings, and column sizing is screen-dependent — persisting them would
+ * override future preferences or look wrong on different displays.
+ */
+export const stripTransientFields = (layout) => {
+  const cloned = structuredClone(layout);
+  if (cloned?.viewers) {
+    Object.values(cloned.viewers).forEach((viewer) => {
+      delete viewer.theme;
+      // Strip datagrid column width overrides from plugin_config
+      if (viewer.plugin_config?.columns) {
+        for (const col of Object.values(viewer.plugin_config.columns)) {
+          delete col.column_size_override;
+        }
+      }
+    });
+  }
+  return cloned;
+};
+
 /** Fetch server-defined layouts from the gateway API */
 export const getServerLayouts = async () => {
   const data = await fetch(

@@ -22,7 +22,7 @@ from csp import ts
 from fastapi import APIRouter, WebSocket
 from perspective import Client, Server, Table
 from perspective.handlers.starlette import PerspectiveStarletteHandler
-from pydantic import Field, PrivateAttr, field_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 from starlette.websockets import WebSocketDisconnect
 from typing_extensions import TypeAliasType
 
@@ -33,6 +33,7 @@ from csp_gateway.utils import PickleableQueue, get_args, get_origin, get_thread
 __all__ = (
     "psp_schema_to_arrow_schema",
     "create_pyarrow_table",
+    "TableConfig",
     "MountPerspectiveTables",
 )
 
@@ -141,23 +142,74 @@ ViewConfig = Dict[
 ]
 
 
+class TableConfig(BaseModel):
+    """Configuration for a perspective table. When channel is omitted, defaults to using the table name as the channel."""
+
+    channel: Optional[str] = Field(None, description="The source channel name. Defaults to the table name if omitted.")
+    limit: Optional[int] = Field(None, description="Row limit for this table.")
+    index: Optional[Union[str, List[str]]] = Field(None, description="Index field(s) for this table.")
+    architecture: Literal["server", "client-server"] = Field("client-server", description="Perspective data architecture for this table.")
+    excluded_columns: Optional[ExcludedColumns] = Field(None, description="Columns to exclude from the schema.")
+
+
+# Backwards compat alias
+AdditionalTableConfig = TableConfig
+
+
+def _is_channel_selection_input(v) -> bool:
+    """Detect whether a raw input value looks like a ChannelSelection (old-style tables field)."""
+    if v is None or isinstance(v, list):
+        return True
+    if isinstance(v, ChannelSelection):
+        return True
+    if isinstance(v, dict):
+        keys = set(v.keys())
+        # Empty dict is ambiguous — treat as empty TableConfig dict (new-style)
+        if len(keys) == 0:
+            return False
+        if keys <= {"include", "exclude"}:
+            # Verify values aren't TableConfig-like dicts (handles edge case of channel named "include"/"exclude")
+            for val in v.values():
+                if isinstance(val, (dict, TableConfig)):
+                    return False
+            return True
+    return False
+
+
 class MountPerspectiveTables(GatewayModule):
     requires: Optional[ChannelSelection] = []
 
-    tables: ChannelSelection = Field(default_factory=ChannelSelection)
+    tables: Dict[str, TableConfig] = Field(
+        default={},
+        description=(
+            "Dictionary mapping table name to a TableConfig. Each entry configures a perspective table. "
+            "If 'channel' is omitted in the config, the table name is used as the channel name. "
+            "If 'channel' is set to a different name, an additional table is created mirroring that channel's data. "
+            "Tables entries whose channel matches their name override per-table settings from legacy fields "
+            "(limits, indexes, etc.). For backwards compatibility, this field also accepts a ChannelSelection "
+            "(list or dict with include/exclude keys) which will be moved to 'channel_selection'."
+        ),
+    )
+    channel_selection: ChannelSelection = Field(
+        default_factory=ChannelSelection,
+        description="Controls which channels are auto-discovered as perspective tables. "
+        "Channels not explicitly listed in 'tables' will use defaults. "
+        "This is the successor to the old 'tables' field when it was a ChannelSelection.",
+    )
     _unused_tables: Optional[List[str]] = PrivateAttr(default_factory=list)
 
     server_views: Optional[Dict[str, ViewConfig]] = Field(
         default_factory=dict, description="Optional dict mapping new table name to a dict with table and view information"
     )
 
+    # Legacy per-table config fields (still functional; tables entries take precedence)
     limits: Dict[str, int] = Field(
         description="Dict mapping table name to [perspective limit](https://perspective-dev.github.io/guide/explanation/table/options.html)",
         default={},
     )
     default_limit: Optional[int] = Field(None, description="Default limit for all tables, i.e. 1000")
     indexes: Dict[str, Optional[Union[str, List[str]]]] = Field(
-        description="Dict mapping table name to [perspective index](https://perspective-dev.github.io/guide/explanation/table/options.html). . If a multi-index is provided, will create a new computed index field.",
+        description="Dict mapping table name to [perspective index](https://perspective-dev.github.io/guide/explanation/table/options.html). If a multi-index is provided, will create a new computed index field.",
         default={},
     )
     default_index: Optional[Union[str, List[str]]] = Field(
@@ -170,6 +222,15 @@ class MountPerspectiveTables(GatewayModule):
     default_architecture: Literal["server", "client-server"] = Field(
         "client-server",
         description="Default architecture for all tables, i.e. 'client-server'",
+    )
+    excluded_table_columns: Dict[str, ExcludedColumns] = Field(
+        default={},
+        description=(
+            "Dictionary from table name to columns (which are attributes on a GatewayStruct) to exclude from perspective. "
+            "The columns to exclude can be specified as either be a set of column names or as a dictionary. If specified "
+            "as a dictionary, the dictionary is a mapping from attribute name to sub-attributes to exclude. This is defined "
+            "recursively so it can be used to exclude fields that are structs of structs."
+        ),
     )
 
     layouts: Dict[str, str] = Field(default={})
@@ -189,15 +250,28 @@ class MountPerspectiveTables(GatewayModule):
         description="Optional field on the channels which has a dictionary of layouts to use, "
         "such that it can also be used by other GatewayModules with custom table preparation logic.",
     )
-    excluded_table_columns: Dict[str, ExcludedColumns] = Field(
-        default={},
-        description=(
-            "Dictionary from table name to columns (which are attributes on a GatewayStruct) to exclude from perspective. "
-            "The columns to exclude can be specified as either be a set of column names or as a dictionary. If specified "
-            "as a dictionary, the dictionary is a mapping from attribute name to sub-attributes to exclude. This is defined "
-            "recursively so it can be used to exclude fields that are structs of structs."
-        ),
-    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_tables_input(cls, data):
+        if not isinstance(data, dict):
+            return data
+
+        tables_input = data.get("tables")
+        if _is_channel_selection_input(tables_input):
+            # Old style: `tables` was a ChannelSelection — move to channel_selection
+            # Only do this if channel_selection is not already explicitly provided
+            if tables_input is not None and "channel_selection" not in data:
+                data["channel_selection"] = tables_input
+            data.pop("tables", None)
+
+        # Merge deprecated additional_tables into tables
+        additional = data.pop("additional_tables", None)
+        if additional:
+            tables = data.setdefault("tables", {})
+            tables.update(additional)
+
+        return data
 
     _route: str = "/perspective"
     _server: Server = PrivateAttr(default=None)
@@ -224,11 +298,37 @@ class MountPerspectiveTables(GatewayModule):
                 raise ValueError(f"View config for {new_table_name} must specify at least one view operation in addition to the base 'table'.")
         return v
 
+    def _get_effective_config(self, table_name: str) -> TableConfig:
+        """Get effective config for a table, merging tables dict entry with legacy fields and defaults."""
+        config = self.tables.get(table_name)
+        if config:
+            return TableConfig(
+                channel=config.channel,
+                limit=config.limit if config.limit is not None else self.limits.get(table_name, self.default_limit),
+                index=config.index if config.index is not None else self.indexes.get(table_name, self.default_index),
+                architecture=config.architecture or self.architectures.get(table_name, self.default_architecture),
+                excluded_columns=config.excluded_columns if config.excluded_columns is not None else self.excluded_table_columns.get(table_name),
+            )
+        return TableConfig(
+            limit=self.limits.get(table_name, self.default_limit),
+            index=self.indexes.get(table_name, self.default_index),
+            architecture=self.architectures.get(table_name, self.default_architecture),
+            excluded_columns=self.excluded_table_columns.get(table_name),
+        )
+
     def _connect_all_tables(self, channels: GatewayChannels) -> None:
-        selected_tables = set(self.tables.select_from(channels)) | set(_["table"] for _ in self.server_views.values())
-        for field in selected_tables:
+        # Determine primary channels from channel_selection + server_views + tables entries without explicit channel
+        selected_channels = set(self.channel_selection.select_from(channels)) | set(_["table"] for _ in self.server_views.values())
+        for table_name, config in self.tables.items():
+            channel = config.channel or table_name
+            if channel == table_name:
+                selected_channels.add(table_name)
+
+        # Register primary tables (table_name == channel_name)
+        for field in selected_channels:
+            config = self._get_effective_config(field)
             edge = channels.get_channel(field)
-            excluded_columns = self.excluded_table_columns.get(field, None)
+            excluded_columns = config.excluded_columns
             if isinstance(edge, dict):
                 if not edge:
                     raise ValueError(f"No keys defined for dict basket channel {field}.")
@@ -244,8 +344,8 @@ class MountPerspectiveTables(GatewayModule):
                 self.add_table(
                     field,
                     schema,
-                    limit=self.limits.get(field, self.default_limit),
-                    index=self.indexes.get(field, self.default_index),
+                    limit=config.limit,
+                    index=config.index,
                 )
 
                 if hasattr(subfield, "name"):
@@ -265,8 +365,8 @@ class MountPerspectiveTables(GatewayModule):
                 self.add_table(
                     field,
                     schema,
-                    limit=self.limits.get(field, self.default_limit),
-                    index=self.indexes.get(field, self.default_index),
+                    limit=config.limit,
+                    index=config.index,
                 )
                 self.push_to_perspective(
                     edge,
@@ -285,6 +385,64 @@ class MountPerspectiveTables(GatewayModule):
             base_table = self._client.open_table(view_config.pop("table"))
             view = base_table.view(**view_config)
             self._table_insts[new_table_name] = self._client.table(view, name=new_table_name)
+
+        # Register additional tables (tables entries where channel differs from table_name)
+        for table_name, table_config in self.tables.items():
+            channel = table_config.channel or table_name
+            if channel == table_name:
+                continue  # Already handled as a primary table above
+
+            if channel not in self._schema_insts:
+                raise ValueError(
+                    f"Table '{table_name}' references channel '{channel}' which is not a registered table. "
+                    f"Ensure '{channel}' is included in the channel selection or as a primary table."
+                )
+            config = self._get_effective_config(table_name)
+            excluded_columns = config.excluded_columns
+            if excluded_columns is not None:
+                # Recompute schema with different exclusions
+                edge = channels.get_channel(channel)
+                if isinstance(edge, dict):
+                    a_subfield = list(edge.keys())[0]
+                    ts_type = channels.get_channel(channel, a_subfield).tstype.typ
+                else:
+                    ts_type = edge.tstype.typ
+                    if get_origin(ts_type) is list:
+                        ts_type = get_args(ts_type)[0]
+                schema = ts_type.psp_schema(excluded_columns)
+            else:
+                schema = self._schema_insts[channel].copy()
+
+            self.add_table(
+                table_name,
+                schema,
+                limit=config.limit,
+                index=config.index,
+            )
+            self._schema_insts[table_name] = schema
+            self._arrow_schema_insts[table_name] = psp_schema_to_arrow_schema(schema)
+            self._arrow_schema_date_conversions[table_name] = set()
+            for k, v in schema.items():
+                if v is date:
+                    self._arrow_schema_date_conversions[table_name].add(k)
+
+            # Wire up data flow: push same channel data to the additional table
+            edge = channels.get_channel(channel)
+            if isinstance(edge, dict):
+                to_flatten = []
+                for subfield in edge.keys():
+                    to_flatten.append(channels.get_channel(channel, subfield))
+                if hasattr(subfield, "name"):
+                    self.push_to_perspective(csp.flatten(to_flatten), table_name, subfield.name)
+                else:
+                    self.push_to_perspective(csp.flatten(to_flatten), table_name, subfield)
+            else:
+                ts_type = channels.get_channel(channel).tstype.typ
+                if get_origin(ts_type) is list:
+                    edge = csp.unroll(channels.get_channel(channel))
+                else:
+                    edge = channels.get_channel(channel)
+                self.push_to_perspective(edge, table_name)
 
     def get_schema_from_field(self, channels: GatewayChannels, field: str):
         edge = channels.get_channel(field)
@@ -451,11 +609,15 @@ class MountPerspectiveTables(GatewayModule):
             indexes, and architecture.
             """
             return {
-                "limits": self.limits,
+                "limits": {**self.limits, **{k: v.limit for k, v in self.tables.items() if v.limit is not None}},
                 "default_limit": self.default_limit,
-                "indexes": {**self.indexes, **{k: v[0] for k, v in self._computed_indexes.items()}},
+                "indexes": {
+                    **self.indexes,
+                    **{k: v.index for k, v in self.tables.items() if v.index is not None},
+                    **{k: v[0] for k, v in self._computed_indexes.items()},
+                },
                 "default_index": self.default_index,
-                "architectures": self.architectures,
+                "architectures": {**self.architectures, **{k: v.architecture for k, v in self.tables.items()}},
                 "default_architecture": self.default_architecture,
                 "layouts": self.layouts,
                 "default_layout": self.default_layout,

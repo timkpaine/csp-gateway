@@ -14,6 +14,7 @@ import {
   saveCustomLayout,
   getUrlLayout,
   setUrlLayout,
+  stripTransientFields,
 } from "./layout";
 import { getCurrentTheme, getViewerTheme } from "./theme";
 
@@ -119,7 +120,7 @@ export const Workspace = forwardRef(function Workspace(
         await restoreQueueRef.current.catch(() => {});
         const ws = wsRef.current;
         if (!ws) return;
-        const config = await ws.save();
+        const config = stripTransientFields(await ws.save());
         saveCustomLayout(config);
         setLayouts((prev) => ({ ...prev, "Custom Layout": config }));
         setActiveLayoutName("Custom Layout");
@@ -128,7 +129,7 @@ export const Workspace = forwardRef(function Workspace(
         await restoreQueueRef.current.catch(() => {});
         const ws = wsRef.current;
         if (!ws) return null;
-        const config = await ws.save();
+        const config = stripTransientFields(await ws.save());
         return JSON.stringify(config).replace(
           /PERSPECTIVE_GENERATED_/g,
           "CSP_GATEWAY_GENERATED_",
@@ -214,7 +215,7 @@ export const Workspace = forwardRef(function Workspace(
       ws.addEventListener("workspace-layout-update", async () => {
         if (!initializedRef.current || restoringRef.current) return;
         try {
-          const config = await ws.save();
+          const config = stripTransientFields(await ws.save());
           if (!restoringRef.current) {
             await setUrlLayout(config);
           }
