@@ -566,3 +566,195 @@ def test_exclude_unused_tables():
 
     # Assert that tables were pruned
     assert sorted(psp_module._unused_tables) == sorted(["b", "d", "f"])
+
+
+def test_additional_tables():
+    """Test that additional_tables creates duplicate tables from the same channel with different config."""
+    from csp_gateway.server.modules.web.perspective import AdditionalTableConfig
+
+    module = MountPerspectiveTables(
+        tables={"include": ["test_channel", "limit_channel"]},
+        indexes={"test_channel": "id"},
+        limits={"limit_channel": 5},
+        additional_tables={
+            "test_channel_no_index": AdditionalTableConfig(
+                channel="test_channel",
+                # no index, no limit - raw append
+            ),
+            "test_channel_limited": AdditionalTableConfig(
+                channel="test_channel",
+                limit=3,
+            ),
+            "limit_channel_full": AdditionalTableConfig(
+                channel="limit_channel",
+                # no limit override - gets all rows
+            ),
+        },
+        update_interval=timedelta(seconds=0.5),
+    )
+
+    h = GatewayTestHarness(
+        test_channels=[GWC.test_channel, GWC.limit_channel],
+    )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
+
+    for _ in range(10):
+        h.send(GWC.test_channel, o)
+        h.send(GWC.limit_channel, o)
+    h.assert_ticked(GWC.test_channel, 10)
+    h.assert_ticked(GWC.limit_channel, 10)
+
+    h.delay(2 * module.update_interval)  # So that the buffer is flushed
+    channels = GWC()
+    gateway = Gateway(modules=[h, module], channels=channels)
+    csp.run(gateway.graph, starttime=datetime(2023, 1, 1), endtime=timedelta(5))
+
+    psp = module._server
+
+    # All tables should be registered
+    table_names = sorted(psp.new_local_client().get_hosted_table_names())
+    assert "test_channel" in table_names
+    assert "test_channel_no_index" in table_names
+    assert "test_channel_limited" in table_names
+    assert "limit_channel" in table_names
+    assert "limit_channel_full" in table_names
+
+    def table_len(name):
+        return len(psp.new_local_client().open_table(name).view().to_json())
+
+    # test_channel has index="id", so all rows collapse to 1
+    assert table_len("test_channel") == 1
+    # test_channel_no_index has no index, all 10 rows kept
+    assert table_len("test_channel_no_index") == 10
+    # test_channel_limited has limit=3, so at most 3 rows
+    assert table_len("test_channel_limited") == 3
+
+    # limit_channel has limit=5
+    assert table_len("limit_channel") == 5
+    # limit_channel_full has no limit, all 10 rows
+    assert table_len("limit_channel_full") == 10
+
+
+def test_additional_tables_with_dict_channel():
+    """Test that additional_tables works with dict basket channels."""
+    from csp_gateway.server.modules.web.perspective import AdditionalTableConfig
+
+    module = MountPerspectiveTables(
+        tables={"include": ["dict_channel"]},
+        indexes={"dict_channel": "id"},
+        additional_tables={
+            "dict_channel_no_index": AdditionalTableConfig(
+                channel="dict_channel",
+                # no index - keeps all rows
+            ),
+        },
+        update_interval=timedelta(seconds=0.5),
+    )
+
+    h = GatewayTestHarness(
+        test_channels=[GWC.dict_channel],
+        test_dynamic_keys={"dict_channel": ["test_key"]},
+    )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
+
+    for _ in range(5):
+        h.send(GWC.dict_channel, {"test_key": o})
+    h.assert_ticked((GWC.dict_channel, "test_key"), 5)
+
+    h.delay(2 * module.update_interval)
+    channels = GWC()
+    gateway = Gateway(modules=[h, module], channels=channels)
+    csp.run(gateway.graph, starttime=datetime(2023, 1, 1), endtime=timedelta(5))
+
+    psp = module._server
+
+    def table_len(name):
+        return len(psp.new_local_client().open_table(name).view().to_json())
+
+    # dict_channel has index="id", collapses to 1 row
+    assert table_len("dict_channel") == 1
+    # dict_channel_no_index has no index, all 5 rows kept
+    assert table_len("dict_channel_no_index") == 5
+
+
+def test_additional_tables_invalid_channel():
+    """Test that referencing a non-existent channel raises an error."""
+    from csp_gateway.server.modules.web.perspective import AdditionalTableConfig
+
+    module = MountPerspectiveTables(
+        tables={"include": ["test_channel"]},
+        additional_tables={
+            "bogus_table": AdditionalTableConfig(
+                channel="nonexistent_channel",
+            ),
+        },
+        update_interval=timedelta(seconds=0.5),
+    )
+
+    h = GatewayTestHarness(
+        test_channels=[GWC.test_channel],
+    )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
+    h.send(GWC.test_channel, o)
+
+    channels = GWC()
+    gateway = Gateway(modules=[h, module], channels=channels)
+    with pytest.raises(ValueError, match="references channel 'nonexistent_channel'"):
+        csp.run(gateway.graph, starttime=datetime(2023, 1, 1), endtime=timedelta(5))
+
+
+def test_tables_unified_api():
+    """Test the new unified tables API where everything is configured via tables dict."""
+    from csp_gateway.server.modules.web.perspective import TableConfig
+
+    module = MountPerspectiveTables(
+        tables={
+            # Primary table with config override (channel == table_name when omitted)
+            "test_channel": TableConfig(index="id"),
+            # Primary table with limit
+            "limit_channel": TableConfig(limit=5),
+            # Additional table: same channel, different config
+            "test_channel_no_index": TableConfig(channel="test_channel"),
+            "test_channel_limited": TableConfig(channel="test_channel", limit=3),
+        },
+        channel_selection={"exclude": ["dict_channel", "dict_enum_channel", "index_channel", "exclude_channel"]},
+        update_interval=timedelta(seconds=0.5),
+    )
+
+    h = GatewayTestHarness(
+        test_channels=[GWC.test_channel, GWC.limit_channel],
+    )
+
+    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
+
+    for _ in range(10):
+        h.send(GWC.test_channel, o)
+        h.send(GWC.limit_channel, o)
+    h.assert_ticked(GWC.test_channel, 10)
+    h.assert_ticked(GWC.limit_channel, 10)
+
+    h.delay(2 * module.update_interval)
+    channels = GWC()
+    gateway = Gateway(modules=[h, module], channels=channels)
+    csp.run(gateway.graph, starttime=datetime(2023, 1, 1), endtime=timedelta(5))
+
+    psp = module._server
+
+    def table_len(name):
+        return len(psp.new_local_client().open_table(name).view().to_json())
+
+    # test_channel has index="id" via TableConfig, collapses to 1
+    assert table_len("test_channel") == 1
+    # test_channel_no_index has no index, keeps all 10
+    assert table_len("test_channel_no_index") == 10
+    # test_channel_limited has limit=3
+    assert table_len("test_channel_limited") == 3
+    # limit_channel has limit=5
+    assert table_len("limit_channel") == 5
