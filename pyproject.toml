@@ -205,7 +205,6 @@ build_cmd = "build"
 tool = "pnpm"
 targets = [
     "csp_gateway/server/build/index.css",
-    "csp_gateway/server/build/index.html",
     "csp_gateway/server/build/main.js",
 ]
 

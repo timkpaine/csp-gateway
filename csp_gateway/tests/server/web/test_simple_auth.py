@@ -191,6 +191,66 @@ class TestSimpleAuthFormLogin:
         assert "error" in response.headers.get("location", "")
 
 
+class TestSimpleAuthRootPath:
+    """Test form-based auth flows when served under a reverse-proxy sub-path."""
+
+    @pytest.fixture(scope="class")
+    def root_path_gateway(self, free_port):
+        gateway = Gateway(
+            modules=[
+                ExampleModule(),
+                MountRestRoutes(force_mount_all=True),
+                MountSimpleAuthMiddleware(external_validator=mock_simple_auth_validator_valid),
+            ],
+            channels=ExampleGatewayChannels(),
+            settings=GatewaySettings(PORT=free_port, ROOT_PATH="/watchtower", UI=True),
+        )
+        return gateway
+
+    @pytest.fixture(scope="class")
+    def root_path_webserver(self, root_path_gateway):
+        root_path_gateway.start(rest=True, _in_test=True)
+        yield root_path_gateway
+        root_path_gateway.stop()
+
+    @pytest.fixture(scope="class")
+    def root_path_rest_client(self, root_path_webserver) -> TestClient:
+        return TestClient(root_path_webserver.web_app.get_fastapi())
+
+    def test_login_form_action_is_prefixed(self, root_path_rest_client: TestClient):
+        response = root_path_rest_client.get("/login")
+        assert response.status_code == 200
+        assert 'action="/watchtower/api/v1/auth/login"' in response.text
+
+    def test_form_login_redirect_is_prefixed(self, root_path_rest_client: TestClient):
+        response = root_path_rest_client.post(
+            "/login",
+            data={"username": "alice", "password": "alicepass"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+        assert response.headers.get("location") == "/watchtower/"
+
+    def test_form_login_error_redirect_is_prefixed(self, root_path_rest_client: TestClient):
+        response = root_path_rest_client.post(
+            "/login",
+            data={"username": "alice", "password": "wrongpass"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+        assert response.headers.get("location", "").startswith("/watchtower/login")
+
+    def test_logout_form_action_is_prefixed(self, root_path_rest_client: TestClient):
+        response = root_path_rest_client.get("/logout")
+        assert response.status_code == 200
+        assert 'action="/watchtower/api/v1/auth/logout"' in response.text
+
+    def test_unauthenticated_ui_redirect_is_prefixed(self, root_path_rest_client: TestClient):
+        response = root_path_rest_client.get("/", follow_redirects=False)
+        assert response.status_code == 307
+        assert response.headers.get("location") == "/watchtower/login"
+
+
 class TestHostAuthUnix:
     """Test Unix/PAM host authentication helpers."""
 

@@ -11,7 +11,7 @@
     <body>
         <div class="centered">
             <h1>Logout</h1>
-            <form class="centered-form" method="get" action="/api/v1/auth/logout">
+            <form class="centered-form" method="get" action="{{ request.scope.get('root_path', '') }}/api/v1/auth/logout">
                 <input type="submit" value="Logout">
             </form>
         </div>

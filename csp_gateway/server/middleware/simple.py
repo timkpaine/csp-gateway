@@ -383,13 +383,13 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
                 password = form.get("password", "")
 
                 if not username or not password:
-                    return RedirectResponse(url="/login?error=missing_credentials", status_code=303)
+                    return RedirectResponse(url=app.root_path_url(request, "/login?error=missing_credentials"), status_code=303)
 
                 identity = self._validate_credentials(str(username), str(password))
 
                 if identity and isinstance(identity, dict):
                     session_uuid = self._create_session(identity)
-                    response = RedirectResponse(url="/", status_code=303)
+                    response = RedirectResponse(url=app.root_path_url(request, "/"), status_code=303)
                     response.set_cookie(
                         self.cookie_name,
                         value=session_uuid,
@@ -400,12 +400,12 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
                     )
                     return response
 
-                return RedirectResponse(url="/login?error=invalid_credentials", status_code=303)
+                return RedirectResponse(url=app.root_path_url(request, "/login?error=invalid_credentials"), status_code=303)
 
         @auth_router.get("/login")
-        async def api_login(session_uuid: str = Depends(check)):
+        async def api_login(request: Request, session_uuid: str = Depends(check)):
             """API login endpoint - validates Basic Auth and returns session cookie."""
-            response = RedirectResponse(url="/")
+            response = RedirectResponse(url=app.root_path_url(request, "/"))
             response.set_cookie(
                 self.cookie_name,
                 value=session_uuid,
@@ -423,7 +423,7 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
             if session_uuid and session_uuid in self._identity_store:
                 self._identity_store.pop(session_uuid, None)
 
-            response = RedirectResponse(url="/login")
+            response = RedirectResponse(url=app.root_path_url(request, "/login"))
             response.delete_cookie(self.cookie_name, domain=self.domain)
             return response
 
@@ -450,7 +450,7 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
                     status_code=exc.status_code,
                 )
             if self.enable_form_login:
-                return RedirectResponse(url="/login")
+                return RedirectResponse(url=app.root_path_url(request, "/login"))
             # Return 401 with Basic Auth challenge
             return JSONResponse(
                 {"detail": self.unauthorized_status_message},
