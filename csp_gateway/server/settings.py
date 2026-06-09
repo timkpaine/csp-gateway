@@ -33,9 +33,47 @@ class Settings(BaseSettings):
     BIND: str = "0.0.0.0"
     PORT: int = 8000
 
+    ROOT_PATH: str = Field(
+        default="",
+        description="URL path prefix the app is served under when behind a reverse proxy that "
+        "strips the prefix (e.g. '/watchtower'). Passed to the ASGI server as root_path and used "
+        "to prefix all server-rendered asset/API URLs so the UI works under a sub-path. Leave "
+        "empty when served at a domain root.",
+    )
+
     UI: bool = Field(False, description="Enables ui in the web application")
 
-    # --- DEPRECATED auth settings ---
+    # UI customization fields that let downstream applications white-label the
+    # default UI from server-side config alone, without a custom Javascript bundle.
+    HEADER_LOGO: Optional[str] = Field(
+        default=None,
+        description="Header logo image, given as an http(s) URL, a data URI, an absolute "
+        "URL path, or a local file path (local files are served automatically).",
+    )
+    FOOTER_LOGO: Optional[str] = Field(
+        default=None,
+        description="Footer logo image, given as an http(s) URL, a data URI, an absolute "
+        "URL path, or a local file path (local files are served automatically).",
+    )
+    CUSTOM_JS: List[str] = Field(
+        default_factory=list,
+        description="Custom Javascript files to inject into the UI, given as URLs or local "
+        "file paths (local files are served automatically). Loaded after the main bundle.",
+    )
+    CUSTOM_CSS: List[str] = Field(
+        default_factory=list,
+        description="Custom CSS files to inject into the UI, given as URLs or local file "
+        "paths (local files are served automatically). Loaded after the main stylesheet.",
+    )
+    CUSTOM_STATIC_DIR: Optional[str] = Field(
+        default=None,
+        description="Local directory served at <root_path>/custom. The entire directory is exposed "
+        "as public static content (useful for assets like logos, e.g. /custom/logo.svg); its top-level "
+        "*.js and *.css files are additionally auto-injected into the UI in sorted filename order. Do "
+        "not point this at a directory containing private files.",
+    )
+
+    # DEPRECATED auth settings
     # Historically (csp-gateway <2.5), auth was configured via these two fields
     # on Settings. In 2.5+, auth moved onto `MountAPIKeyMiddleware` as module
     # fields. Keeping these here (default-None sentinels) lets existing YAML

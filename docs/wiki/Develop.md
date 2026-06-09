@@ -53,15 +53,64 @@ class ExampleModule(GatewayModule):
 `csp-gateway` is designed as an all-in-one application builder.
 However, sometimes it is convenient to white-label the frontend beyond what is currently exposed.
 
-To this end, `csp-gateway` publishes its Javascript frontend as a library to [npmjs.com](https://www.npmjs.com/).
+There are two ways to customize the UI:
 
-You can extend the frontend with customizations like so:
+1. **Server-side configuration** (no Javascript build required) — set fields on `GatewaySettings`.
+1. **A custom Javascript bundle** — build your own app on top of the published `@point72/csp-gateway` library.
 
-### Install
+### Server-side configuration
+
+The simplest way to white-label the UI is through settings. These require no Javascript build:
+the gateway templates the served `index.html` and exposes the configuration at `GET /ui-config`,
+which the default frontend reads on load.
+
+- `TITLE`: Page title and header title.
+- `HEADER_LOGO` / `FOOTER_LOGO`: Logo image, given as an `http(s)` URL, a `data:` URI, an
+  already-served URL path, or a local file path. Local files are served automatically.
+- `CUSTOM_CSS`: List of CSS files to inject (URLs or local file paths).
+- `CUSTOM_JS`: List of Javascript files to inject (URLs or local file paths), loaded after the
+  main bundle.
+- `CUSTOM_STATIC_DIR`: A local directory served at `/custom`. The entire directory is exposed as
+  public static content (useful for assets like logos, e.g. `/custom/logo.svg`); its top-level `*.js`
+  and `*.css` files are additionally auto-injected into the UI in sorted filename order. Do not point
+  this at a directory containing private files.
+- `ROOT_PATH`: URL path prefix the app is served under when behind a reverse proxy that strips the
+  prefix (e.g. `/watchtower`). It is passed to the ASGI server as `root_path` and used to prefix all
+  server-rendered asset and API URLs (static bundle, logos, custom JS/CSS, `/ui-config`, docs) so the
+  UI works under a sub-path. Leave empty when served at a domain root.
+
+Injected custom Javascript can register richer customizations (logos, loader, `processTables`,
+`shutdown`, the layout config name) on `window.__CSP_GATEWAY_CUSTOM__`, which the frontend reads
+on load. Frontend helpers (e.g. `getDefaultViewerConfig`) are available on `window.CSPGateway`,
+so no bundling is needed. For example, a `custom.js` served from `CUSTOM_STATIC_DIR`:
+
+```javascript
+window.__CSP_GATEWAY_CUSTOM__ = {
+  layoutConfigName: "my_custom_layout",
+  // HTML strings are supported for logos and the loader (no JSX/build step):
+  footerLogoHtml: '<a href="https://example.com">My App</a>',
+  loaderHtml: "<svg>...</svg>",
+  // Functions can use helpers from window.CSPGateway:
+  processTables: function (toRestore, tables, theme) {
+    var getDefaultViewerConfig = window.CSPGateway.getDefaultViewerConfig;
+    // ...
+  },
+  shutdown: async function () {
+    /* ... */
+  },
+};
+```
+
+### Custom Javascript bundle
+
+For deeper customization, `csp-gateway` publishes its Javascript frontend as a library to
+[npmjs.com](https://www.npmjs.com/). You can extend the frontend with customizations like so:
+
+#### Install
 
 Install the Javascript library `@point72/csp-gateway` into your project.
 
-### React
+#### React
 
 Here is an example React app which replaces the default `csp-gateway` logo with a logo of a gate:
 
@@ -84,9 +133,9 @@ window.addEventListener("load", () => {
 });
 ```
 
-### Customization
+#### Customization
 
-Right now, the Javascript application exposes a small number of customizations, provided as `props` to the `App` React component.
+The Javascript application exposes a small number of customizations, provided as `props` to the `App` React component.
 We may extend these more in the future.
 
 - `headerLogo`: React component to replace the top bar logo
