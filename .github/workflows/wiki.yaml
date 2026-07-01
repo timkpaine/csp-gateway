@@ -22,14 +22,11 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - run: cp README.md docs/wiki/Home.md
-      - uses: Andrew-Chen-Wang/github-wiki-action@64efa0a9436db17670a2259e0ac249d6f08bb352 # v5
-        with:
-          path: docs/wiki
 
       - uses: actions-ext/python/setup@main
       - run: pip install nbconvert
       - run: jupyter nbconvert examples/Client.ipynb --to markdown --output  ../docs/wiki/Client.md
 
-      - uses: Andrew-Chen-Wang/github-wiki-action@v5
+      - uses: Andrew-Chen-Wang/github-wiki-action@64efa0a9436db17670a2259e0ac249d6f08bb352 # v5
         with:
           path: docs/wiki
