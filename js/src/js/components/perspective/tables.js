@@ -7,6 +7,8 @@ import "@perspective-dev/workspace";
 import "@perspective-dev/viewer-datagrid";
 import "@perspective-dev/viewer-charts";
 
+import { httpUrl, wsUrl } from "../../common";
+
 const perspective_init_promise = Promise.all([
   perspective.init_server(fetch(SERVER_WASM)),
   perspective_viewer.init_client(fetch(CLIENT_WASM)),
@@ -15,12 +17,9 @@ const perspective_init_promise = Promise.all([
 export const fetchTables = async () => {
   await perspective_init_promise;
   const worker = await perspective.worker();
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const websocket = await perspective.websocket(
-    `${protocol}//${window.location.host}/api/v1/perspective`,
-  );
+  const websocket = await perspective.websocket(wsUrl("/api/v1/perspective"));
 
-  const meta = await (await fetch("/api/v1/perspective/meta")).json();
+  const meta = await (await fetch(httpUrl("/api/v1/perspective/meta"))).json();
   const schemas = meta.tables;
 
   const table_names = [...Object.keys(schemas)];

@@ -1,4 +1,4 @@
-import { CUSTOM_LAYOUT_CONFIG_NAME } from "../../common";
+import { CUSTOM_LAYOUT_CONFIG_NAME, httpUrl } from "../../common";
 
 /** Read custom layout from localStorage */
 export const getCustomLayout = () => {
@@ -38,13 +38,9 @@ export const stripTransientFields = (layout) => {
 
 /** Fetch server-defined layouts from the gateway API */
 export const getServerLayouts = async () => {
-  const data = await fetch(
-    `${window.location.protocol}//${window.location.host}/api/v1/perspective/layouts`,
-  );
+  const data = await fetch(httpUrl("/api/v1/perspective/layouts"));
   if (data.status === 403) {
-    window.location.replace(
-      `${window.location.protocol}//${window.location.host}/login${window.location.search}`,
-    );
+    window.location.replace(httpUrl(`/login${window.location.search}`));
   }
   const json = await data.json();
   Object.keys(json).forEach((key) => {

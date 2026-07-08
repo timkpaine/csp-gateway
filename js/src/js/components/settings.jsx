@@ -8,7 +8,7 @@ import {
   FaPowerOff,
 } from "react-icons/fa";
 
-import { shutdownDefault } from "../common";
+import { httpUrl, shutdownDefault } from "../common";
 
 export function Settings(props) {
   /* Open / Toggle */
@@ -68,18 +68,12 @@ export function Settings(props) {
 
   /* go to log viewer */
   const goToLogs = () => {
-    window.open(
-      `${window.location.protocol}//${window.location.host}/outputs`,
-      "_blank",
-    );
+    window.open(httpUrl("/outputs"), "_blank");
   };
 
   /* view graph */
   const goToGraphView = () => {
-    window.open(
-      `${window.location.protocol}//${window.location.host}/channels_graph`,
-      "_blank",
-    );
+    window.open(httpUrl("/channels_graph"), "_blank");
   };
 
   return (

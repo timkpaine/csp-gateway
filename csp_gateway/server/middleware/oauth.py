@@ -311,7 +311,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
                     "id_token": tokens.get("id_token"),
                 }
 
-                response = RedirectResponse(url="/")
+                response = RedirectResponse(url=app.root_path_url(request, "/"))
                 response.set_cookie(
                     self.cookie_name,
                     value=session_uuid,
@@ -332,7 +332,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
             if session_uuid and session_uuid in self._identity_store:
                 self._identity_store.pop(session_uuid, None)
 
-            response = RedirectResponse(url="/login")
+            response = RedirectResponse(url=app.root_path_url(request, "/login"))
             response.delete_cookie(self.cookie_name, domain=self.domain)
             return response
 
@@ -355,4 +355,4 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
                     {"detail": self.unauthorized_status_message, "status_code": exc.status_code},
                     status_code=exc.status_code,
                 )
-            return RedirectResponse(url="/login")
+            return RedirectResponse(url=app.root_path_url(request, "/login"))

@@ -8,7 +8,7 @@ from os import path
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from csp.impl.types.tstype import isTsType
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -79,11 +79,13 @@ class GatewayWebApp(object):
         _in_test: bool = False,
     ):
         # Instantiate a new FastAPI instance
+        root_path = self._normalize_root_path(settings.ROOT_PATH)
         self.app = FastAPI(
             title=settings.TITLE,
             description=settings.DESCRIPTION,
             version=settings.VERSION,
             contact={"name": settings.AUTHOR, "email": settings.EMAIL},
+            root_path=root_path,
             lifespan=self._lifespan,
         )
         self.templates = Jinja2Templates(
@@ -100,8 +102,14 @@ class GatewayWebApp(object):
         # setup controls
         self._controls = {}
 
+        # local files (logos / custom js / css) served by url, keyed by url path
+        self._custom_asset_routes: Dict[str, str] = {}
+
+        # raw UI customization config (root-relative URLs); populated in add_static_files
+        self._ui_config_raw: Dict[str, Any] = {}
+
         # update ui in settings
-        self.settings = settings.model_copy()
+        self.settings = settings.model_copy(update={"ROOT_PATH": root_path})
         if ui:
             self.settings.UI = True
 
@@ -192,24 +200,131 @@ class GatewayWebApp(object):
 
         # Mount openapi
         @app_router.get("/openapi.json", include_in_schema=False)
-        def getOpenapi() -> Dict[str, Any]:
+        def getOpenapi(request: Request) -> Dict[str, Any]:
+            root_path = request.scope.get("root_path", "")
             return get_openapi(
                 title=self.settings.TITLE,
                 version=self.settings.VERSION,
                 routes=self.app.routes,
+                servers=[{"url": root_path}] if root_path else None,
             )
 
         @app_router.get("/docs/", include_in_schema=False, response_class=HTMLResponse)
-        def getDocs():
-            return get_swagger_ui_html(openapi_url="/openapi.json", title=self.settings.TITLE)
+        def getDocs(request: Request):
+            root_path = request.scope.get("root_path", "")
+            return get_swagger_ui_html(openapi_url=f"{root_path}/openapi.json", title=self.settings.TITLE)
 
         @app_router.get("/redoc/", include_in_schema=False, response_class=HTMLResponse)
-        def getRedoc():
-            return get_redoc_html(openapi_url="/openapi.json", title=self.settings.TITLE)
+        def getRedoc(request: Request):
+            root_path = request.scope.get("root_path", "")
+            return get_redoc_html(openapi_url=f"{root_path}/openapi.json", title=self.settings.TITLE)
+
+    @staticmethod
+    def _is_asset_url(value: str) -> bool:
+        """Whether an asset reference is already a servable URL (vs a local file path)."""
+        return value.startswith(("http://", "https://", "data:"))
+
+    @staticmethod
+    def _normalize_root_path(value: Optional[str]) -> str:
+        """Normalize a configured ROOT_PATH to '' or a leading-slash, no-trailing-slash path.
+
+        '' / '/' -> '', 'watchtower' -> '/watchtower', '/watchtower/' -> '/watchtower'.
+        """
+        if not value:
+            return ""
+        value = value.strip().rstrip("/")
+        if not value:
+            return ""
+        if not value.startswith("/"):
+            value = "/" + value
+        return value
+
+    @staticmethod
+    def _join_root_path(root_path: str, url: Optional[str]) -> Optional[str]:
+        """Prefix a root-relative URL with the proxy root_path, leaving absolute URLs alone."""
+        if not url or not root_path:
+            return url
+        if url.startswith(("http://", "https://", "data:")):
+            return url
+        if url.startswith("/"):
+            return f"{root_path.rstrip('/')}{url}"
+        return url
+
+    @staticmethod
+    def root_path_url(request: Optional[Request], url: str) -> str:
+        """Prefix a root-relative URL with the current request's proxy root_path.
+
+        Use for redirect targets and template links so auth and navigation flows
+        work when the app is served under a sub-path behind a reverse proxy.
+        """
+        root_path = request.scope.get("root_path", "") if request is not None else ""
+        return GatewayWebApp._join_root_path(root_path, url) or url
+
+    def _prefixed_ui_config(self, root_path: str) -> Dict[str, Any]:
+        """Return the UI config with all local asset URLs prefixed for the current root_path."""
+        raw = self._ui_config_raw
+        return {
+            **raw,
+            "basePath": root_path or "",
+            "headerLogo": self._join_root_path(root_path, raw["headerLogo"]),
+            "footerLogo": self._join_root_path(root_path, raw["footerLogo"]),
+            "customCss": [self._join_root_path(root_path, css) for css in raw["customCss"]],
+            "customJs": [self._join_root_path(root_path, js) for js in raw["customJs"]],
+        }
+
+    def _resolve_asset(self, value: Optional[str], kind: str) -> Optional[str]:
+        """Resolve an asset reference to a URL, serving local files automatically."""
+        if not value:
+            return None
+        # http(s) URLs and data URIs are used as-is. Anything that exists on disk
+        # is served automatically; everything else is treated as a URL path
+        # (e.g. an already-mounted "/static/..." or "/img/..." asset).
+        if self._is_asset_url(value) or not path.isfile(value):
+            return value
+        abspath = path.abspath(value)
+        url = f"/custom-assets/{kind}-{len(self._custom_asset_routes)}-{path.basename(abspath)}"
+        self._custom_asset_routes[url] = abspath
+        return url
+
+    def _resolve_ui_assets(self):
+        """Resolve all configured UI assets into URLs, mounting/serving local files."""
+        header_logo = self._resolve_asset(self.settings.HEADER_LOGO, "logo")
+        footer_logo = self._resolve_asset(self.settings.FOOTER_LOGO, "logo")
+        custom_css = [self._resolve_asset(css, "css") for css in self.settings.CUSTOM_CSS]
+        custom_js = [self._resolve_asset(js, "js") for js in self.settings.CUSTOM_JS]
+
+        # Auto-discover any *.js / *.css in the configured custom static directory
+        if self.settings.CUSTOM_STATIC_DIR:
+            custom_dir = path.abspath(self.settings.CUSTOM_STATIC_DIR)
+            if path.isdir(custom_dir):
+                self.app.mount(
+                    "/custom",
+                    CacheControlledStaticFiles(directory=custom_dir, check_dir=False),
+                    name="custom",
+                )
+                for fname in sorted(os.listdir(custom_dir)):
+                    if fname.endswith(".css"):
+                        custom_css.append(f"/custom/{fname}")
+                    elif fname.endswith(".js"):
+                        custom_js.append(f"/custom/{fname}")
+            else:
+                self.logger.warning("CUSTOM_STATIC_DIR %s is not a directory", custom_dir)
+
+        # Raw config with root-relative URLs; prefixed per-request via _prefixed_ui_config.
+        self._ui_config_raw = {
+            "title": self.settings.TITLE,
+            "description": "",
+            "headerLogo": header_logo,
+            "footerLogo": footer_logo,
+            "customCss": custom_css,
+            "customJs": custom_js,
+        }
+        return self._ui_config_raw
 
     def add_static_files(self) -> None:
         """Add static file handlers to FastAPI app"""
         app_router: APIRouter = self.get_router("app")
+        public_router: APIRouter = self.get_router("public")
 
         # Mount static files
         self.app.mount(
@@ -225,6 +340,25 @@ class GatewayWebApp(object):
             name="img",
         )
 
+        # Resolve UI customization assets (logos, custom js/css), serving local files
+        self._resolve_ui_assets()
+
+        # Serve any local files referenced by the UI customization settings
+        if self._custom_asset_routes:
+
+            @app_router.get("/custom-assets/{name:path}", include_in_schema=False, response_class=FileResponse)
+            async def serve_custom_asset(name: str):
+                target = self._custom_asset_routes.get(f"/custom-assets/{name}")
+                if target is None:
+                    raise HTTPException(status_code=404, detail="Not found")
+                return FileResponse(target)
+
+        # Expose the UI customization config (title, logos, custom assets) for the frontend.
+        # Public (no auth) so the UI shell can render before authentication.
+        @public_router.get("/ui-config", include_in_schema=False)
+        async def get_ui_config(request: Request) -> Dict[str, Any]:
+            return self._prefixed_ui_config(request.scope.get("root_path", ""))
+
         # Mount top level routes
         @self.app.get("/favicon.ico", include_in_schema=False, response_class=FileResponse)
         async def readFavicon():
@@ -233,15 +367,29 @@ class GatewayWebApp(object):
         # Add UI if present, otherwise redirect to docs
         if self.settings.UI:
 
-            @app_router.get("/", include_in_schema=False, response_class=FileResponse)
-            async def serve_react_app():
-                return FileResponse(path.join(build_files_dir, "index.html"))
+            @app_router.get("/", include_in_schema=False, response_class=HTMLResponse)
+            async def serve_react_app(request: Request):
+                root_path = request.scope.get("root_path", "")
+                ui_config = self._prefixed_ui_config(root_path)
+                return self.templates.TemplateResponse(
+                    request,
+                    "index.html.j2",
+                    {
+                        "title": ui_config["title"],
+                        "description": ui_config["description"],
+                        "base_path": root_path,
+                        "ui_config": ui_config,
+                        "custom_css": ui_config["customCss"],
+                        "custom_js": ui_config["customJs"],
+                    },
+                )
 
         else:
 
             @self.app.get("/", include_in_schema=False, response_class=RedirectResponse)
-            async def serve_react_app():
-                return RedirectResponse("/redoc")
+            async def serve_react_app(request: Request):
+                root_path = request.scope.get("root_path", "")
+                return RedirectResponse(f"{root_path}/redoc")
 
     def add_api(self) -> None:
         """Add API handlers to FastAPI app"""

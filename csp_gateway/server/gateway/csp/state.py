@@ -1,6 +1,7 @@
 import abc
 import datetime
 import logging
+import os
 import threading
 import typing
 from collections import deque
@@ -29,6 +30,20 @@ _DUCKDB_BUFFER_THRESHOLD_ORIGINAL = 1000000
 _DUCKDB_BUFFER_THRESHOLD_CURRENT = _DUCKDB_BUFFER_THRESHOLD_ORIGINAL
 _USE_DUCKDB_STATE = True
 
+# DuckDB sizes its worker-thread pool to the host core count by default, spawning (threads - 1)
+# background workers per database instance. To keep the worker count from scaling with the number of
+# Struct channels (and with the host core count), every DuckDBState shares a single process-wide DuckDB
+# instance -- each state operates on its own cursor -- so the pool is created once and its size is a
+# single global knob. The default caps the pool at 4 threads: bounded on large hosts, while still
+# allowing some intra-query parallelism. Tune it with modify_duckdb_threads.
+# See https://github.com/Point72/csp-gateway/issues/292
+_DUCKDB_THREADS_ORIGINAL = min(os.cpu_count() or 1, 4)
+_DUCKDB_THREADS_CURRENT = _DUCKDB_THREADS_ORIGINAL
+# The shared DuckDB database instance, lazily created on first use. All DuckDBState objects operate on
+# cursors of this instance so that they share one TaskScheduler / worker-thread pool.
+_DUCKDB_SHARED_CONNECTION = None
+_DUCKDB_SHARED_CONNECTION_LOCK = threading.Lock()
+
 log = logging.getLogger(__name__)
 
 __all__ = [
@@ -39,6 +54,8 @@ __all__ = [
     "build_track_state_node",
     "modify_buffer_threshold",
     "restore_buffer_threshold",
+    "modify_duckdb_threads",
+    "restore_duckdb_threads",
     "enable_duckdb_state",
     "disable_duckdb_state",
 ]
@@ -59,6 +76,49 @@ def restore_buffer_threshold() -> None:
 
     global _DUCKDB_BUFFER_THRESHOLD_CURRENT
     _DUCKDB_BUFFER_THRESHOLD_CURRENT = _DUCKDB_BUFFER_THRESHOLD_ORIGINAL
+
+
+def _get_duckdb_cursor() -> "duckdb.DuckDBPyConnection":
+    """Return a cursor on the process-wide shared DuckDB instance.
+
+    A single database instance is shared across all DuckDBState objects so that DuckDB's TaskScheduler
+    (and therefore its worker-thread pool) is created once for the whole process rather than once per
+    Struct channel. Each state uses its own cursor, which has an independent result context and so can
+    be used safely from that state's own threads -- sharing a single connection object instead raises
+    "Attempting to execute an unsuccessful or closed pending query result" under concurrent access.
+    """
+
+    global _DUCKDB_SHARED_CONNECTION
+    with _DUCKDB_SHARED_CONNECTION_LOCK:
+        if _DUCKDB_SHARED_CONNECTION is None:
+            _DUCKDB_SHARED_CONNECTION = duckdb.connect(config={"threads": _DUCKDB_THREADS_CURRENT})
+            # The memory filesystem (used for bulk loading) is registered on the shared instance and is
+            # visible to every cursor, so it must be registered exactly once here rather than per state.
+            _DUCKDB_SHARED_CONNECTION.register_filesystem(fsspec.filesystem("memory"))
+        return _DUCKDB_SHARED_CONNECTION.cursor()
+
+
+def modify_duckdb_threads(new_threads: int) -> None:
+    """Set the size of the shared DuckDB worker-thread pool.
+
+    DuckDB spawns ``new_threads - 1`` background worker threads for the whole process (all state
+    tables share one pool), so this is a single global knob independent of the host core count and the
+    number of state channels. Takes effect immediately, including on an already-created shared instance.
+    """
+
+    global _DUCKDB_THREADS_CURRENT
+    if new_threads < 1:
+        raise ValueError("Number of threads should be a positive integer")
+    with _DUCKDB_SHARED_CONNECTION_LOCK:
+        _DUCKDB_THREADS_CURRENT = new_threads
+        if _DUCKDB_SHARED_CONNECTION is not None:
+            _DUCKDB_SHARED_CONNECTION.execute(f"SET threads={new_threads}")
+
+
+def restore_duckdb_threads() -> None:
+    """Reset the shared DuckDB worker-thread pool size to the original value"""
+
+    modify_duckdb_threads(_DUCKDB_THREADS_ORIGINAL)
 
 
 def enable_duckdb_state() -> None:
@@ -205,10 +265,13 @@ class DuckDBState(object):
         # Store the schema
         self._schema = schema
         self._schema_str = orjson.dumps(self._schema).decode()
-        # NOTE: We make a new connection object for each state object. Using the same state connection across
-        #  multiple state objects leads to issues in DuckDB's python API related to pending query results not
-        #  being fully executed. This should be okay since we are doing this once during the initialization
-        self._con = duckdb.connect()
+        # NOTE: Each state operates on its own cursor of a single process-wide DuckDB instance (see
+        #  _get_duckdb_cursor). We use a per-state cursor -- rather than one shared connection object --
+        #  because DuckDB's Python API raises on pending/unfinished query results when a single
+        #  connection is used concurrently from multiple states. Sharing the underlying instance keeps
+        #  the worker-thread pool bounded globally instead of one pool per Struct channel. The table
+        #  name (self._table_name) is unique per instance, so states never collide in the shared catalog.
+        self._con = _get_duckdb_cursor()
         self._keyby = keyby
         # ID generator for new records. We cannot rely on the id in the record as that might or might not exist
         self._obj_id_generator = Counter(1)
@@ -259,9 +322,6 @@ class DuckDBState(object):
 
         # Open the memory file for buffering data before bulk loading
         self._mem_file = fsspec.filesystem("memory").open(self._mem_file_name, "wb")
-
-        # Register memory filesystem so that duckdb can read from memory
-        self._con.register_filesystem(fsspec.filesystem("memory"))
 
     # TODO: Improve this to support querying dicts and lists as well, currently it only
     # works with structs and primitive types

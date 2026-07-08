@@ -66,8 +66,8 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
         check = self.get_check_dependency()
 
         @auth_router.get("/login")
-        async def route_login_and_add_cookie(api_key: str = Depends(check)):
-            response = RedirectResponse(url="/")
+        async def route_login_and_add_cookie(request: Request, api_key: str = Depends(check)):
+            response = RedirectResponse(url=app.root_path_url(request, "/"))
             response.set_cookie(
                 self.api_key_name,
                 value=api_key,
@@ -79,8 +79,8 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
             return response
 
         @auth_router.get("/logout")
-        async def route_logout_and_remove_cookie():
-            response = RedirectResponse(url="/login")
+        async def route_logout_and_remove_cookie(request: Request):
+            response = RedirectResponse(url=app.root_path_url(request, "/login"))
             response.delete_cookie(self.api_key_name, domain=self.domain)
             return response
 
@@ -94,7 +94,7 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
         async def get_login_page(token: str = "", request: Request = None):
             if token:
                 if token != "":
-                    return RedirectResponse(url=f"{app.settings.API_STR}/auth/login?token={token}")
+                    return RedirectResponse(url=app.root_path_url(request, f"{app.settings.API_STR}/auth/login?token={token}"))
             return app.templates.TemplateResponse(
                 request,
                 "login.html.j2",

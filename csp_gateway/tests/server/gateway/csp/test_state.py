@@ -1,6 +1,8 @@
+import time
 import typing
 from datetime import datetime, timedelta
 
+import pytest
 from csp import Enum, Struct
 
 from csp_gateway import (
@@ -11,7 +13,10 @@ from csp_gateway import (
     StateType,
     disable_duckdb_state,
     enable_duckdb_state,
+    modify_duckdb_threads,
+    restore_duckdb_threads,
 )
+from csp_gateway.server.gateway.csp import state as state_module
 
 
 class MyEnum(Enum):
@@ -269,3 +274,117 @@ def test_set_duckdb_config():
     disable_duckdb_state()
     s = State[CspStruct](keyby=("a", "b", "f"))
     assert s.state_type() == StateType.DEFAULT
+
+
+def test_duckdb_states_share_single_connection():
+    # All DuckDBState objects must operate on cursors of one shared DuckDB instance so that the
+    # worker-thread pool is created once for the process instead of once per Struct channel.
+    enable_duckdb_state()
+    states = [State[CspStruct](keyby=("a",)) for _ in range(5)]
+    for s in states:
+        assert s.state_type() == StateType.DUCKDB
+
+    shared = state_module._DUCKDB_SHARED_CONNECTION
+    assert shared is not None
+    # Every state gets its own cursor (needed to avoid pending-result errors), but they all share
+    # one underlying DuckDB instance. Prove the instance -- and therefore its catalog and worker
+    # pool -- is shared by reading one state's table through another state's cursor.
+    for s in states:
+        assert s._state_impl._con is not shared
+    table0 = states[0]._state_impl._table_name
+    assert states[1]._state_impl._con.sql(f"SELECT count(*) FROM '{table0}'").fetchall() == [(0,)]
+
+    # Interleaved inserts/queries across states return correct, isolated results.
+    for i, s in enumerate(states):
+        s.insert(CspStruct(a=i, b=f"v{i}"))
+    for i, s in enumerate(reversed(states)):
+        idx = len(states) - 1 - i
+        res = s.query()
+        assert res == [CspStruct(a=idx, b=f"v{idx}")]
+
+
+def test_modify_and_restore_duckdb_threads():
+    enable_duckdb_state()
+    try:
+        # Create a state so the shared instance exists.
+        State[CspStruct](keyby=("a",))
+        shared = state_module._DUCKDB_SHARED_CONNECTION
+        assert shared is not None
+
+        def current_threads():
+            return shared.sql("SELECT current_setting('threads')").fetchall()[0][0]
+
+        assert current_threads() == state_module._DUCKDB_THREADS_ORIGINAL
+
+        modify_duckdb_threads(4)
+        assert state_module._DUCKDB_THREADS_CURRENT == 4
+        assert current_threads() == 4
+
+        restore_duckdb_threads()
+        assert state_module._DUCKDB_THREADS_CURRENT == state_module._DUCKDB_THREADS_ORIGINAL
+        assert current_threads() == state_module._DUCKDB_THREADS_ORIGINAL
+
+        try:
+            modify_duckdb_threads(0)
+            raise AssertionError("expected ValueError for non-positive thread count")
+        except ValueError:
+            pass
+    finally:
+        restore_duckdb_threads()
+
+
+def test_duckdb_threads_spawn_expected_os_threads():
+    # Verify two properties against real OS threads:
+    #   1. DuckDBState objects share one DuckDB instance, so creating many state tables adds zero
+    #      extra threads.
+    #   2. The thread knob spawns exactly (threads - 1) background workers on that shared instance.
+    psutil = pytest.importorskip("psutil")
+    enable_duckdb_state()
+    proc = psutil.Process()
+
+    def settled_num_threads(timeout=5.0):
+        # DuckDB reaps/spawns workers slightly asynchronously on some platforms; return the OS thread
+        # count once it has stopped changing so the baseline is stable.
+        deadline = time.monotonic() + timeout
+        prev = proc.num_threads()
+        time.sleep(0.05)
+        cur = proc.num_threads()
+        while cur != prev and time.monotonic() < deadline:
+            prev = cur
+            time.sleep(0.05)
+            cur = proc.num_threads()
+        return cur
+
+    def wait_for_delta(base, expected, timeout=10.0):
+        # Poll until the OS thread delta settles at the expected value to tolerate slow machines.
+        deadline = time.monotonic() + timeout
+        delta = proc.num_threads() - base
+        while delta != expected and time.monotonic() < deadline:
+            time.sleep(0.02)
+            delta = proc.num_threads() - base
+        return delta
+
+    try:
+        # Establish the zero-worker baseline before creating any state objects. The shared instance
+        # persists for the process, so pin it to threads=1 (0 background workers) and let the OS thread
+        # count settle before snapshotting.
+        modify_duckdb_threads(1)
+        base = settled_num_threads()
+
+        # Property 1: state tables share one instance and so add zero extra OS threads.
+        states = [State[CspStruct](keyby=("a",)) for _ in range(8)]
+        assert all(s.state_type() == StateType.DUCKDB for s in states)
+        assert wait_for_delta(base, 0) == 0, "creating state tables must not spawn per-state worker pools"
+
+        # Property 2: the knob spawns exactly (threads - 1) background workers, regardless of how many
+        # state tables exist.
+        for num_threads in (2, 4, 8):
+            modify_duckdb_threads(num_threads)
+            delta = wait_for_delta(base, num_threads - 1)
+            assert delta == num_threads - 1, f"threads={num_threads}: expected {num_threads - 1} extra OS threads, saw {delta}"
+
+        # Lowering the knob reaps the workers back down to the baseline.
+        modify_duckdb_threads(1)
+        assert wait_for_delta(base, 0) == 0
+    finally:
+        restore_duckdb_threads()

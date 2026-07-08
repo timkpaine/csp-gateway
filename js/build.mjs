@@ -28,7 +28,7 @@ const BUNDLES = [
     entryPoints: ["./src/js/main.jsx"],
     outfile: "../csp_gateway/server/build/main.js",
     alias: REACT_ALIAS,
-    publicPath: "/static",
+    publicPath: "static",
   },
 ];
 
@@ -47,9 +47,6 @@ function copy_wasm_assets(outdir) {
 async function build() {
   // Bundle css
   await bundle_css();
-
-  // Copy HTML
-  await cpy("src/html/*", "dist/");
 
   // Copy images
   await cpy("src/img/*", "dist/", { flat: true });
