@@ -12,6 +12,7 @@ from .channels import ChannelsType
 
 if TYPE_CHECKING:
     from csp_gateway.server import GatewaySettings, GatewayWebApp
+    from csp_gateway.server.web import GatewayUI
 
 
 class Module(BaseModel, ABC, Generic[ChannelsType]):
@@ -31,6 +32,15 @@ class Module(BaseModel, ABC, Generic[ChannelsType]):
     def connect(self, Channels: ChannelsType) -> None: ...
 
     def rest(self, app: "GatewayWebApp") -> None: ...
+
+    def ui(self, app: "GatewayUI") -> None:
+        """Contribute to the spaday-based UI.
+
+        Only invoked when `Settings.UI_PROVIDER == "spaday"`, after `rest`. Modules use the
+        `GatewayUI` handle to register the main panel (e.g. a Perspective workspace) or add
+        navigation actions (links/buttons in the header). Modules that have no UI contribution
+        leave this as a no-op, exactly like `rest`.
+        """
 
     def info(self, settings: "GatewaySettings") -> str | None: ...
 
