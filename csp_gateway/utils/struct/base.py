@@ -144,14 +144,14 @@ class GatewayPydanticMixin:
         return final
 
     @staticmethod
-    def _get_pydantic_core_schema(cls, source_type, handler):
-        # Get parent schema - note the cls parameter
-        parent_schema = csp.Struct._get_pydantic_core_schema(cls, source_type, handler)
+    def _get_pydantic_core_schema(struct_cls, source_type, handler):
+        # Get parent schema - note the struct_cls parameter
+        parent_schema = csp.Struct._get_pydantic_core_schema(struct_cls, source_type, handler)
         core_config = CoreConfig(coerce_numbers_to_str=True)
         # soooo hacky...
         parent_schema["schema"]["config"] = core_config
         return core_schema.with_info_wrap_validator_function(
-            function=cls._validate_gateway_struct, schema=parent_schema, serialization=parent_schema.get("serialization")
+            function=struct_cls._validate_gateway_struct, schema=parent_schema, serialization=parent_schema.get("serialization")
         )
 
 
@@ -191,5 +191,5 @@ def is_gateway_struct_like(cls) -> bool:
             and issubclass(cls, GatewayPydanticMixin)
             and issubclass(cls, PerspectiveUtilityMixin)
         )
-    except Exception:
+    except TypeError:
         return False

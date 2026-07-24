@@ -65,10 +65,10 @@ def add_send_routes(
                         )
                     else:
                         # unroll and send individually
-                        for data in data:
+                        for datum in data:
                             request.app.gateway.channels.send(
                                 getattr(request.app.gateway.channels_model, field),
-                                data,
+                                datum,
                                 key,
                             )
                 except NoProviderException:
@@ -160,10 +160,10 @@ def add_send_routes(
                         )
                     else:
                         # unroll and send individually
-                        for data in data:
+                        for datum in data:
                             request.app.gateway.channels.send(
                                 getattr(request.app.gateway.channels_model, field),
-                                data,
+                                datum,
                             )
                 except NoProviderException:
                     raise HTTPException(
@@ -201,6 +201,6 @@ def add_send_available_channels(api_router: APIRouter, fields: set[str] | None =
         """
         return sorted(
             field + ("" if indexer is None else f"/{indexer.name if hasattr(indexer, 'name') else indexer}")
-            for field, indexer in request.app.gateway.channels._send_channels.keys()
+            for field, indexer in request.app.gateway.channels._send_channels
             if fields is None or field in fields
         )

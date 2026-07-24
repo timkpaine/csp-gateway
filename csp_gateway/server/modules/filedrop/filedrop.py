@@ -14,6 +14,7 @@ from csp_gateway.server import (
     GatewayChannels,
     GatewayModule,
 )
+from csp_gateway.utils import GatewayException
 
 from .adapter import FileDropAdapterConfiguration, FileDropType, filedrop_adapter_def
 
@@ -131,7 +132,7 @@ class ReadFileDrop(GatewayModule):
                     non_ts_type = dict[key_type, inner_type.typ]
                     channel_basket_types[config.channel_name] = "dict"
                 else:
-                    raise Exception(f"Channel type cannot be handled: {channel_type}")
+                    raise GatewayException(f"Channel type cannot be handled: {channel_type}")
             data = filedrop_adapter_def(config=adapter_config, ts_typ=non_ts_type)
             channel_data[config.channel_name].append(data)
         for channel_name, data_list in channel_data.items():

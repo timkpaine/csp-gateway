@@ -215,15 +215,14 @@ def _host(config) -> str:
         else:
             host = f"{config.protocol}://{host}"
     host = host.removesuffix("/")
-    if config.port:
-        if config.port not in (80, 443):
-            host += f":{config.port}"
+    if config.port and config.port not in (80, 443):
+        host += f":{config.port}"
 
     return host
 
 
 class GatewayClientConfig(BaseModel):
-    model_config = dict(extra="forbid")  # To raise error on misspelling/misspecification
+    model_config = {"extra": "forbid"}  # To raise error on misspelling/misspecification
 
     protocol: Literal["http", "https"] = "http"
     host: str = "localhost"
@@ -268,10 +267,9 @@ class ResponseWrapper(BaseModel):
 
     @field_validator("openapi_schema", mode="after")
     def validate_openapi_schema(cls, v):
-        if v is not None:
-            # we have a list of items, so we get the properties for those
-            if (schema := v.get("items")) is not None:
-                return schema
+        # we have a list of items, so we get the properties for those
+        if v is not None and (schema := v.get("items")) is not None:
+            return schema
         return v
 
     def is_empty(self):
@@ -345,7 +343,7 @@ class ResponseWrapper(BaseModel):
             res = pd.json_normalize(self.json_data)
             # we do this to not change the order of columns
             columns = {col: True for col in res.columns}
-            for col in pandas_dtypes.keys():
+            for col in pandas_dtypes:
                 if col not in columns:
                     columns[col] = True
             # We might have some columns missing data,
@@ -395,7 +393,7 @@ class BaseGatewayClient(BaseModel):
     config: GatewayClientConfig = Field(default_factory=GatewayClientConfig)
 
     http_args: dict[str, Any] = Field(
-        default=dict(follow_redirects=True), description="Additional arguments to pass to httpx requests (e.g., headers, auth, etc.)"
+        default={"follow_redirects": True}, description="Additional arguments to pass to httpx requests (e.g., headers, auth, etc.)"
     )
 
     # Additional initialization for bearer_token
@@ -534,7 +532,7 @@ class BaseGatewayClient(BaseModel):
         try:
             resp_json = cast(dict[str, Any], resp.json())
         except JSONDecodeError as e:
-            resp_json = dict(detail=str(e))
+            resp_json = {"detail": str(e)}
         if resp.status_code == 200:
             return_type = self.config.return_type
             if return_type in (ReturnType.Raw, ReturnType.JSON):
@@ -564,7 +562,7 @@ class BaseGatewayClient(BaseModel):
     def _get(
         self,
         route: str,
-        params: dict[str, Any] = None,
+        params: dict[str, Any] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
     ) -> ResponseType:
         params = params or {}
@@ -574,7 +572,7 @@ class BaseGatewayClient(BaseModel):
     async def _getasync(
         self,
         route: str,
-        params: dict[str, Any] = None,
+        params: dict[str, Any] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
     ) -> ResponseType:
         params = params or {}
@@ -587,8 +585,8 @@ class BaseGatewayClient(BaseModel):
     def _post(
         self,
         route: str,
-        params: dict[str, Any] = None,
-        data: dict[str, Any] = None,
+        params: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
     ) -> ResponseType:
         params = params or {}
@@ -600,8 +598,8 @@ class BaseGatewayClient(BaseModel):
     async def _postasync(
         self,
         route: str,
-        params: dict[str, Any] = None,
-        data: dict[str, Any] = None,
+        params: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
     ) -> ResponseType:
         params = params or {}
@@ -614,7 +612,7 @@ class BaseGatewayClient(BaseModel):
     def _stream(
         self,
         channels: list[str | tuple[str, str]] | None = None,
-        callback: Callable = None,
+        callback: Callable | None = None,
         timeout: float | None = None,
     ):
         if callback:
@@ -653,7 +651,7 @@ class BaseGatewayClient(BaseModel):
         if not self._initialized_streaming:
             await self._initialized_streaming
 
-        subscription = dict(action="subscribe", channel=channel)
+        subscription = {"action": "subscribe", "channel": channel}
         if key is not None:
             subscription["key"] = key
 
@@ -672,7 +670,7 @@ class BaseGatewayClient(BaseModel):
         if not self._initialized_streaming:
             await self._initialized_streaming
 
-        subscription_removal = dict(action="unsubscribe", channel=channel)
+        subscription_removal = {"action": "unsubscribe", "channel": channel}
         if key is not None:
             subscription_removal["key"] = key
 
@@ -690,7 +688,7 @@ class BaseGatewayClient(BaseModel):
     async def _publish(self, channel: str, data: dict[str, Any] | list[Any], key: str | None = None):
         if not self._initialized_streaming:
             await self._initialized_streaming
-        send_msg = dict(action="send", channel=channel, data=data)
+        send_msg = {"action": "send", "channel": channel, "data": data}
         if key is not None:
             send_msg["key"] = key
         if self._event_loop_setup:
@@ -783,7 +781,7 @@ class BaseGatewayClient(BaseModel):
     def lookup(self, field: str, id: str, timeout: float = _DEFAULT_TIMEOUT) -> ResponseType: ...
 
     @abstractmethod
-    def next(self, field: str = "", timeout: float = None) -> ResponseType: ...
+    def next(self, field: str = "", timeout: float | None = None) -> ResponseType: ...
 
     @abstractmethod
     def send(self, field: str = "", data: Any = None, timeout: float = _DEFAULT_TIMEOUT) -> ResponseType: ...
@@ -844,7 +842,7 @@ class SyncGatewayClientMixin:
         return res
 
     @_raiseIfNotMounted
-    def next(self, field: str = "", timeout: float = None, return_type_override: ReturnType | None = None) -> ResponseType:
+    def next(self, field: str = "", timeout: float | None = None, return_type_override: ReturnType | None = None) -> ResponseType:
         if return_type_override is not None:
             old_return_type = self.config.return_type
             self.config.return_type = return_type_override
@@ -878,7 +876,7 @@ class SyncGatewayClientMixin:
             self.config.return_type = old_return_type
         return res
 
-    def stream(self, channels: list[str | tuple[str, str]] | None = None, callback: Callable = None, timeout: float | None = None):
+    def stream(self, channels: list[str | tuple[str, str]] | None = None, callback: Callable | None = None, timeout: float | None = None):
         """Stream data from specified channels with optional key filtering for dict baskets.
 
         Establishes a synchronous streaming connection to receive real-time updates from the specified channels.
@@ -1054,7 +1052,7 @@ class AsyncGatewayClientMixin:
         return await self._getasync("{}/{}/{}".format("lookup", field, id), timeout=timeout)
 
     @_raiseIfNotMounted
-    async def next(self, field: str = "", timeout: float = None) -> ResponseType:
+    async def next(self, field: str = "", timeout: float | None = None) -> ResponseType:
         return await self._getasync("{}/{}".format("next", field), timeout=timeout)
 
     @_raiseIfNotMounted
@@ -1066,7 +1064,7 @@ class AsyncGatewayClientMixin:
         params = None if query is None else {"query": query.model_dump_json()}
         return await self._getasync("{}/{}".format("state", field), timeout=timeout, params=params)
 
-    async def stream(self, channels: list[str | tuple[str, str]] = None, timeout: float | None = None):
+    async def stream(self, channels: list[str | tuple[str, str]] | None = None, timeout: float | None = None):
         """Stream data from specified channels with optional key filtering for dict baskets.
 
         Establishes an asynchronous streaming connection to receive real-time updates from the specified channels.

@@ -91,9 +91,8 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
 
         @public_router.get("/login", response_class=HTMLResponse, include_in_schema=False)
         async def get_login_page(token: str = "", request: Request = None):
-            if token:
-                if token != "":
-                    return RedirectResponse(url=app.root_path_url(request, f"{app.settings.API_STR}/auth/login?token={token}"))
+            if token and token != "":
+                return RedirectResponse(url=app.root_path_url(request, f"{app.settings.API_STR}/auth/login?token={token}"))
             return app.templates.TemplateResponse(
                 request,
                 "login.html.j2",

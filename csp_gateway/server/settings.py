@@ -17,7 +17,7 @@ __all__ = (
 class Settings(BaseSettings):
     """Generic settings for the CSP Gateway."""
 
-    model_config = dict(case_sensitive=True)
+    model_config = {"case_sensitive": True}
 
     API_STR: str = "/api/v1"
     BACKEND_CORS_ORIGINS: list[AnyHttpUrl] = []

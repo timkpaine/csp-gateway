@@ -13,7 +13,7 @@ from .module import Module
 
 
 class ChannelsFactory(BaseModel, Generic[ChannelsType]):
-    model_config = dict(arbitrary_types_allowed=True)  # (for FeedbackOutputDef)
+    model_config = {"arbitrary_types_allowed": True}  # (for FeedbackOutputDef)
 
     modules: list[Module[ChannelsType]] = Field(
         default_factory=list, description="The list of modules that will operate on the channels to build the csp graph."

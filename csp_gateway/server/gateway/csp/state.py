@@ -3,6 +3,7 @@ import datetime
 import logging
 import os
 import threading
+import types
 import typing
 from collections import deque
 from enum import Enum as PyEnum
@@ -200,8 +201,7 @@ class DefaultState(BaseState):
 
     @override
     def __iter__(self) -> Any:
-        for _ in self._records:
-            yield _
+        yield from self._records
 
     @override
     def insert(self, record: Any) -> None:
@@ -242,8 +242,10 @@ class DuckDBState:
     # table for each instance of the DuckDBState class for any particular type
     TABLE_ID = Counter(1)
 
-    def __init__(self, typ: Struct, keyby: tuple[str, ...] | str, schema: dict[str, str] = {}) -> None:
+    def __init__(self, typ: Struct, keyby: tuple[str, ...] | str, schema: dict[str, str] | None = None) -> None:
         super().__init__()
+        if schema is None:
+            schema = {}
         # Type of record
         self._typ = typ
         # Table name for this instance of DuckDBState[<self._typ>] class
@@ -395,7 +397,7 @@ class DuckDBState:
                 elif isinstance(obj, (PyEnum, CoreBaseEnum, CoreEnum)):
                     return obj.name
                 else:
-                    logging.warning(f"Type({type(obj)}) cannot be json serialized please provide serializer: {obj} serializing to '' for now")
+                    log.warning(f"Type({type(obj)}) cannot be json serialized please provide serializer: {obj} serializing to '' for now")
                     return ""
 
             for id, record in buffer.items():
@@ -446,8 +448,7 @@ class DuckDBState:
     @override
     def __iter__(self) -> Any:
         buf = self.query()
-        for _ in buf:
-            yield _
+        yield from buf
 
     @override
     def insert(self, record: Struct) -> None:
@@ -471,7 +472,7 @@ class DuckDBState:
                 subkey_to_use = getattr(record, subkey, None)
 
                 if subkey == self._keyby[-1]:
-                    if subkey_to_use not in place.keys():
+                    if subkey_to_use not in place:
                         place[subkey_to_use] = self._obj_id_generator.next()
                     obj_id = place[subkey_to_use]
                     self._id_record_buffer[obj_id] = record
@@ -491,7 +492,9 @@ class DuckDBState:
 
 
 def _remove_optional(cls: Any) -> tuple[Any, bool]:
-    if typing.get_origin(cls) is typing.Union:
+    # Accept both typing.Optional[X]/typing.Union[X, None] and the PEP 604 ``X | None`` form.
+    # The former have get_origin() is typing.Union; the latter is a types.UnionType.
+    if typing.get_origin(cls) in (typing.Union, types.UnionType):
         args = typing.get_args(cls)
         non_none_args = [arg for arg in args if arg is not type(None)]
         if len(non_none_args) == 1:
@@ -563,7 +566,7 @@ def get_duckdb_schema_obj(parent: Any, key: Any, cls: Any) -> tuple[Any, bool]:
     try:
         # Convert type to a duckdb type
         return (str(duckdb.sqltypes.DuckDBPyType(cls)), True)
-    except Exception:
+    except Exception:  # noqa: BLE001 -- any conversion failure means the type is unsupported in duckdb; fall back
         # TODO: Be more specific in the exception we need to handle here
         return (cls, False)
 
@@ -592,7 +595,6 @@ class State(BaseState):
     def __init__(self, keyby: tuple[str, ...] | str = ("id",)) -> None:
         """Switch case between different state specializations based on the type of the records"""
 
-        global _USE_DUCKDB_STATE
         try:
             typ = self._typ
             if _USE_DUCKDB_STATE and isinstance(typ, type) and issubclass(typ, Struct):
@@ -617,7 +619,7 @@ class State(BaseState):
         #       Remove them when duckdb state has become stable
         try:
             return self._state_impl.query(query)
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 -- experimental duckdb safety net (see NOTE above); never fail queries
             log.error(f"Querying state raised exception {err}")
             return []
 
@@ -631,7 +633,7 @@ class State(BaseState):
         #       Remove them when duckdb state has become stable
         try:
             self._state_impl.insert(record)
-        except Exception as err:
+        except Exception as err:  # noqa: BLE001 -- experimental duckdb safety net (see NOTE above); never fail inserts
             log.error(f"Inserting state raised exception {err}")
 
     @override

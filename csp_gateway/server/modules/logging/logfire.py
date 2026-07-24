@@ -133,7 +133,7 @@ def configure_logfire_early(
 
         return True
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- optional logfire integration must never crash the app
         log.warning(f"Failed to configure logfire early: {e}")
         return False
 
@@ -323,7 +323,7 @@ class Logfire(GatewayModule):
                 logfire.configure(**kwargs)
                 _logfire_configured = True
                 log.info("Logfire configured via LogfireIntegration")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- optional logfire integration must never crash the app
                 log.warning(f"Failed to configure logfire: {e}")
                 return
 
@@ -340,7 +340,7 @@ class Logfire(GatewayModule):
             try:
                 logfire.instrument_pydantic()
                 log.debug("Pydantic instrumentation enabled")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- optional logfire integration must never crash the app
                 log.warning(f"Failed to instrument Pydantic: {e}")
 
     def rest(self, app: GatewayWebApp) -> None:
@@ -361,7 +361,7 @@ class Logfire(GatewayModule):
             fastapi_app = getattr(app, "app", app)
             logfire.instrument_fastapi(fastapi_app)
             log.info("FastAPI instrumentation enabled")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- optional logfire integration must never crash the app
             log.warning(f"Failed to instrument FastAPI: {e}")
 
 

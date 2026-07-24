@@ -348,7 +348,7 @@ def test_switch_automatically_to_write(writing_start_type, tmpdir):
     )
     gateway = MyGateway(modules=[json_module, setter], channels=MyGatewayChannels())
     csp.run(gateway.graph, starttime=datetime(2020, 1, 1))
-    with open(file, "r") as json_file:
+    with open(file) as json_file:
         assert len(list(json_file)) == 1
 
     json_module_read_and_write = ReplayEngineJSON(selection=channels, filename=file, start_writing=start_writing)
@@ -359,7 +359,7 @@ def test_switch_automatically_to_write(writing_start_type, tmpdir):
     )
     new_gateway = MyGateway(modules=[json_module_read_and_write, setter], channels=MyGatewayChannels())
     csp.run(new_gateway.graph, starttime=datetime(2020, 1, 1))
-    with open(file, "r") as json_file:
+    with open(file) as json_file:
         items = list(json_file)
         assert len(items) == 2
         json_dict_0 = orjson.loads(items[0])
@@ -393,7 +393,7 @@ def test_overwrite_json(read_write_mode, tmpdir):
     )
     gateway = MyGateway(modules=[setup_json_module, setter], channels=MyGatewayChannels())
     csp.run(gateway.graph, starttime=datetime(2020, 1, 1))
-    with open(file, "r") as json_file:
+    with open(file) as json_file:
         assert len(list(json_file)) == 1
 
     json_module = ReplayEngineJSON(
@@ -410,7 +410,7 @@ def test_overwrite_json(read_write_mode, tmpdir):
     )
     new_gateway = MyGateway(modules=[json_module, setter], channels=MyGatewayChannels())
     csp.run(new_gateway.graph, starttime=datetime(2020, 1, 1))
-    with open(file, "r") as json_file:
+    with open(file) as json_file:
         items = list(json_file)
         assert len(items) == 1
         json_dict = orjson.loads(items[0])

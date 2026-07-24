@@ -1,7 +1,7 @@
 import logging
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, TypeVar, Union
+from typing import Any, TypeVar
 
 import csp
 import numpy as np
@@ -26,7 +26,9 @@ __all__ = (
     "read_engine_encoding_json_with_duckdb",
 )
 
-_KEY_TYPE = Union[str, Enum]
+logger = logging.getLogger(__name__)
+
+_KEY_TYPE = str | Enum
 T = TypeVar("T")
 K = TypeVar("K")
 
@@ -127,7 +129,7 @@ def _deserialize_snapshot_dict(encoded_snapshot: ts[dict], typ: "T", log_lagging
             stack.append(snapshot)
         else:
             if timestamp < csp_now and log_lagging_engine_cycles:
-                logging.info(
+                logger.info(
                     f"Timestamp for a replayed engine cycle is: {timestamp} "
                     + f"which is behind csp engine time: {csp_now}. Engine cycle is: {snapshot}"
                 )
@@ -155,7 +157,7 @@ def _deserialize_snapshot_str(encoded_snapshot: ts[str], typ: "T", log_lagging_e
             stack.append(snapshot)
         else:
             if timestamp < csp_now and log_lagging_engine_cycles:
-                logging.info(
+                logger.info(
                     f"Timestamp for a replayed engine cycle is: {timestamp} "
                     + f"which is behind csp engine time: {csp_now}. Engine cycle is: {snapshot}"
                 )
@@ -236,7 +238,7 @@ class JSONConverter(BaseModel):
         field: _KEY_TYPE,
         keys: ["K"],
         value_type: "T",
-    ) -> csp.OutputBasket(Dict["K", ts["T"]], shape="keys"):  # noqa
+    ) -> csp.OutputBasket(dict["K", ts["T"]], shape="keys"):
         if csp.ticked(snapshot):
             dict_basket = getattr(snapshot, field)
             if dict_basket is not None:
@@ -256,13 +258,13 @@ class JSONConverter(BaseModel):
                 value = pydantic_value
                 # TODO: ponder how to better do this
                 if self.decode_exclude_fields:
-                    for field in self.decode_exclude_fields:
-                        if field == "id":
+                    for exclude_field in self.decode_exclude_fields:
+                        if exclude_field == "id":
                             value.id = value.generate_id()
-                        elif field == "timestamp":
+                        elif exclude_field == "timestamp":
                             value.timestamp = datetime.now(timezone.utc)
-                        elif hasattr(value, field):
-                            delattr(value, field)
+                        elif hasattr(value, exclude_field):
+                            delattr(value, exclude_field)
                 if isinstance(value, (list, tuple)):
                     for attribute, updated_flag in channel_flag_updates:
                         for obj in value:

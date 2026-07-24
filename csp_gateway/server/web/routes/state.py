@@ -43,7 +43,9 @@ def add_state_routes(
         # Prune s_ from start
         name_without_state = field[2:]
 
-        async def get_state(key: str, query: Query | None = query_json(), request: Request = None) -> list_model:  # type: ignore[valid-type]
+        query_dependency = query_json()
+
+        async def get_state(key: str, query: Query | None = query_dependency, request: Request = None) -> list_model:  # type: ignore[valid-type]
             """
             Get state value on a dictionary basket channel, where `key` is the key of the dictionary basket.
             If such a key does not exist or is not mounted, this endpoint will raise a `404` error.
@@ -127,7 +129,9 @@ def add_state_routes(
         # Prune s_ from start
         name_without_state = field[2:]
 
-        async def get_state(query: Query | None = query_json(), request: Request = None) -> list_model:  # type: ignore[misc, valid-type]
+        query_dependency = query_json()
+
+        async def get_state(query: Query | None = query_dependency, request: Request = None) -> list_model:  # type: ignore[misc, valid-type]
             """Get state value on a non-dict basket channel. This endpoint will flatten the state structure and return a list of the elements.
             Query parameters may be provided to perform server-side filtering and other functionality on the state object.
 

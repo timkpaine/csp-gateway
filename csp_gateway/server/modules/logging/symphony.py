@@ -73,9 +73,9 @@ class PublishSymphony(GatewayModule):
     selections: list[str] = []
 
     def get_cert_and_key(self) -> tuple[str, str]:
-        with open(self.cert_path, "r") as f:
+        with open(self.cert_path) as f:
             cert = f.read()
-        with open(self.key_path, "r") as f:
+        with open(self.key_path) as f:
             key = f.read()
         return cert, key
 

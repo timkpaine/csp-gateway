@@ -11,10 +11,12 @@ from typing import Any, get_args, get_origin
 
 import csp
 from csp import ts
+from csp.impl.wiring import MAX_END_TIME as CSP_MAX_END_TIME
 from pydantic import Field, PrivateAttr, create_model, model_validator
 
 from csp_gateway.server.gateway import State
 from csp_gateway.server.settings import Settings
+from csp_gateway.utils import GatewayException
 
 from .csp import Channels, ChannelsFactory, ChannelsType, Module
 
@@ -25,7 +27,6 @@ __all__ = (
 )
 
 
-MAX_END_TIME = datetime(2261, 12, 31, 23, 59, 50, 999999)
 log = logging.getLogger(__name__)
 
 
@@ -88,7 +89,7 @@ class Gateway(ChannelsFactory[GatewayChannels]):
 
     def __init__(
         self,
-        modules: list[Module[GatewayChannels]] = None,
+        modules: list[Module[GatewayChannels]] | None = None,
         channels: ChannelsType = None,
         *args: str,
         **kwargs: str,
@@ -97,7 +98,7 @@ class Gateway(ChannelsFactory[GatewayChannels]):
         channels = channels or GatewayChannels()
         # Note that the channels object passed into the init function here is not necessarily the channels object
         # that is used to build the graph. Things like dynamic channels can be added.
-        super().__init__(modules=modules, channels=channels, *args, **kwargs)
+        super().__init__(*args, modules=modules, channels=channels, **kwargs)
         self.graph_built = False
         self.graph_build_failed = False
         self._in_test = False
@@ -117,9 +118,8 @@ class Gateway(ChannelsFactory[GatewayChannels]):
                 channels_with_state = m.dynamic_state_channels() if hasattr(m, "dynamic_state_channels") else None
                 for n, t in module_dynamic_channels.items():
                     existing_type = dynamic_channels.get(n, None)
-                    if existing_type is not None:
-                        if t is not existing_type:
-                            raise ValueError(f"Conflicting types for dynamic channel {n}.")
+                    if existing_type is not None and t is not existing_type:
+                        raise ValueError(f"Conflicting types for dynamic channel {n}.")
 
                     dynamic_channels[n] = t
                     if channels_with_state and n in channels_with_state:
@@ -147,13 +147,12 @@ class Gateway(ChannelsFactory[GatewayChannels]):
         return values
 
     def __getattribute__(self, attr: str) -> Any:
-        if attr in ("channels", "state"):
-            if not self.running:
-                raise Exception(f"Can only access `{attr}` when engine is running")
+        if attr in ("channels", "state") and not self.running:
+            raise GatewayException(f"Can only access `{attr}` when engine is running")
         return object.__getattribute__(self, attr)
 
     @csp.graph
-    def graph(self, user_graph: Callable[[GatewayChannels], Any] = None):  # type: ignore[no-untyped-def]
+    def graph(self, user_graph: Callable[[GatewayChannels], Any] | None = None):  # type: ignore[no-untyped-def]
         """Generates the csp graph corresponding to the gateway application.
 
         This is the graph that will be called by the `start` method
@@ -263,7 +262,7 @@ class Gateway(ChannelsFactory[GatewayChannels]):
                     user_graph,
                     realtime=realtime,
                     starttime=starttime,
-                    endtime=endtime or MAX_END_TIME,
+                    endtime=endtime or CSP_MAX_END_TIME,
                 )
             else:
                 # If not blocking, run csp on thread
@@ -272,7 +271,7 @@ class Gateway(ChannelsFactory[GatewayChannels]):
                     user_graph,
                     realtime=realtime,
                     starttime=starttime,
-                    endtime=endtime or MAX_END_TIME,
+                    endtime=endtime or CSP_MAX_END_TIME,
                 )
 
             if rest:
@@ -436,7 +435,7 @@ class Gateway(ChannelsFactory[GatewayChannels]):
             kwargs["user_initiated"] = True
             return self._shutdown(**kwargs)
         else:
-            raise Exception("Gateway can only be stopped if started with `block=False`")
+            raise GatewayException("Gateway can only be stopped if started with `block=False`")
 
     def _shutdown(self, user_initiated: bool = True, wait: bool = False):
         # Now run through shutdown routine
@@ -446,15 +445,14 @@ class Gateway(ChannelsFactory[GatewayChannels]):
             # nothing more to do
             return self.output
 
-        if not wait:
-            if self.output.is_alive():
-                # First, try to stop the CSP thread if its alive
-                try:
-                    self.output.stop_engine()
-                except Exception:
-                    # If there was an error stopping it, we have an unclean shutdown
-                    log.exception("CSP `stop_engine` exception")
-                    raise
+        if not wait and self.output.is_alive():
+            # First, try to stop the CSP thread if its alive
+            try:
+                self.output.stop_engine()
+            except Exception:
+                # If there was an error stopping it, we have an unclean shutdown
+                log.exception("CSP `stop_engine` exception")
+                raise
 
         # Now join the csp thread, allowing it to raise
         try:

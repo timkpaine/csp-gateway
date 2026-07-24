@@ -5,7 +5,7 @@ NOTE: The webserver tests use this code internally to validate rest endpoints,
 and those tests in turn ensure that this demo works.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from logging import INFO, basicConfig
 from pathlib import Path
 from random import choice
@@ -76,8 +76,8 @@ class ExampleDataBase(csp.Struct):
     internal_csp_struct: ExampleCspStruct = ExampleCspStruct()
     data: Numpy1DArray[float] = np.array([])
     mapping: dict[str, int] = {}
-    dt: datetime = datetime.today()
-    d: date = datetime.today().date()
+    dt: datetime = datetime.now(timezone.utc)
+    d: date = datetime.now(timezone.utc).date()
 
     @classmethod
     def __get_validator_dict__(cls):
@@ -222,7 +222,7 @@ class ExampleModuleFeedback(GatewayModule):
         self,
         data: ts[ExampleData],
     ) -> ts[ExampleData]:
-        if csp.ticked(data):
+        if csp.ticked(data):  # noqa: SIM102
             if data.x % 2 == 0:
                 return ExampleData(
                     x=data.x + 1,
@@ -246,7 +246,7 @@ class ExampleModuleCustomTable(GatewayModule):
 
     def connect(self, channels: ExampleGatewayChannels):
         perspective_client = channels.perspective.new_local_client()
-        my_table = perspective_client.table(dict(timestamp=datetime, x=int, y=str), limit=None, index="y", name=self.table_name)
+        my_table = perspective_client.table({"timestamp": datetime, "x": int, "y": str}, limit=None, index="y", name=self.table_name)
 
         example = channels.get_channel(ExampleGatewayChannels.example)
         example_list = csp.unroll(channels.get_channel(ExampleGatewayChannels.example_list))

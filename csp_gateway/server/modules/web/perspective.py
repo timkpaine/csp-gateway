@@ -5,7 +5,6 @@ from logging import getLogger
 from typing import (
     Literal,
     TypeVar,
-    Union,
 )
 
 import csp
@@ -23,7 +22,7 @@ from typing_extensions import TypeAliasType
 
 from csp_gateway.server import ChannelSelection, GatewayChannels, GatewayModule
 from csp_gateway.server.web import GatewayWebApp, get_default_responses
-from csp_gateway.utils import PickleableQueue, get_args, get_origin, get_thread
+from csp_gateway.utils import GatewayException, PickleableQueue, get_args, get_origin, get_thread
 
 __all__ = (
     "MountPerspectiveTables",
@@ -127,13 +126,13 @@ ExcludedColumns = TypeAliasType("ExcludedColumns", "set[str] | dict[str, bool | 
 
 ViewConfig = dict[
     Literal["table", "group_by", "split_by", "aggregates", "columns", "sort", "filter", "expressions"],
-    Union[
-        str,  # table
-        list[str],  # group_by, split_by, columns, expressions
-        dict[str, str],  # aggregates
-        list[dict[str, str | Literal["asc", "desc"]]],  # sort
-        list[dict[str, str | list[str | int | float]]],  # filter
-    ],
+    (
+        str  # table
+        | list[str]  # group_by, split_by, columns, expressions
+        | dict[str, str]  # aggregates
+        | list[dict[str, str | Literal["asc", "desc"]]]  # sort
+        | list[dict[str, str | list[str | int | float]]]  # filter
+    ),
 ]
 
 
@@ -313,7 +312,7 @@ class MountPerspectiveTables(GatewayModule):
 
     def _connect_all_tables(self, channels: GatewayChannels) -> None:
         # Determine primary channels from channel_selection + server_views + tables entries without explicit channel
-        selected_channels = set(self.channel_selection.select_from(channels)) | set(_["table"] for _ in self.server_views.values())
+        selected_channels = set(self.channel_selection.select_from(channels)) | {_["table"] for _ in self.server_views.values()}
         for table_name, config in self.tables.items():
             channel = config.channel or table_name
             if channel == table_name:
@@ -329,7 +328,7 @@ class MountPerspectiveTables(GatewayModule):
                     raise ValueError(f"No keys defined for dict basket channel {field}.")
 
                 to_flatten = []
-                for subfield in edge.keys():
+                for subfield in edge:
                     to_flatten.append(channels.get_channel(field, subfield))
 
                 # save perspective schema
@@ -398,7 +397,7 @@ class MountPerspectiveTables(GatewayModule):
                 # Recompute schema with different exclusions
                 edge = channels.get_channel(channel)
                 if isinstance(edge, dict):
-                    a_subfield = list(edge.keys())[0]
+                    a_subfield = next(iter(edge.keys()))
                     ts_type = channels.get_channel(channel, a_subfield).tstype.typ
                 else:
                     ts_type = edge.tstype.typ
@@ -425,7 +424,7 @@ class MountPerspectiveTables(GatewayModule):
             edge = channels.get_channel(channel)
             if isinstance(edge, dict):
                 to_flatten = []
-                for subfield in edge.keys():
+                for subfield in edge:
                     to_flatten.append(channels.get_channel(channel, subfield))
                 if hasattr(subfield, "name"):
                     self.push_to_perspective(csp.flatten(to_flatten), table_name, subfield.name)
@@ -443,7 +442,7 @@ class MountPerspectiveTables(GatewayModule):
         edge = channels.get_channel(field)
 
         if isinstance(edge, dict):
-            a_subfield = list(edge.keys())[0]
+            a_subfield = next(iter(edge.keys()))
             edge = channels.get_channel(field, a_subfield)
 
         ts_type = edge.tstype.typ
@@ -455,12 +454,12 @@ class MountPerspectiveTables(GatewayModule):
             struct_type = ts_type
 
         if not hasattr(struct_type, "psp_schema"):
-            raise Exception(f"Type has no conversion to perspective: {struct_type}")
+            raise GatewayException(f"Type has no conversion to perspective: {struct_type}")
 
         excluded_columns = self.excluded_table_columns.get(field, None)
         return struct_type.psp_schema(excluded_columns)
 
-    def add_table(self, field: str, schema, limit: int = None, index: str = None):
+    def add_table(self, field: str, schema, limit: int | None = None, index: str | None = None):
         if isinstance(index, list):
             # create a new computed index field
             index_fields = index
@@ -588,13 +587,13 @@ class MountPerspectiveTables(GatewayModule):
             responses=get_default_responses(),
             response_model=dict[
                 str,
-                Union[
-                    None,
-                    int,  # limit
-                    str,  # index, architecture
-                    list[str],  # index, unused tables
-                    dict[str, str | int | list[str] | dict[str, str]],
-                ],
+                (
+                    None
+                    | int  # limit
+                    | str  # index, architecture
+                    | list[str]  # index, unused tables
+                    | dict[str, str | int | list[str] | dict[str, str]]
+                ),
             ],
             tags=["Utility"],
         )

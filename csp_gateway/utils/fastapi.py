@@ -13,7 +13,9 @@ def json_param(param_name: str, model: Any, **query_kwargs):
     by the `model` attribute.
     """
 
-    def get_parsed_object(value: Json | None = Query(default=None, alias=param_name, **query_kwargs)):
+    query_default = Query(default=None, alias=param_name, **query_kwargs)
+
+    def get_parsed_object(value: Json | None = query_default):
         try:
             if value is None:
                 return None

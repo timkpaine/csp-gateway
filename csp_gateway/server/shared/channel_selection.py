@@ -37,7 +37,7 @@ class ChannelSelection(BaseModel):
         if v is None:
             return {}
         if isinstance(v, list):
-            return dict(include=list(v))
+            return {"include": list(v)}
         return v
 
     def select_from(

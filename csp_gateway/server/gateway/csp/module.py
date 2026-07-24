@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from csp_gateway.server import GatewaySettings, GatewayWebApp
 
 
-class Module(BaseModel, Generic[ChannelsType], ABC):
+class Module(BaseModel, ABC, Generic[ChannelsType]):
     model_config = {"arbitrary_types_allowed": True}
 
     requires: ChannelSelection | None = None

@@ -92,7 +92,7 @@ class MountExternalAPIKeyMiddleware(MountAPIKeyMiddleware, IdentityAwareMiddlewa
                 identity = self._invoke_external(api_key, self._app_settings, self._app_module)
                 if identity and isinstance(identity, dict):
                     return identity
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
 
         # Try header
@@ -102,7 +102,7 @@ class MountExternalAPIKeyMiddleware(MountAPIKeyMiddleware, IdentityAwareMiddlewa
                 identity = self._invoke_external(api_key, self._app_settings, self._app_module)
                 if identity and isinstance(identity, dict):
                     return identity
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
 
         return None

@@ -1,7 +1,7 @@
 import logging
 from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from ccflow import RootModelRegistry, load_config as load_config_base
 

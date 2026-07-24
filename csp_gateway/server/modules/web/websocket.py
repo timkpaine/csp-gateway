@@ -326,7 +326,7 @@ class MountWebSocketRoutes(GatewayModule):
                     type_adapter = channel_type.type_adapter()
                     datum = [type_adapter.validate_python(obj) for obj in msg_data]
                 except Exception:
-                    log.error("Error during websocket data conversion", exc_info=True)
+                    log.exception("Error during websocket data conversion")
                     return
 
                 try:
@@ -336,7 +336,7 @@ class MountWebSocketRoutes(GatewayModule):
                         for obj in datum:
                             self._channels.send(channel, obj, key)
                 except Exception:
-                    log.error("Error during websocket data send to CSP", exc_info=True)
+                    log.exception("Error during websocket data send to CSP")
                     return
 
             else:

@@ -119,7 +119,7 @@ def _validate_host_windows(username: str, password: str) -> dict[str, Any] | Non
                     "home": user_info.get("home_dir", ""),
                     "comment": user_info.get("comment", ""),
                 }
-            except Exception:
+            except Exception:  # noqa: BLE001 -- optional win32 user-info lookup is best-effort
                 return {"user": username}
 
         except win32security.error:
@@ -128,7 +128,7 @@ def _validate_host_windows(username: str, password: str) -> dict[str, Any] | Non
     except ImportError:
         log.warning("pywin32 package not installed. Install with: pip install pywin32")
         return None
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- windows auth degrades gracefully to None
         log.debug(f"Windows authentication failed for {username}: {e}")
         return None
 
@@ -266,7 +266,7 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
             return None
         try:
             return self.external_validator.object(username, password, settings, module)
-        except Exception:
+        except Exception:  # noqa: BLE001 -- external validator may raise anything; treat as auth failure
             return None
 
     def _create_session(self, identity: dict[str, Any]) -> str:
@@ -317,7 +317,7 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
                     identity = self._validate_credentials(username, password)
                     if identity and isinstance(identity, dict):
                         return identity
-                except Exception:
+                except Exception:  # noqa: BLE001, S110
                     pass
 
         return None
@@ -325,11 +325,12 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
     def validate(self) -> Callable:
         """Return a FastAPI dependency function for credential validation."""
         basic_security = HTTPBasic(auto_error=False)
+        basic_credentials_security = Security(basic_security)
         cookie_security = Security(APIKeyCookie(name=self.cookie_name, auto_error=False))
 
         async def validate_credentials(
             request: Request,
-            basic_credentials: HTTPBasicCredentials | None = Security(basic_security),
+            basic_credentials: HTTPBasicCredentials | None = basic_credentials_security,
             session_cookie: str | None = cookie_security,
         ) -> str:
             """Validate credentials and return session UUID."""

@@ -74,7 +74,7 @@ class GatewayWebApp:
         csp_thread: Any,
         settings: Settings,
         ui: bool = True,
-        logger: Logger = None,
+        logger: Logger | None = None,
         _in_test: bool = False,
     ):
         # Instantiate a new FastAPI instance
@@ -652,5 +652,5 @@ class GatewayWebApp:
             self.gateway._shutdown(user_initiated=True)
         except InterruptedError:
             self.gateway._shutdown(user_initiated=True)
-        except Exception:
+        except Exception:  # noqa: BLE001 -- top-level server boundary: any crash triggers unclean shutdown
             self.gateway._shutdown(user_initiated=False)

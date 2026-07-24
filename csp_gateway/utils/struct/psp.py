@@ -1,16 +1,18 @@
 import _thread
 import itertools
+import types
 from collections.abc import Callable
 from datetime import date, datetime
 from enum import Enum as PyEnum
 from logging import getLogger
-from typing import Any, GenericAlias, Union, _GenericAlias, get_args, get_origin
+from typing import Any, Union, get_args, get_origin
 
 import orjson
 from csp import Enum, Struct
 from csp.impl.enum import EnumMeta
 from csp.impl.types.container_type_normalizer import ContainerTypeNormalizer
 from numpy import ndarray
+from typing_extensions import TypeAliasType
 
 __all__ = (
     "CustomJsonifier",
@@ -113,7 +115,7 @@ def psp_flatten(obj: Any) -> Any:
     return ret
 
 
-ExcludedColumns = Union[set[str], dict[str, Union[bool, "ExcludedColumns"]]]
+ExcludedColumns = TypeAliasType("ExcludedColumns", "set[str] | dict[str, bool | ExcludedColumns]")
 
 
 def _is_excluded(field: str, excluded_columns: ExcludedColumns) -> bool | ExcludedColumns:
@@ -124,14 +126,12 @@ def _is_excluded(field: str, excluded_columns: ExcludedColumns) -> bool | Exclud
 
 
 def _is_optional(t: type) -> bool:
-    if not isinstance(t, (GenericAlias, _GenericAlias)):
-        return False
-    if get_origin(t) is not Union:
+    # Accept both typing.Optional[X]/typing.Union[X, None] and the PEP 604 ``X | None`` form.
+    # The former have get_origin() is typing.Union; the latter is a types.UnionType.
+    if get_origin(t) not in (Union, types.UnionType):
         return False
     args = list(get_args(t))
-    if len(args) != 2 or type(None) not in args:
-        return False
-    return True
+    return not (len(args) != 2 or type(None) not in args)
 
 
 def _get_type_from_optional(t: type):
@@ -253,8 +253,8 @@ def psp_schema(cls, excluded_columns: ExcludedColumns | None = None) -> dict[str
     for to_remove in remove:
         schema.pop(to_remove)
 
-    for key in schema:
-        if schema[key] is object and _is_optional(schema_annotated[key]):
+    for key, value in schema.items():
+        if value is object and _is_optional(schema_annotated[key]):
             schema[key] = _get_type_from_optional(schema_annotated[key])
 
     schema.update(add)

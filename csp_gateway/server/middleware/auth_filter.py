@@ -140,7 +140,7 @@ class AuthFilterMiddleware(GatewayModule):
                 if maybe_edge is None:
                     continue
                 if isinstance(maybe_edge, dict):
-                    for key in maybe_edge.keys():
+                    for key in maybe_edge:
                         self._send_validated_channels.add(f"{field}/{key}")
                 else:
                     self._send_validated_channels.add(field)
@@ -152,7 +152,7 @@ class AuthFilterMiddleware(GatewayModule):
                 if maybe_edge is None:
                     continue
                 if isinstance(maybe_edge, dict):
-                    for key in maybe_edge.keys():
+                    for key in maybe_edge:
                         self._next_filtered_channels.add(f"{field}/{key}")
                 else:
                     self._next_filtered_channels.add(field)
@@ -539,13 +539,9 @@ class AuthFilterMiddleware(GatewayModule):
             return True
 
         for field in self.filter_fields:
-            # Check if struct has this field
-            if field in data:
-                # Check if identity has this field
-                if field in identity:
-                    # Filter: only include if values match
-                    if data[field] != identity[field]:
-                        return False
+            # Only filter out when both struct and identity have the field and their values differ
+            if field in data and field in identity and data[field] != identity[field]:
+                return False
         return True
 
     def filter_response_data(self, data: Any, identity: dict[str, Any] | None) -> Any:

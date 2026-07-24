@@ -1,11 +1,11 @@
 from collections.abc import Callable, Sequence
 from datetime import datetime, timedelta
 from inspect import getframeinfo, stack
+from logging import getLogger
 from pprint import pprint
 from typing import (
     Any,
     TypeVar,
-    Union,
     get_origin,
 )
 
@@ -17,9 +17,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from csp_gateway import ChannelSelection, GatewayChannels, GatewayModule
 
+logger = getLogger(__name__)
+
 __all__ = ("GatewayTestHarness",)
 
-ChannelType = Union[str, tuple[str, Any]]
+ChannelType = str | tuple[str, Any]
 T = TypeVar("T")
 
 
@@ -67,8 +69,8 @@ class BaseGatewayTestEvent(BaseModel):
                 caller = getframeinfo(stack()[2][0])
                 self._lineno = caller.lineno
                 self._filename = caller.filename
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001 -- best-effort caller introspection for test diagnostics
+                logger.debug("Could not determine caller location for test harness event: %s", e)
 
     def apply(self, now, values, tick_counts, ticked_values, *args, **kwargs) -> bool | None:
         """Function to run inside the csp graph during runtime.
@@ -322,9 +324,8 @@ class GatewayTestHarness(GatewayModule):
                     delta += event.delay
                 else:
                     # event.delay is a datetime.
-                    if reference_time is not None:
-                        if event_time > event.delay:
-                            raise ValueError(f"Trying to move backwards in time from {event_time} to {event.delay}.")
+                    if reference_time is not None and event_time > event.delay:
+                        raise ValueError(f"Trying to move backwards in time from {event_time} to {event.delay}.")
 
                     reference_time = event.delay
                     delta = timedelta(0)
@@ -346,11 +347,11 @@ class GatewayTestHarness(GatewayModule):
                 basket = channels.get_channel(channel)
 
                 # Split the data events for the basket by basket key.
-                basket_curve_data = {k: [] for k in basket.keys()}
+                basket_curve_data = {k: [] for k in basket}
                 if curve_data[channel]:
                     for delta, basket_events in curve_data[channel]:
                         if not isinstance(basket_events, dict):
-                            raise ValueError(f"Event values for dictionary baskets should be a dictionary, got {basket_events}.")
+                            raise TypeError(f"Event values for dictionary baskets should be a dictionary, got {basket_events}.")
 
                         for k, v in basket_events.items():
                             if k not in basket:
@@ -420,12 +421,12 @@ class GatewayTestHarness(GatewayModule):
                 current_values = {k: v[-1][1] for k, v in s_values.items() if len(v) > 0}
                 tick_counts = {k: len(v) for k, v in s_values.items()}
                 reset = event.apply(csp.now(), current_values, tick_counts, ticked_values=s_values)
-            except AssertionError as e:
+            except AssertionError:
                 print(f"Assertion failed in test at {event._filename}:{event._lineno}")
-                raise e
-            except Exception as e:
+                raise
+            except Exception:
                 print(f"Exception in test at {event._filename}:{event._lineno}")
-                raise e
+                raise
             if reset:
                 s_values = {}
 

@@ -91,7 +91,7 @@ def test_overwrite_json(read_write_mode, tmpdir):
     )
     gateway = MyGateway(modules=[setup_json_module, setter], channels=MyGatewayChannels())
     csp.run(gateway.graph, starttime=datetime(2020, 1, 1))
-    with open(file, "r") as json_file:
+    with open(file) as json_file:
         assert len(list(json_file)) == 1
 
     # start_writing doesnt matter since Mirror is only in READ mode
@@ -110,7 +110,7 @@ def test_overwrite_json(read_write_mode, tmpdir):
     mirror = Mirror(mirror_source=json_module, selection=json_module.selection)
     new_gateway = MyGateway(modules=[mirror, setter], channels=MyGatewayChannels())
     csp.run(new_gateway.graph, starttime=datetime(2020, 1, 1))
-    with open(file, "r") as json_file:
+    with open(file) as json_file:
         items = list(json_file)
         assert len(items) == 1
         json_dict = orjson.loads(items[0])
@@ -140,7 +140,7 @@ def test_mirror_state(by_key, tmpdir):
     )
     gateway = MyGateway(modules=[setup_json_module, setter], channels=MyGatewayChannels())
     csp.run(gateway.graph, starttime=datetime(2020, 1, 1))
-    with open(file, "r") as json_file:
+    with open(file) as json_file:
         assert len(list(json_file)) == 1
 
     json_module = ReplayEngineJSON(

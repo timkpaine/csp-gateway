@@ -410,7 +410,7 @@ def test_get_set_block_set(by_key, override):
         block_set_channels_until=datetime(2020, 1, 2),
     )
     out = csp.run(gateway.graph, starttime=datetime(2020, 1, 1), endtime=timedelta(1))
-    for _, output in out.items():
+    for output in out.values():
         assert len(output) == 0
 
 
@@ -475,7 +475,7 @@ def test_requires_fails():
     with pytest.raises(ValidationError):
         MyGetModuleDynamicKeys(requires=99)
 
-    getter = MyGetModuleDynamicKeys(requires=dict(exclude=[MyGatewayChannels.my_array_channel]))
+    getter = MyGetModuleDynamicKeys(requires={"exclude": [MyGatewayChannels.my_array_channel]})
     gateway = MyGateway(modules=[getter], channels=MyGatewayChannels(my_keys=["my_key", "my_key2"]))
     with pytest.raises(NoProviderException):
         csp.run(gateway.graph, starttime=datetime(2020, 1, 1), endtime=timedelta(1))

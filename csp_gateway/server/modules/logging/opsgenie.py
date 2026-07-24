@@ -186,7 +186,7 @@ class PublishOpsGenie(GatewayModule):
                     _request_timeout=self.ops_sync_delay_sec,
                 )
                 log.info("Disabled heartbeat '%s' on shutdown", self.ops_heartbeat_name)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- best-effort heartbeat disable on shutdown
                 log.error("Failed to disable heartbeat '%s' on shutdown: %s", self.ops_heartbeat_name, e)
 
         if csp.ticked(data):
@@ -247,7 +247,6 @@ class PublishOpsGenie(GatewayModule):
 
     @csp.node
     def _publish_alerts(self, data: ts[list[MonitoringEvent]]):
-        """ """
         with csp.alarms():
             alarm = csp.alarm(bool)
 
@@ -290,8 +289,8 @@ class PublishOpsGenie(GatewayModule):
                                 True,
                             )
                             s_alarm_scheduled = True
-                    except Exception as e:
-                        log.error(e, exc_info=True)
+                    except Exception:
+                        log.exception("Error creating OpsGenie alert")
                 else:
                     log.trace(
                         "Ignoring MonitoringEvent alert level %s (logging level %s) below threshold %s",

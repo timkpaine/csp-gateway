@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Optional, get_type_hints
+from typing import get_type_hints
 
 import csp
 import numpy as np
@@ -110,12 +110,12 @@ def test_snapshot_model_type_hints():
     snapshot_model = MyGatewayChannels._snapshot_model
     type_hints = get_type_hints(snapshot_model)
     assert len(type_hints) == 6
-    assert type_hints["my_channel"] == Optional[MyStruct]
-    assert type_hints["my_list_channel"] == Optional[list[MyStruct]]
-    assert type_hints["my_enum_basket"] == Optional[dict[MyEnum, MyStruct]]
-    assert type_hints["my_str_basket"] == Optional[dict[str, MyStruct]]
-    assert type_hints["my_enum_basket_list"] == Optional[dict[MyEnum, list[MyStruct]]]
-    assert type_hints[_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD] == Optional[datetime]
+    assert type_hints["my_channel"] == MyStruct | None
+    assert type_hints["my_list_channel"] == list[MyStruct] | None
+    assert type_hints["my_enum_basket"] == dict[MyEnum, MyStruct] | None
+    assert type_hints["my_str_basket"] == dict[str, MyStruct] | None
+    assert type_hints["my_enum_basket_list"] == dict[MyEnum, list[MyStruct]] | None
+    assert type_hints[_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD] == datetime | None
 
 
 def test_snapshot_model_instantiation():

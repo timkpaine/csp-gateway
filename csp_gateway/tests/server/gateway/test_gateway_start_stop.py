@@ -33,13 +33,10 @@ def test_long_startup_die_cleanly(free_port):
             ],
             channels=ExampleGatewayChannels(),
         )
-        try:
+        with pytest.raises(RuntimeError):
             gateway.start(realtime=True, rest=True, build_timeout=1)
-        except RuntimeError:
-            assert exit_mock.call_count == 1
-            assert kill_mock.call_count == 1
-            return
-        raise Exception("test failed")
+        assert exit_mock.call_count == 1
+        assert kill_mock.call_count == 1
 
 
 def test_start_with_endtime(free_port):
@@ -89,11 +86,8 @@ def test_start_and_then_die_with_error(free_port):
         ],
         channels=ExampleGatewayChannels(),
     )
-    try:
+    with pytest.raises(RuntimeError):
         gateway.start(realtime=True, rest=True)
-    except RuntimeError:
-        return
-    raise Exception("test failed")
 
 
 @pytest.mark.skipif(sys.platform == "darwin", reason="Flaky on MacOS GHA runners")
@@ -107,12 +101,9 @@ def test_start_and_then_graph_start_error(caplog, free_port):
         ],
         channels=ExampleGatewayChannels(),
     )
-    try:
+    with pytest.raises(RuntimeError):
         gateway.start(realtime=True, rest=True, block=False, build_timeout=timedelta(seconds=60))
-    except RuntimeError:
-        assert "Graph start failure" in caplog.text
-        return
-    raise Exception("test failed")
+    assert "Graph start failure" in caplog.text
 
 
 def test_stop_with_shutdown(free_port):
@@ -173,7 +164,7 @@ def test_signal_with_shutdown(signal_val, free_port):
             # Unable to fully start the server
             os.kill(p.pid, signal.SIGKILL)
             p.join()
-            assert False
+            pytest.fail(f"Server did not start after {NUM_TRIES} tries")
         if not p.is_alive():
             # Process has exited
             assert p.exitcode == 0
@@ -216,10 +207,9 @@ def test_shutdown_with_big_red_button(free_port):
     for idx in range(NUM_TRIES + 1):
         if idx == NUM_TRIES:
             # Unable to fully start the server
-            # Unable to fully start the server
             os.kill(p.pid, signal.SIGKILL)
             p.join()
-            assert False
+            pytest.fail(f"Server did not start after {NUM_TRIES} tries")
         if not p.is_alive():
             # Process has exited
             assert p.exitcode == 0

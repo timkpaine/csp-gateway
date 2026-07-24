@@ -237,7 +237,7 @@ def test_exclude_id():
     o = SimpleOrderChild(timestamp=now, symbol="foo", quantity=100, settlement_date=now.date())
     # Since we exclude id from the set, the GatewayStruct automatically
     # consructs a new one on initialization
-    o2 = SimpleOrderChild.type_adapter().validate_python(o.to_dict(), context=dict(force_new_id=True))
+    o2 = SimpleOrderChild.type_adapter().validate_python(o.to_dict(), context={"force_new_id": True})
     assert o2.id != o.id
 
 
@@ -247,7 +247,7 @@ def test_exclude_id_timestamp_recursive():
     o2 = SimpleOrder(timestamp=now, symbol="bar", quantity=200, settlement_date=now.date())
 
     m = MyCompositeStruct(order=o, order_list=[o, o2])
-    m2 = MyCompositeStruct.type_adapter().validate_python(m.to_dict(), context=dict(force_new_timestamp=True, force_new_id=True))
+    m2 = MyCompositeStruct.type_adapter().validate_python(m.to_dict(), context={"force_new_timestamp": True, "force_new_id": True})
     assert m2.id != m.id
     assert m2.order.id != o.id
     assert m2.order_list[0].id != o.id
@@ -275,7 +275,7 @@ def test_int_to_str_coercion():
     class SmallStruct(GatewayStruct):
         z: str
 
-    my_model = SmallStruct.type_adapter().validate_python(dict(z=12345))
+    my_model = SmallStruct.type_adapter().validate_python({"z": 12345})
     assert my_model.z == "12345"
 
 

@@ -21,12 +21,12 @@ from pydantic import Field, PrivateAttr, field_validator
 from csp_gateway.server import ChannelSelection, ChannelsType, GatewayModule
 
 __all__ = (
-    "Logging",
     "LogChannels",
-    "configure_stdlib_logging",
-    "is_stdlib_logging_configured",
+    "Logging",
     # Backwards compatibility alias
     "StdlibLogging",
+    "configure_stdlib_logging",
+    "is_stdlib_logging_configured",
 )
 
 log = logging.getLogger(__name__)
@@ -313,7 +313,7 @@ class Logging(GatewayModule):
 
             if HydraConfig.initialized():
                 return HydraConfig.get().runtime.output_dir
-        except (ImportError, Exception):
+        except (ImportError, Exception):  # noqa: BLE001, S110 -- hydra output dir is best-effort; any failure falls through
             pass
         return None
 

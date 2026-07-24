@@ -76,7 +76,7 @@ class MonitoringBase(GatewayStruct):
                 raise KeyError(f"Unexpected field `{field}` for type {obj_type}")
             setattr(self, field, obj_type._obj_from_python(value, expected_type))
 
-    def get_tags(self, extra_tags: dict[str, str] = None) -> list[str]:
+    def get_tags(self, extra_tags: dict[str, str] | None = None) -> list[str]:
         """
         Appends extra (i.e., global) tags if supplied to event or metric specific tags.
         Transforms dictionary of monitoring tags into Datadog compliant List format.
@@ -94,7 +94,7 @@ class MonitoringBase(GatewayStruct):
             self.tags["monitoring_id"] = self.id
         return [f"{k}:{v}" for k, v in self.tags.items()]
 
-    def get_datadog_timestamp(self, from_tz: timezone = timezone.utc, to_tz: timezone = None) -> float:
+    def get_datadog_timestamp(self, from_tz: timezone = timezone.utc, to_tz: timezone | None = None) -> float:
         """
         Provides Datadog timestamp.
         Optionally converts timestamp time zone into Datadog instance time zone.
@@ -110,7 +110,7 @@ class MonitoringBase(GatewayStruct):
         return self.timestamp.replace(tzinfo=from_tz).astimezone(tz=to_tz).timestamp()
 
     @abstractmethod
-    def to_datadog(extra_tags: list[str] = None) -> dict[str, str | list[str]]:
+    def to_datadog(extra_tags: list[str] | None = None) -> dict[str, str | list[str]]:
         """
         Abstract method to implement conversion to Datadog payload.
 
@@ -123,7 +123,7 @@ class MonitoringBase(GatewayStruct):
         raise NotImplementedError
 
     @abstractmethod
-    def to_dict(self, extra_tags: dict[str, str] = None) -> dict[str, str]:
+    def to_dict(self, extra_tags: dict[str, str] | None = None) -> dict[str, str]:
         """
         Abstract method to convert to dictionary.
 
@@ -136,7 +136,7 @@ class MonitoringBase(GatewayStruct):
         raise NotImplementedError
 
     @abstractmethod
-    def to_opsgenie(self, extra_tags: dict[str, str] = None) -> "opsgenie_sdk.CloseAlertPayload":  # noqa: F821
+    def to_opsgenie(self, extra_tags: dict[str, str] | None = None) -> "opsgenie_sdk.CloseAlertPayload":  # noqa: F821
         """
         Abstract method to convert to OpsGenie payload.
 
@@ -189,8 +189,8 @@ class MonitoringEvent(MonitoringBase):
     def get_event_alias(
         self,
         category_tag: str = "event_group",
-        alias_tags: dict[str, str] = None,
-        extra_tags: dict[str, str] = None,
+        alias_tags: dict[str, str] | None = None,
+        extra_tags: dict[str, str] | None = None,
         separator: str = ":",
     ) -> str:
         """
@@ -218,7 +218,7 @@ class MonitoringEvent(MonitoringBase):
                 return separator.join(alias)
         return ""
 
-    def to_datadog(self, extra_tags: dict[str, str] = None) -> dict[str, str | list[str]]:
+    def to_datadog(self, extra_tags: dict[str, str] | None = None) -> dict[str, str | list[str]]:
         """
         Formats Datadog event payload.
 
@@ -238,7 +238,7 @@ class MonitoringEvent(MonitoringBase):
             "tags": self.get_tags(extra_tags),
         }
 
-    def to_dict(self, extra_tags: dict[str, str] = None) -> dict[str, str]:
+    def to_dict(self, extra_tags: dict[str, str] | None = None) -> dict[str, str]:
         """
         Converts the event to a dictionary.
 
@@ -264,8 +264,8 @@ class MonitoringEvent(MonitoringBase):
     def to_opsgenie(
         self,
         category_tag: str = "event_group",
-        alias_tags: dict[str, str] = None,
-        extra_tags: dict[str, str] = None,
+        alias_tags: dict[str, str] | None = None,
+        extra_tags: dict[str, str] | None = None,
         separator: str = ":",
     ) -> "opsgenie_sdk.CloseAlertPayload":  # noqa: F821
         """
@@ -470,7 +470,7 @@ class MonitoringMetric(MonitoringBase):
     metric_type: MetricType
     value: float
 
-    def to_datadog(self, extra_tags: dict[str, str] = None) -> dict[str, str | list[str]]:
+    def to_datadog(self, extra_tags: dict[str, str] | None = None) -> dict[str, str | list[str]]:
         """
         Formats Datadog metric payload.
 
@@ -487,7 +487,7 @@ class MonitoringMetric(MonitoringBase):
             "tags": self.get_tags(extra_tags),
         }
 
-    def to_dict(self, extra_tags: dict[str, str] = None) -> dict[str, str | list[str]]:
+    def to_dict(self, extra_tags: dict[str, str] | None = None) -> dict[str, str | list[str]]:
         """
         Converts the metric to a dictionary.
 
@@ -503,9 +503,9 @@ class MonitoringMetric(MonitoringBase):
         self,
         title: str,
         alert_type: MonitoringLevelMapping,
-        text: str = None,
-        source: str = None,
-        extra_tags: dict[str, str] = None,
+        text: str | None = None,
+        source: str | None = None,
+        extra_tags: dict[str, str] | None = None,
     ) -> "opsgenie_sdk.CloseAlertPayload":  # noqa: F821
         """
         Converts the metric to an OpsGenie payload.

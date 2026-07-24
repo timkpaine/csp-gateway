@@ -83,31 +83,26 @@ class FileReaderBase:
         """Generator to return stucts from a filepath"""
 
         should_read = True
-        if self.extensions:
-            if not any([src_path.endswith(suffix) for suffix in self.extensions]):
-                should_read = False
+        if self.extensions and not any(src_path.endswith(suffix) for suffix in self.extensions):
+            should_read = False
         if should_read:
             dicts = self.read_impl(src_path)
             structs = [self.deserializer(d) for d in dicts]
-            for s in structs:
-                yield s
+            yield from structs
 
     def read_impl(self, src_path: str) -> list[dict]:
         """File type specific implementation"""
 
-        raise Exception(f"read not implemented for {self}")
+        raise NotImplementedError(f"read not implemented for {self}")
 
 
 class FileReaderCsv(FileReaderBase):
     """File reader for json file type"""
 
     def read_impl(self, src_path: str) -> list[Any]:
-        data = []
-        with open(src_path, "r") as f:
+        with open(src_path) as f:
             reader = csv.DictReader(f)
-            for row in reader:
-                data.append(row)
-        return data
+            return list(reader)
 
 
 class FileReaderJson(FileReaderBase):
@@ -171,7 +166,7 @@ class EventHandlerCustom(FileSystemEventHandler):
             try:
                 for data in self.file_reader.read(file_path):
                     self.adapter.push_tick(data)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- file-watch callback must not crash on a bad file
                 log.error(f"Failed to read data from {file_path} with exception: {e}, skipping")
 
 

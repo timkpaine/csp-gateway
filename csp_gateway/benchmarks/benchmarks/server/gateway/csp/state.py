@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from csp import Enum, Struct
 
@@ -20,7 +20,7 @@ class MyEnum(Enum):
 class CspSubStruct(Struct):
     suba: int = 1
     subb: str = "b"
-    subc: datetime = datetime.now()
+    subc: datetime = datetime.now(timezone.utc)
     subd: str
     sube: dict[str, str]
     subf: MyEnum = MyEnum.A
@@ -29,7 +29,7 @@ class CspSubStruct(Struct):
 class NonCspStruct:
     a: int = 0
     b: str
-    c: datetime = datetime.now()
+    c: datetime = datetime.now(timezone.utc)
     d: str = ""
     e: dict[str, str] = {"A": "hhello", "B": "bbye"}
     f: MyEnum = MyEnum.A
@@ -43,7 +43,7 @@ class NonCspStruct:
 class CspStruct(Struct):
     a: int = 0
     b: str
-    c: datetime = datetime.now()
+    c: datetime = datetime.now(timezone.utc)
     d: str = ""
     e: dict[str, str] = {"A": "hhello", "B": "bbye"}
     f: MyEnum = MyEnum.A

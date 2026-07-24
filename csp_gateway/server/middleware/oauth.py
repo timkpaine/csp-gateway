@@ -202,7 +202,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
                     userinfo = await self._get_userinfo(token)
                     if userinfo:
                         return userinfo
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
                 pass
 
         return None
@@ -280,7 +280,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
             return RedirectResponse(url=auth_url)
 
         @auth_router.get("/callback", name="oauth_callback")
-        async def oauth_callback(request: Request, code: str = None, error: str = None):
+        async def oauth_callback(request: Request, code: str | None = None, error: str | None = None):
             """Handle OAuth2 callback with authorization code."""
             if error:
                 return JSONResponse({"error": error}, status_code=400)
@@ -322,7 +322,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
                 )
                 return response
 
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- return 500 on any login-handler failure
                 return JSONResponse({"error": str(e)}, status_code=500)
 
         @auth_router.get("/logout")

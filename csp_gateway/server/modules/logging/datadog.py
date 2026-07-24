@@ -72,9 +72,9 @@ def _send_to_datadog(queue: Queue, dd_latency_log_threshold_seconds: int) -> Non
                 elif issubclass(event_or_metric_type, MonitoringMetric):
                     res = api.Metric.send(**event_or_metric_body)
                 else:
-                    raise ValueError(f"Unknown monitor type {event_or_metric_type.__name__}.")
-            except Exception as e:
-                log.error(e, exc_info=True)
+                    raise TypeError(f"Unknown monitor type {event_or_metric_type.__name__}.")
+            except Exception:
+                log.exception("Error sending monitoring data to Datadog")
             else:
                 end_time = datetime.now(timezone.utc)
                 _log_result(event_or_metric_type.__name__, event_or_metric_body, res)

@@ -211,7 +211,7 @@ class _GatewayStreamAdapterManagerImpl(AdapterManagerImpl):
             self._loop.run_until_complete(self._connect_and_stream())
         except Exception as e:
             self._connection_error = e
-            log.exception(f"Error in websocket streaming: {e}")
+            log.exception("Error in websocket streaming")
         finally:
             self._disconnected = True
             self._loop.close()
@@ -242,7 +242,7 @@ class _GatewayStreamAdapterManagerImpl(AdapterManagerImpl):
 
                     try:
                         await asyncio.gather(receive_task, send_task)
-                    except Exception:
+                    except Exception:  # noqa: BLE001 -- async websocket task cleanup must not raise on shutdown
                         receive_task.cancel()
                         send_task.cancel()
                     finally:
@@ -299,7 +299,7 @@ class _GatewayStreamAdapterManagerImpl(AdapterManagerImpl):
                         # Push data to all registered adapters
                         for adapter in self._adapters:
                             adapter.push_tick(data)
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001 -- message-loop resilience against malformed frames
                         log.debug(f"Error parsing websocket message: {e}")
                 elif msg.type == 8:  # aiohttp.WSMsgType.ERROR
                     log.error(f"WebSocket error received: {ws.exception()}")
@@ -340,7 +340,7 @@ class _GatewayStreamAdapterManagerImpl(AdapterManagerImpl):
                     pass
 
                 await asyncio.sleep(0.01)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- send-loop resilience; keep streaming on transient errors
                 log.debug(f"Error sending data: {e}")
 
 
