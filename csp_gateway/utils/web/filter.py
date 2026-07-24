@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import Literal, Optional, Union
+from typing import Literal
 
 try:
     from csp.impl.enum import Enum as CspEnum, EnumMeta as CspEnumMeta
@@ -26,10 +26,10 @@ FilterWhereLambdaMap = {
 
 class FilterCondition(BaseModel):
     # in priority order
-    value: Optional[Union[float, int, str]] = Field(None)
+    value: float | int | str | None = Field(None)
     # have to handle separately otherwise
     # all ints would be datetimes..
-    when: Optional[datetime] = Field(None)
+    when: datetime | None = Field(None)
     attr: str = ""
     where: FilterWhere = "=="
 

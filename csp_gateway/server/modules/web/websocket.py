@@ -1,7 +1,7 @@
 import asyncio
 from datetime import timedelta
 from logging import getLogger
-from typing import Any, Dict, List, Optional, Set, Tuple, TypeVar, get_args, get_origin
+from typing import Any, TypeVar, get_args, get_origin
 from uuid import uuid4
 
 import csp
@@ -29,7 +29,7 @@ U = TypeVar("U")
 
 
 class MountWebSocketRoutes(GatewayModule):
-    requires: Optional[ChannelSelection] = []
+    requires: ChannelSelection | None = []
     selection: ChannelSelection = Field(default_factory=ChannelSelection)
 
     readonly: bool = False
@@ -38,15 +38,15 @@ class MountWebSocketRoutes(GatewayModule):
     ping_time_s: int = 1
 
     _channels: Any = PrivateAttr(None)
-    _supported_channels: Dict[Tuple[str, Any], Any] = PrivateAttr(default_factory=dict)
-    _dict_basket_keys_and_type_adapter: Dict[str, Tuple[Any, List[Any]]] = PrivateAttr(
+    _supported_channels: dict[tuple[str, Any], Any] = PrivateAttr(default_factory=dict)
+    _dict_basket_keys_and_type_adapter: dict[str, tuple[Any, list[Any]]] = PrivateAttr(
         default_factory=dict
     )  # Maps dict basket channels to the type adapter for their keys and keys themselves
-    _connect_events: Dict[Tuple[str, Any], GenericPushAdapter] = PrivateAttr(default_factory=dict)
-    _disconnect_events: Dict[Tuple[str, Any], GenericPushAdapter] = PrivateAttr(default_factory=dict)
-    _subscriptions: Dict[str, Set[Tuple[str, Any]]] = PrivateAttr(default_factory=dict)
-    _queue: Optional[janus.Queue] = PrivateAttr(None)
-    _task: Optional[asyncio.Task] = PrivateAttr(None)
+    _connect_events: dict[tuple[str, Any], GenericPushAdapter] = PrivateAttr(default_factory=dict)
+    _disconnect_events: dict[tuple[str, Any], GenericPushAdapter] = PrivateAttr(default_factory=dict)
+    _subscriptions: dict[str, set[tuple[str, Any]]] = PrivateAttr(default_factory=dict)
+    _queue: janus.Queue | None = PrivateAttr(None)
+    _task: asyncio.Task | None = PrivateAttr(None)
     _app: Any = PrivateAttr(None)
 
     def connect(self, channels: GatewayChannels) -> None:
@@ -93,10 +93,10 @@ class MountWebSocketRoutes(GatewayModule):
                 self._supported_channels[channel_and_key] = (is_list_model, ts_type)
 
                 # add generic push for connects
-                self._connect_events[channel_and_key] = GenericPushAdapter(Tuple[str, WebSocket], name=f"connect_{name}")
+                self._connect_events[channel_and_key] = GenericPushAdapter(tuple[str, WebSocket], name=f"connect_{name}")
 
                 # add generic push for disconnects
-                self._disconnect_events[channel_and_key] = GenericPushAdapter(Tuple[str, WebSocket], name=f"disconnect_{name}")
+                self._disconnect_events[channel_and_key] = GenericPushAdapter(tuple[str, WebSocket], name=f"disconnect_{name}")
 
                 # run csp node
                 self.handle_websocket_connection(
@@ -109,8 +109,8 @@ class MountWebSocketRoutes(GatewayModule):
 
         heartbeat_key = ("heartbeat", None)
         self._supported_channels[heartbeat_key] = (False, None)
-        self._connect_events[heartbeat_key] = GenericPushAdapter(Tuple[str, WebSocket], name="connect_heartbeat")
-        self._disconnect_events[heartbeat_key] = GenericPushAdapter(Tuple[str, WebSocket], name="disconnect_heartbeat")
+        self._connect_events[heartbeat_key] = GenericPushAdapter(tuple[str, WebSocket], name="connect_heartbeat")
+        self._disconnect_events[heartbeat_key] = GenericPushAdapter(tuple[str, WebSocket], name="disconnect_heartbeat")
         self.handle_heartbeat_connection(
             connect=self._connect_events[heartbeat_key].out(),
             disconnect=self._disconnect_events[heartbeat_key].out(),
@@ -146,7 +146,7 @@ class MountWebSocketRoutes(GatewayModule):
             except Exception:
                 log.exception("Something bad happened during queue processing")
 
-    async def _apply_auth_filter(self, message: str, websocket) -> Optional[str]:
+    async def _apply_auth_filter(self, message: str, websocket) -> str | None:
         """Apply auth filter middleware if configured."""
         if self._app is None:
             return message
@@ -163,7 +163,7 @@ class MountWebSocketRoutes(GatewayModule):
         with csp.alarms():
             a_send_ping: ts[bool] = csp.alarm(bool)
         with csp.state():
-            s_connections: Dict[str, WebSocket] = {}
+            s_connections: dict[str, WebSocket] = {}
 
         with csp.start():
             csp.schedule_alarm(a_send_ping, timedelta(seconds=self.ping_time_s), True)
@@ -186,11 +186,11 @@ class MountWebSocketRoutes(GatewayModule):
         data: ts["T"],
         connect: ts["U"],
         disconnect: ts["U"],
-        channel_and_key: Tuple[str, Any],  # channel name to possible dict basket key
+        channel_and_key: tuple[str, Any],  # channel name to possible dict basket key
         is_list_model: bool = False,
     ):
         with csp.state():
-            s_connections: Dict[str, WebSocket] = {}
+            s_connections: dict[str, WebSocket] = {}
         with csp.start():
             # make the input passive unless we have active subscriptions
             csp.make_passive(data)
@@ -391,10 +391,10 @@ class MountWebSocketRoutes(GatewayModule):
         @api_router.get(
             f"{self.prefix}",
             responses=get_default_responses(),
-            response_model=List[str],
+            response_model=list[str],
             tags=["Streaming"],
         )
-        async def stream() -> List[str]:
+        async def stream() -> list[str]:
             """
             This endpoint returns all of the available mounted websocket streams.
 

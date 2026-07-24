@@ -330,10 +330,9 @@ async def test_async_client_stream_timeout_raises_on_slow_iteration():
         yield {"data": "test"}
 
     # Patch _streamAsync to return our slow generator
-    with patch.object(client, "_streamAsync", return_value=slow_generator()):
-        with pytest.raises(asyncio.TimeoutError):
-            async for _ in client.stream(channels=["test"], timeout=0.1):
-                pass
+    with patch.object(client, "_streamAsync", return_value=slow_generator()), pytest.raises(asyncio.TimeoutError):
+        async for _ in client.stream(channels=["test"], timeout=0.1):
+            pass
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,7 @@
 import json
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import csp
 from csp import ts
@@ -53,9 +53,9 @@ class ChannelSchemaConfig(BaseModel):
 
     channel_name: str  # name of channel to write
     table: str
-    fields: List[str] = []  # if empty will just utilize all fields
-    rename_fields: Dict[str, str] = {}
-    augmentation_fields: Dict[str, str] = {}
+    fields: list[str] = []  # if empty will just utilize all fields
+    rename_fields: dict[str, str] = {}
+    augmentation_fields: dict[str, str] = {}
 
 
 class PublishSQLA(GatewayModule):
@@ -104,12 +104,12 @@ class PublishSQLA(GatewayModule):
     """
 
     cnx_details: SQLACnxDetails
-    schema_configs: List[ChannelSchemaConfig] = []
+    schema_configs: list[ChannelSchemaConfig] = []
     n_tries: int = 1
     fail_after_retry: bool = False
 
     # not to be set
-    channel_map: Dict[str, ChannelSchemaConfig] = {}
+    channel_map: dict[str, ChannelSchemaConfig] = {}
     engine: "Engine" = None
 
     def __init__(self, *args, **kwargs):

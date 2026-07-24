@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import uuid4
 
 from ccflow import PyObjectPath
@@ -31,13 +31,13 @@ class MountExternalAPIKeyMiddleware(MountAPIKeyMiddleware, IdentityAwareMiddlewa
         identity_store: Maps session UUIDs to identity dicts (via IdentityAwareMiddlewareMixin).
     """
 
-    external_validator: Optional[PyObjectPath] = Field(
+    external_validator: PyObjectPath | None = Field(
         default=None, description="Path to external API key validation function (ccflow.PyObjectPath as string)."
     )
 
     # Identity store - maps session UUID to identity dict
-    _identity_store: Dict[str, Dict[str, Any]] = PrivateAttr(default_factory=dict)
-    _app_settings: Optional[GatewaySettings] = PrivateAttr(default=None)
+    _identity_store: dict[str, dict[str, Any]] = PrivateAttr(default_factory=dict)
+    _app_settings: GatewaySettings | None = PrivateAttr(default=None)
     _app_module: Any = PrivateAttr(default=None)
 
     @field_validator("external_validator")
@@ -57,10 +57,10 @@ class MountExternalAPIKeyMiddleware(MountAPIKeyMiddleware, IdentityAwareMiddlewa
     async def get_identity_from_credentials(
         self,
         *,
-        cookies: Optional[Dict[str, str]] = None,
-        headers: Optional[Dict[str, str]] = None,
-        query_params: Optional[Dict[str, str]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        cookies: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        query_params: dict[str, str] | None = None,
+    ) -> dict[str, Any] | None:
         """Extract and validate API key credentials.
 
         Checks session cookie first, then query param, then header for API key.

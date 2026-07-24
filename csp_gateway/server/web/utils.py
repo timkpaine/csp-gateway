@@ -1,4 +1,5 @@
-from typing import Any, Callable, Coroutine, Dict, Union
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 from fastapi.exceptions import RequestErrorModel
 
@@ -9,12 +10,12 @@ __all__ = (
 
 NoArgsNoReturnFuncT = Callable[[], None]
 NoArgsNoReturnAsyncFuncT = Callable[[], Coroutine[Any, Any, None]]
-NoArgsNoReturnDecorator = Callable[[Union[NoArgsNoReturnFuncT, NoArgsNoReturnAsyncFuncT]], NoArgsNoReturnAsyncFuncT]
+NoArgsNoReturnDecorator = Callable[[NoArgsNoReturnFuncT | NoArgsNoReturnAsyncFuncT], NoArgsNoReturnAsyncFuncT]
 
 
 class Error404(RequestErrorModel):  # type: ignore[misc, valid-type]
     detail: str = ""
 
 
-def get_default_responses() -> Dict[Union[int, str], Dict[str, Any]]:
+def get_default_responses() -> dict[int | str, dict[str, Any]]:
     return {404: {"model": Error404}}

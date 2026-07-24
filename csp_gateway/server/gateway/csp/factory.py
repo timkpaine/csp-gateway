@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Generic, List, Optional, Type
+from typing import Generic
 
 from ccflow import BaseModel
 from csp.impl.enum import Enum
@@ -15,7 +15,7 @@ from .module import Module
 class ChannelsFactory(BaseModel, Generic[ChannelsType]):
     model_config = dict(arbitrary_types_allowed=True)  # (for FeedbackOutputDef)
 
-    modules: List[Module[ChannelsType]] = Field(
+    modules: list[Module[ChannelsType]] = Field(
         default_factory=list, description="The list of modules that will operate on the channels to build the csp graph."
     )
     channels: ChannelsType = Field(
@@ -23,13 +23,13 @@ class ChannelsFactory(BaseModel, Generic[ChannelsType]):
         description="An instance of the Channels to be provided by the user for the Gateway. One can think of this as the internal message bus topics for the Gateway, "
         "even though there is no message bus, just named edges in a csp graph.",
     )
-    channels_model: Type[ChannelsType] = Field(  # type: ignore[misc]
+    channels_model: type[ChannelsType] = Field(  # type: ignore[misc]
         default=ChannelsType,
         description="The type of the channels. Users of a `Gateway` are expected to pass `channels`, and `channels_model` will"
         "be automatically inferred from the type. Developers can subclass `Gateway` and set the default value of"
         "`channels_model` to be the specific type of channels that users must provide.",
     )
-    block_set_channels_until: Optional[datetime] = Field(
+    block_set_channels_until: datetime | None = Field(
         default=None,
         description="""
         This determines the csp time at which modules can start sending data to channels.

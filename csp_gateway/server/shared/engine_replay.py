@@ -1,6 +1,6 @@
 import abc
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import csp
 from csp import ts
@@ -29,17 +29,17 @@ class EngineReplay(GatewayModule, abc.ABC):
     """
 
     selection: ChannelSelection = Field(default_factory=ChannelSelection)
-    encode_selection: Optional[ChannelSelection] = Field(
+    encode_selection: ChannelSelection | None = Field(
         default=None,
         description=("Optional selection that can be specified to override the selection to specify channels only for encoding."),
     )
-    decode_selection: Optional[ChannelSelection] = Field(
+    decode_selection: ChannelSelection | None = Field(
         default=None,
         description=("Optional selection that can be specified to override the selection to specify channels only for decoding."),
     )
     read_write_mode: ReadWriteMode = ReadWriteMode.READ_AND_WRITE
-    requires: Optional[ChannelSelection] = []
-    start_writing: Union[datetime, timedelta] = Field(
+    requires: ChannelSelection | None = []
+    start_writing: datetime | timedelta = Field(
         default=timedelta(),
         description="""
         This determines the csp time at which the module stops reading. If in WRITE mode or
@@ -48,7 +48,7 @@ class EngineReplay(GatewayModule, abc.ABC):
         If none is supplied, the module will start writing from the start of the graph.
         """,
     )
-    flag_updates: Dict[str, List[Tuple[str, bool]]] = Field(
+    flag_updates: dict[str, list[tuple[str, bool]]] = Field(
         default_factory=dict,
         description="""
         A mapping of channels to a list of tuples each containing:
@@ -70,7 +70,7 @@ class EngineReplay(GatewayModule, abc.ABC):
     )
 
     @abc.abstractclassmethod
-    def subscribe(self) -> Union[ts[str], ts[Dict[str, Any]]]:
+    def subscribe(self) -> ts[str] | ts[dict[str, Any]]:
         """Subscribe to engine ticks from some source.
         Returns ts that will be decoded into an engine cycle and replayed in the current gateway."""
         ...

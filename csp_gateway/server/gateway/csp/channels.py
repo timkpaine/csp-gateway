@@ -6,15 +6,8 @@ from logging import getLogger
 from typing import (
     TYPE_CHECKING,
     Any,
-    DefaultDict,
-    Dict,
-    List,
     Optional,
-    Set,
-    Tuple,
-    Type,
     TypeVar,
-    Union,
     get_args,
     get_origin,
 )
@@ -92,12 +85,12 @@ def _get_ts_pydantic_field_type(outer_type):
         if isinstance(ts_type, type) and is_gateway_struct_like(ts_type):
             if is_list:
                 return (
-                    Optional[Dict[key_type, List[ts_type]]],
+                    Optional[dict[key_type, list[ts_type]]],
                     None,
                 )
             else:
                 return (
-                    Optional[Dict[key_type, ts_type]],
+                    Optional[dict[key_type, ts_type]],
                     None,
                 )
 
@@ -116,13 +109,13 @@ def _get_ts_pydantic_field_type(outer_type):
             #         )
             #     )
             warnings.warn(
-                ("GatewayChannels received a type other than GatewayStruct, this channel will not be available via web APIs: {}".format(ts_type)),
+                (f"GatewayChannels received a type other than GatewayStruct, this channel will not be available via web APIs: {ts_type}"),
                 stacklevel=1,
             )
         if isinstance(ts_type, type) and is_gateway_struct_like(ts_type):
             if is_list:
                 return (
-                    Optional[List[ts_type]],
+                    Optional[list[ts_type]],
                     None,
                 )
             else:
@@ -132,7 +125,7 @@ def _get_ts_pydantic_field_type(outer_type):
                 )
 
 
-def _remove_field_attributes(cls, processed_classes: Set[Type[BaseModel]]) -> None:
+def _remove_field_attributes(cls, processed_classes: set[type[BaseModel]]) -> None:
     processed_classes.add(cls)
 
     if hasattr(cls, "model_fields"):
@@ -199,44 +192,43 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
 
     # we use a Dict with None as the value instead of a set for each channel
     # to preserve insertion order
-    _dynamic_keys: DefaultDict[str, Dict[Any, _NONE_TYPE]] = PrivateAttr(default_factory=lambda: defaultdict(dict))
-    _delayed_channels: Dict[str, DelayedEdge] = PrivateAttr(default_factory=dict)
-    _delayed_edge_providers: Dict[str, List[Tuple[Any, Edge]]] = PrivateAttr(default_factory=lambda: defaultdict(list))
-    _block_set_channels_until: Optional[datetime] = PrivateAttr(default=None)
-    _override_blocks: Dict[Any, Optional[datetime]] = PrivateAttr(default_factory=dict)
-    _feedbacks: Dict[int, FeedbackOutputDef] = PrivateAttr(default_factory=dict)
+    _dynamic_keys: defaultdict[str, dict[Any, _NONE_TYPE]] = PrivateAttr(default_factory=lambda: defaultdict(dict))
+    _delayed_channels: dict[str, DelayedEdge] = PrivateAttr(default_factory=dict)
+    _delayed_edge_providers: dict[str, list[tuple[Any, Edge]]] = PrivateAttr(default_factory=lambda: defaultdict(list))
+    _block_set_channels_until: datetime | None = PrivateAttr(default=None)
+    _override_blocks: dict[Any, datetime | None] = PrivateAttr(default_factory=dict)
+    _feedbacks: dict[int, FeedbackOutputDef] = PrivateAttr(default_factory=dict)
 
-    _state_requests: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
-    _state_keybys: Dict[Tuple[str, Optional[Union[str, int]]], Tuple[str, ...]] = PrivateAttr(default_factory=dict)
-    _last_requests: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
-    _next_requests: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
-    _send_channels: Dict[Tuple[str, Optional[Union[str, int]]], Any] = PrivateAttr(default_factory=dict)
+    _state_requests: dict[tuple[str, str | int | None], Any] = PrivateAttr(default_factory=dict)
+    _state_keybys: dict[tuple[str, str | int | None], tuple[str, ...]] = PrivateAttr(default_factory=dict)
+    _last_requests: dict[tuple[str, str | int | None], Any] = PrivateAttr(default_factory=dict)
+    _next_requests: dict[tuple[str, str | int | None], Any] = PrivateAttr(default_factory=dict)
+    _send_channels: dict[tuple[str, str | int | None], Any] = PrivateAttr(default_factory=dict)
 
     # inside context, the module being attached
     _module_being_attached: Any = PrivateAttr(None)
     # inside context, the requirements of the module being attached
-    _module_being_attached_required: Optional[Set[str]] = PrivateAttr(None)
+    _module_being_attached_required: set[str] | None = PrivateAttr(None)
 
     # all modules that are required by other modules
-    _modules_require: List[Tuple[Any, str]] = PrivateAttr(default_factory=list)
+    _modules_require: list[tuple[Any, str]] = PrivateAttr(default_factory=list)
 
     # all modules that are used, but not required, by other modules
-    _modules_optional: List[Tuple[Any, str]] = PrivateAttr(default_factory=list)
+    _modules_optional: list[tuple[Any, str]] = PrivateAttr(default_factory=list)
 
     # graph of channel connections
     # maps channel name to {set: [providers], get: [consumers]}
-    _modules_connections_graph: Dict[str, Dict[str, List[Any]]] = PrivateAttr(default_factory=dict)
+    _modules_connections_graph: dict[str, dict[str, list[Any]]] = PrivateAttr(default_factory=dict)
 
     _feedback_count: int = PrivateAttr(default=0)
 
     # Track unused channels
     # NOTE: this is private for now, only used by perspective module.
     # Might be public in the future.
-    _null_ts: List[Tuple[str, Optional[str]]] = PrivateAttr(default_factory=list)
+    _null_ts: list[tuple[str, str | None]] = PrivateAttr(default_factory=list)
 
-    def dynamic_keys(self) -> Optional[Dict[str, List[Any]]]:
+    def dynamic_keys(self) -> dict[str, list[Any]] | None:
         """Define dynamic dictionary keys by field, driven by data from the channels."""
-        ...
 
     @contextmanager
     def _connection_context(self, module: Any) -> Any:
@@ -289,7 +281,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
         field: str,
         module: Any,
         setting: bool = False,
-        indexer: Union[int, str] = None,
+        indexer: int | str = None,
     ):
         # TODO handle indexer
         # add to graph
@@ -311,13 +303,13 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     def _validate_field_name(self, field: str) -> bool:
         return field in self.fields()
 
-    def keys_for_channel(self, field: str) -> Optional[Dict[Any, _NONE_TYPE]]:
+    def keys_for_channel(self, field: str) -> dict[Any, _NONE_TYPE] | None:
         """Return the set of keys for the channel"""
         if not self._finalized:
             raise Exception("Must finalize graph first")
         return self._keys_for_channel(field)
 
-    def _keys_for_channel(self, field: str) -> Optional[Dict[Any, _NONE_TYPE]]:
+    def _keys_for_channel(self, field: str) -> dict[Any, _NONE_TYPE] | None:
         tstype = self.get_outer_type(field)
         if is_dict_basket(tstype):
             # get type of key in basket
@@ -331,8 +323,8 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     def _finalize(self) -> None:
         all_required_channels = set(x[1] for x in self._modules_require)
         all_optional_channels = set(x[1] for x in self._modules_optional if x not in all_required_channels)
-        who_requires: Dict[str, Any] = {x: [] for x in all_required_channels}
-        who_requires_id: Dict[str, id] = {x: set() for x in all_required_channels}
+        who_requires: dict[str, Any] = {x: [] for x in all_required_channels}
+        who_requires_id: dict[str, id] = {x: set() for x in all_required_channels}
         for module, requires in self._modules_require:
             # Avoid checking module equality here, because it may fail if modules contain numpy arrays, csp edges, etc,
             # or it may be non-performant; instead look at modules based on id.
@@ -355,7 +347,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
 
                 if is_dict_basket(tstype):
                     # assemble by key type
-                    list_of_channels_per_key: Dict[str, List[Edge]] = {k: [] for k in self._keys_for_channel(field)}
+                    list_of_channels_per_key: dict[str, list[Edge]] = {k: [] for k in self._keys_for_channel(field)}
 
                     for module, key_to_edge_mapping in list_of_edges_and_modules:
                         # each thing in list_of_edges_and_modules has a key->edge mapping
@@ -404,7 +396,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
                             value.bind(csp.null_ts(value_type))
                             self._null_ts.append((k, str(key)))
                         else:
-                            raise NoProviderException("Nothing provides required node: {}-{}".format(k, key))
+                            raise NoProviderException(f"Nothing provides required node: {k}-{key}")
                     else:
                         any_bound = True
                 if not any_bound:
@@ -417,17 +409,17 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
                     v.bind(csp.null_ts(v.tstype.typ))
                     self._null_ts.append((k, None))
                 else:
-                    raise NoProviderException("Nothing provides required node: {}, required by {}".format(k, who_requires[k]))
+                    raise NoProviderException(f"Nothing provides required node: {k}, required by {who_requires[k]}")
 
         for k, e_list in self._delayed_edge_providers.items():
             for _, v in e_list:
                 if isinstance(v, dict):
                     for key, value in v.items():
                         if value.nodedef is _UnsetNodedef:
-                            raise NoProviderException("Nothing provides required node: {}-{}".format(k, key))
+                            raise NoProviderException(f"Nothing provides required node: {k}-{key}")
 
                 elif v.nodedef is _UnsetNodedef:
-                    raise NoProviderException("Nothing provides required node: {}, required by {}".format(k, who_requires[k]))
+                    raise NoProviderException(f"Nothing provides required node: {k}, required by {who_requires[k]}")
 
         # rebuild graph for publishing
         for field in self._modules_connections_graph:
@@ -536,8 +528,8 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
 
         if name:
             # get name from arguments
-            feedback.__name__ = "Feedback<{}>".format(name)
-            feedback.out().nodedef.__name__ = "Feedback<{}>".format(name)
+            feedback.__name__ = f"Feedback<{name}>"
+            feedback.out().nodedef.__name__ = f"Feedback<{name}>"
 
         # Bind and store feedback
         feedback.bind(edge)
@@ -547,8 +539,8 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     def get_channel(
         self,
         field: str,
-        indexer: Union[int, str] = None,
-    ) -> Union[Edge, Dict[Any, Edge], List[Edge]]:
+        indexer: int | str = None,
+    ) -> Edge | dict[Any, Edge] | list[Edge]:
         # register as required
         self._handle_module_requirements(field)
 
@@ -574,7 +566,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
 
                 for key, edge in self._delayed_channels[field].items():
                     # stash the name for later if we replace with a feedback
-                    edge.__name__ = "{}{}".format(field, "[{}]".format(key.name) if hasattr(key, "name") else "")
+                    edge.__name__ = "{}{}".format(field, f"[{key.name}]" if hasattr(key, "name") else "")
 
             elif is_list_basket(tstype):
                 # TODO
@@ -593,7 +585,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
             # if using an indexer, return that edge (raise if not recognized)
             if indexer not in self._keys_for_channel(field):
                 raise Exception(
-                    "Unrecognized key for channel {}: {}. Keys must be Enum type or registered by a node using `dynamic_keys`".format(field, indexer)
+                    f"Unrecognized key for channel {field}: {indexer}. Keys must be Enum type or registered by a node using `dynamic_keys`"
                 )
             return getattr(self, field)[indexer]
 
@@ -614,8 +606,8 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     def set_channel(
         self,
         field: str,
-        edge: Union[Edge, Dict[Any, Edge], List[Edge]],
-        indexer: Union[int, str] = None,
+        edge: Edge | dict[Any, Edge] | list[Edge],
+        indexer: int | str = None,
     ) -> None:
         # add to graph
         self._add_field_to_graph(field, self._module_being_attached, True, indexer)
@@ -641,28 +633,26 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
         # validate arguments
         if _is_dict_basket and isinstance(edge, Edge) and not indexer:
             # if its a dict basket and you set an edge, you need to provide an indexer
-            raise Exception("Field `{}` refers to a dict basket, and you have provided an edge {} but not an indexer".format(field, edge))
+            raise Exception(f"Field `{field}` refers to a dict basket, and you have provided an edge {edge} but not an indexer")
 
         if _is_dict_basket and isinstance(edge, dict) and indexer:
             # if its a dict basket and you set a dict, you should not provide an indexer
-            raise Exception(
-                ("Field `{}` refers to a dict basket, and you have provided an edge basket but also an indexer {}".format(field, indexer))
-            )
+            raise Exception(f"Field `{field}` refers to a dict basket, and you have provided an edge basket but also an indexer {indexer}")
 
         if _is_dict_basket and isinstance(edge, dict) and not all(isinstance(edge_value, Edge) for edge_value in edge.values()):
             # must be flat dict->edge
-            raise Exception("Edge basket for field `{}` contains non edge fields `{}`".format(field, edge))
+            raise Exception(f"Edge basket for field `{field}` contains non edge fields `{edge}`")
 
         if not _is_dict_basket and not isinstance(edge, Edge):
             # must provide an edge type
-            raise TypeError("Edge provided for field `{}` is not an `Edge` instance {}".format(field, edge))
+            raise TypeError(f"Edge provided for field `{field}` is not an `Edge` instance {edge}")
 
         if not _is_dict_basket and indexer:
             # don't provide an indexer for non-dict basket
-            raise Exception("Indexer provided for field `{}` but it is not a basket instance".format(field))
+            raise Exception(f"Indexer provided for field `{field}` but it is not a basket instance")
 
         # validate that its the right type
-        edge_tstypes: List[TsType] = []
+        edge_tstypes: list[TsType] = []
         if isinstance(edge, dict):
             # Dict Basket
             edge_tstypes = [v.tstype for v in edge.values()]
@@ -670,7 +660,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
             edge_tstypes = [edge.tstype]  # type: ignore[union-attr]
 
         if not all(edge_tstype == gateway_tstype for edge_tstype in edge_tstypes) and not is_state_field:
-            raise TypeError("Edge type incorrect for {}: should be {}, found {}".format(field, gateway_tstype, edge_tstypes[0]))
+            raise TypeError(f"Edge type incorrect for {field}: should be {gateway_tstype}, found {edge_tstypes[0]}")
 
         module = self._module_being_attached
         # Add edge to list of edge providers if its not already there
@@ -690,14 +680,14 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
 
     def _ensure_state_field(self, field: str) -> str:
         if not field.startswith("s_"):
-            return "s_{}".format(field)
+            return f"s_{field}"
         return field
 
     def set_state(
         self,
         field: str,
-        keyby: Union[str, Tuple[str, ...]],
-        indexer: Union[str, int] = None,
+        keyby: str | tuple[str, ...],
+        indexer: str | int = None,
     ) -> None:
         # grab state version of field
         state_field = self._ensure_state_field(field)
@@ -721,15 +711,15 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
                 edge_type_name = edge.tstype.typ.__name__
                 state_edge = build_track_state_node(edge, keyby)
 
-            state_edge.nodedef.__name__ = "State[{}]".format(edge_type_name)
+            state_edge.nodedef.__name__ = f"State[{edge_type_name}]"
 
             # register for use inside other csp nodes
             self.set_channel(state_field, state_edge, indexer=indexer)
 
             # setup ad-hoc querying
-            trigger = ConcurrentFutureAdapter(name="RequestState<{}>".format(edge_type_name))
+            trigger = ConcurrentFutureAdapter(name=f"RequestState<{edge_type_name}>")
 
-            named_on_request_node("QueryState<{}>".format(edge_type_name))(state_edge, trigger.out())
+            named_on_request_node(f"QueryState<{edge_type_name}>")(state_edge, trigger.out())
 
             # register the trigger
             self._state_requests[state_field, indexer] = trigger
@@ -738,13 +728,13 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
             # TODO
             raise NotImplementedError()
 
-    def get_state(self, field: str, indexer: Union[str, int] = None) -> Any:
+    def get_state(self, field: str, indexer: str | int = None) -> Any:
         # grab state version of field
         state_field = self._ensure_state_field(field)
 
         return self.get_channel(state_field, indexer=indexer)
 
-    def _set_last(self, field: str, indexer: Union[str, int] = None) -> None:
+    def _set_last(self, field: str, indexer: str | int = None) -> None:
         # Bail if already setup
         if (field, indexer) in self._last_requests:
             return
@@ -773,20 +763,20 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
                 edge_type_name = str(tstype.typ)
 
         # setup ad-hoc querying
-        trigger = ConcurrentFutureAdapter(name="RequestLast<{}>".format(edge_type_name))
+        trigger = ConcurrentFutureAdapter(name=f"RequestLast<{edge_type_name}>")
 
         if is_dict_basket(tstype):
             if indexer:
-                named_on_request_node_dict_basket("QueryLast<Basket<{}>>".format(edge_type_name))({indexer: edge}, trigger.out())
+                named_on_request_node_dict_basket(f"QueryLast<Basket<{edge_type_name}>>")({indexer: edge}, trigger.out())
             else:
-                named_on_request_node_dict_basket("QueryLast<Basket<{}>>".format(edge_type_name))(edge, trigger.out())
+                named_on_request_node_dict_basket(f"QueryLast<Basket<{edge_type_name}>>")(edge, trigger.out())
         else:
-            named_on_request_node("QueryLast<{}>".format(edge_type_name))(edge, trigger.out())
+            named_on_request_node(f"QueryLast<{edge_type_name}>")(edge, trigger.out())
 
         # register the trigger
         self._last_requests[field, indexer] = trigger
 
-    def _set_next(self, field: str, indexer: Union[str, int] = None) -> None:
+    def _set_next(self, field: str, indexer: str | int = None) -> None:
         # Bail if already setup
         if (field, indexer) in self._next_requests:
             return
@@ -815,20 +805,20 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
                 edge_type_name = str(tstype.typ)
 
         # setup ad-hoc querying
-        trigger = ConcurrentFutureAdapter(name="RequestLast<{}>".format(edge_type_name))
+        trigger = ConcurrentFutureAdapter(name=f"RequestLast<{edge_type_name}>")
 
         if is_dict_basket(tstype):
             if indexer:
-                named_wait_for_next_node_dict_basket("QueryNext<Basket<{}>>".format(edge_type_name))({indexer: edge}, trigger.out())
+                named_wait_for_next_node_dict_basket(f"QueryNext<Basket<{edge_type_name}>>")({indexer: edge}, trigger.out())
             else:
-                named_wait_for_next_node_dict_basket("QueryNext<Basket<{}>>".format(edge_type_name))(edge, trigger.out())
+                named_wait_for_next_node_dict_basket(f"QueryNext<Basket<{edge_type_name}>>")(edge, trigger.out())
         else:
-            named_wait_for_next_node("QueryNext<{}>".format(edge_type_name))(edge, trigger.out())
+            named_wait_for_next_node(f"QueryNext<{edge_type_name}>")(edge, trigger.out())
 
         # register the trigger
         self._next_requests[field, indexer] = trigger
 
-    def add_send_channel(self, field: str, indexer: Union[str, int] = None) -> None:
+    def add_send_channel(self, field: str, indexer: str | int = None) -> None:
         # TODO do we want this to happen automatically?
         # Do we want any edge to work with `send`, or only the ones
         # we explicitly opt-in to?
@@ -843,7 +833,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
         # build time we will add the GenericPushAdapter to the
         # graph
         if not self._validate_field_name(field):
-            raise AttributeError("{} has no send channel attribute: {}".format(self.__class__, field))
+            raise AttributeError(f"{self.__class__} has no send channel attribute: {field}")
 
         # short circuit if already registered
         if (field, indexer) in self._send_channels:
@@ -856,7 +846,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
             if indexer:
                 # wire in now
                 tstype = get_dict_basket_value_type(tstype)
-                self._send_channels[field, indexer] = GenericPushAdapter(tstype, name="manual_{}[{}]".format(field, indexer))
+                self._send_channels[field, indexer] = GenericPushAdapter(tstype, name=f"manual_{field}[{indexer}]")
             else:
                 # Put it into the _send_channels for later processing
                 # as we might not know all the keys yet
@@ -865,9 +855,9 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
             if indexer is not None:
                 raise TypeError(f"{field} provided with indexer but is not dict basket")
             tstype = tstype.typ
-            self._send_channels[field, indexer] = GenericPushAdapter(tstype, name="manual_{}".format(field))
+            self._send_channels[field, indexer] = GenericPushAdapter(tstype, name=f"manual_{field}")
 
-    def _add_send_channel_dict_basket(self, field: str, keys: Union[List[str], Enum]) -> None:
+    def _add_send_channel_dict_basket(self, field: str, keys: list[str] | Enum) -> None:
         # NOTE: Do not call this directly, it is used in the factory finalization
 
         # get type of edge
@@ -886,13 +876,13 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
         gpa = GenericPushAdapter(object, name=f"manual_{field}")
 
         @csp.node
-        def _dict_basket_synchronizer(data: ts[object]) -> csp.OutputBasket(Dict[key_type, value_tstype], shape=list(keys)):
+        def _dict_basket_synchronizer(data: ts[object]) -> csp.OutputBasket(dict[key_type, value_tstype], shape=list(keys)):
             if csp.ticked(data):
                 csp.output(data)
 
         self._send_channels[field, None] = (gpa, _dict_basket_synchronizer(gpa.out()))
 
-    def last(self, field: str, indexer: Union[str, int] = None, *, timeout=None) -> None:
+    def last(self, field: str, indexer: str | int = None, *, timeout=None) -> None:
         self._check(field, self._last_requests, "last")
 
         # FIXME decide if we want to keep indexer
@@ -908,7 +898,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
             return result.get(indexer)
         return result
 
-    def next(self, field: str, indexer: Union[str, int] = None, *, timeout=None) -> None:
+    def next(self, field: str, indexer: str | int = None, *, timeout=None) -> None:
         self._check(field, self._last_requests, "last")
 
         # FIXME decide if we want to keep indexer
@@ -924,7 +914,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
             return result.get(indexer)
         return result
 
-    def state(self, field: str, indexer: Union[str, int] = None, *, timeout=None) -> Any:
+    def state(self, field: str, indexer: str | int = None, *, timeout=None) -> Any:
         # grab state version of field
         state_field = self._ensure_state_field(field)
 
@@ -940,17 +930,17 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
         # wait for result
         return future.result(timeout=timeout)
 
-    def query(self, field: str, indexer: Union[str, int] = None, query: "Query" = None) -> Any:
+    def query(self, field: str, indexer: str | int = None, query: "Query" = None) -> Any:
         state = self.state(field=field, indexer=indexer)
 
         if state:
             return state.query(query)
         return []
 
-    def send(self, field: str, value: Any, indexer: Union[str, int] = None) -> None:
+    def send(self, field: str, value: Any, indexer: str | int = None) -> None:
         # TODO elaborate
         if not self._validate_field_name(field):
-            raise AttributeError("{} has no send channel attribute: {}".format(self.__class__, field))
+            raise AttributeError(f"{self.__class__} has no send channel attribute: {field}")
 
         self._check(field, self._send_channels, "send channel", indexer=indexer)
         send_channel = self._send_channels[field, indexer]
@@ -961,16 +951,16 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
             # basket, push into first item of tuple
             send_channel[0].push_tick(value)
 
-    def _check(self, field: str, where: Dict, kind: str, indexer: Union[str, int] = None) -> None:
+    def _check(self, field: str, where: dict, kind: str, indexer: str | int = None) -> None:
         if (field, indexer) not in where:
             # TODO should only be called once the graph is started
-            raise NoProviderException("Nobody provides {}: {}{}".format(kind, field, "-{}".format(indexer) if indexer else ""))
+            raise NoProviderException("Nobody provides {}: {}{}".format(kind, field, f"-{indexer}" if indexer else ""))
 
     def override(self, field: str, value: Any) -> None:
         raise NotImplementedError()
 
     @classmethod
-    def fields(cls) -> List[str]:
+    def fields(cls) -> list[str]:
         return list(cls.model_fields.keys())
 
     def graph(self):

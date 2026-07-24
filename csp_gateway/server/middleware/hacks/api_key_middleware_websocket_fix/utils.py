@@ -1,5 +1,6 @@
+from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import Any, Awaitable, Callable, Optional, Tuple, TypeVar
+from typing import Any, TypeVar
 
 from fastapi.exceptions import HTTPException, WebSocketException
 from starlette.requests import HTTPConnection
@@ -8,8 +9,8 @@ from starlette.websockets import WebSocket
 
 
 def get_authorization_scheme_param(
-    authorization_header_value: Optional[str],
-) -> Tuple[str, str]:
+    authorization_header_value: str | None,
+) -> tuple[str, str]:
     if not authorization_header_value:
         return "", ""
     scheme, _, param = authorization_header_value.partition(" ")

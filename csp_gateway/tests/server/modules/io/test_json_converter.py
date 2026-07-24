@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Any, Dict, List, Optional, Tuple, Type
+from typing import Annotated, Any
 
 import csp
 import orjson
@@ -57,10 +57,10 @@ class MyPrivateAttrStruct(MyStruct):
 
 
 class MySelectiveSetModule(GatewayModule):
-    requires: Optional[ChannelSelection] = []
+    requires: ChannelSelection | None = []
     my_data: ts[MyStruct]
     my_data2: ts[MyStruct]
-    my_list_data: ts[List[MyStruct]]
+    my_list_data: ts[list[MyStruct]]
     by_key: bool = True
 
     def dynamic_keys(self):
@@ -101,7 +101,7 @@ class MySelectiveSetModule(GatewayModule):
 
 
 class MyCustomStruct(GatewayStruct):
-    mystery_val: List[ValidatedMysteryClass]
+    mystery_val: list[ValidatedMysteryClass]
 
 
 class MyFatPipeChannels(MyGatewayChannels):
@@ -117,7 +117,7 @@ class SetMysteryClassModule(GatewayModule):
 
 
 class MyFatPipeChannelsGateway(Gateway):
-    channels_model: Type[Channels] = MyFatPipeChannels
+    channels_model: type[Channels] = MyFatPipeChannels
 
 
 class MyFatPipeSetter(GatewayModule):
@@ -128,9 +128,9 @@ class MyFatPipeSetter(GatewayModule):
 
 
 class MyJsonEncoder(GatewayModule):
-    requires: Optional[ChannelSelection] = []
-    channels_list: List[str]
-    _dict_basket_keys: Dict[str, Any] = PrivateAttr(default=None)
+    requires: ChannelSelection | None = []
+    channels_list: list[str]
+    _dict_basket_keys: dict[str, Any] = PrivateAttr(default=None)
 
     def dynamic_keys(self):
         self._dict_basket_keys = {
@@ -151,10 +151,10 @@ class MyJsonEncoder(GatewayModule):
 
 
 class MyJsonDecoder(GatewayModule):
-    requires: Optional[ChannelSelection] = []
-    channels_list: List[str]
-    _dict_basket_keys: Dict[str, Any] = PrivateAttr(default=None)
-    flag_updates: Dict[str, List[Tuple[str, bool]]] = None
+    requires: ChannelSelection | None = []
+    channels_list: list[str]
+    _dict_basket_keys: dict[str, Any] = PrivateAttr(default=None)
+    flag_updates: dict[str, list[tuple[str, bool]]] = None
 
     def dynamic_keys(self):
         self._dict_basket_keys = {
@@ -175,11 +175,11 @@ class MyJsonDecoder(GatewayModule):
 
 
 class MyJsonEncoderDecoder(GatewayModule):
-    requires: Optional[ChannelSelection] = []
-    decode_channels: List[str]
-    encode_channels: List[str]
-    _dict_basket_keys: Dict[str, Any] = PrivateAttr(default=None)
-    flag_updates: Dict[str, List[Tuple[str, bool]]] = None
+    requires: ChannelSelection | None = []
+    decode_channels: list[str]
+    encode_channels: list[str]
+    _dict_basket_keys: dict[str, Any] = PrivateAttr(default=None)
+    flag_updates: dict[str, list[tuple[str, bool]]] = None
     encode: bool
 
     def dynamic_keys(self):
@@ -204,7 +204,7 @@ class MyJsonEncoderDecoder(GatewayModule):
 
 
 class MyJsonChecker(GatewayModule):
-    requires: Optional[ChannelSelection] = []
+    requires: ChannelSelection | None = []
     timestamp: datetime
 
     @csp.node
@@ -333,7 +333,7 @@ def test_json_snapshot():
     dummy_id = "9"
     snapshot_dict = create_snapshot_dict(timestamp, dummy_id)
     model = MyGatewayChannels._snapshot_model.model_validate(snapshot_dict)
-    target = '{"my_channel":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":3.0,"my_flag":true},"my_list_channel":[{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":4.0,"my_flag":true},{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":5.0,"my_flag":true}],"my_enum_basket":{"ONE":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":6.0,"my_flag":true},"TWO":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":7.0,"my_flag":true}},"my_str_basket":{"key1":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":8.0,"my_flag":true},"key2":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":9.0,"my_flag":true}},"my_enum_basket_list":{"ONE":[{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":10.0,"my_flag":true},{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":11.0,"my_flag":true}]},"csp_engine_timestamp":"2020-01-01T00:00:00+00:00"}'  # noqa
+    target = '{"my_channel":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":3.0,"my_flag":true},"my_list_channel":[{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":4.0,"my_flag":true},{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":5.0,"my_flag":true}],"my_enum_basket":{"ONE":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":6.0,"my_flag":true},"TWO":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":7.0,"my_flag":true}},"my_str_basket":{"key1":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":8.0,"my_flag":true},"key2":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":9.0,"my_flag":true}},"my_enum_basket_list":{"ONE":[{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":10.0,"my_flag":true},{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":11.0,"my_flag":true}]},"csp_engine_timestamp":"2020-01-01T00:00:00+00:00"}'
     target = target.replace("+00:00", "")
     print(model.model_dump_json())
     assert orjson.loads(model.model_dump_json()) == orjson.loads(target)
@@ -343,7 +343,7 @@ def test_json_snapshot():
 def test_parse_snapshot_json():
     timestamp = datetime(2020, 1, 1, 5, tzinfo=timezone(timedelta(hours=5)))
     dummy_id = "9"
-    snapshot_str = '{"my_channel":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":3.0},"my_list_channel":[{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":4.0},{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":5.0}],"my_enum_basket":{"ONE":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":6.0},"TWO":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":7.0}},"my_str_basket":{"key1":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":8.0},"key2":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":9.0}},"my_enum_basket_list":{"ONE":[{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":10.0},{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":11.0}]}}'  # noqa: E501
+    snapshot_str = '{"my_channel":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":3.0},"my_list_channel":[{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":4.0},{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":5.0}],"my_enum_basket":{"ONE":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":6.0},"TWO":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":7.0}},"my_str_basket":{"key1":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":8.0},"key2":{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":9.0}},"my_enum_basket_list":{"ONE":[{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":10.0},{"id":"9","timestamp":"2020-01-01T00:00:00+00:00","foo":11.0}]}}'
     model = MyGatewayChannels._snapshot_model.model_validate_json(snapshot_str)
     exp_model = MyGatewayChannels._snapshot_model(
         my_channel=MyStruct(foo=3.0, timestamp=timestamp, id=dummy_id),
@@ -688,7 +688,7 @@ def test_encode_decode_flag_updates(include_list_channel):
 # NOTE: This test relies on the format of the json encoding to not change
 @pytest.mark.parametrize("after_graph_ends", [True, False])
 def test_decode(after_graph_ends):
-    raw_encoding = """{"csp_engine_timestamp":"2020-01-01T00:00:00.000000+00:00","my_channel":{"id":"2319507561549660168","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":1.0},"my_list_channel":[{"id":"2319507561549660168","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":1.0},{"id":"2319507561549660169","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":2.0}],"my_enum_basket":{"ONE":{"id":"2319507561549660168","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":1.0},"TWO":{"id":"2319507561549660169","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":2.0}},"my_str_basket":{"my_key":{"id":"2319507561549660168","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":1.0},"my_key2":{"id":"2319507561549660169","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":2.0}},"my_enum_basket_list":{"TWO":[{"id":"2319507561549660168","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":1.0},{"id":"2319507561549660169","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":2.0}],"ONE":[{"id":"2319507561549660168","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":1.0},{"id":"2319507561549660169","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":2.0}]}}"""  # noqa: E501
+    raw_encoding = """{"csp_engine_timestamp":"2020-01-01T00:00:00.000000+00:00","my_channel":{"id":"2319507561549660168","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":1.0},"my_list_channel":[{"id":"2319507561549660168","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":1.0},{"id":"2319507561549660169","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":2.0}],"my_enum_basket":{"ONE":{"id":"2319507561549660168","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":1.0},"TWO":{"id":"2319507561549660169","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":2.0}},"my_str_basket":{"my_key":{"id":"2319507561549660168","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":1.0},"my_key2":{"id":"2319507561549660169","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":2.0}},"my_enum_basket_list":{"TWO":[{"id":"2319507561549660168","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":1.0},{"id":"2319507561549660169","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":2.0}],"ONE":[{"id":"2319507561549660168","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":1.0},{"id":"2319507561549660169","timestamp":"2023-03-28T14:11:46.074000+00:00","foo":2.0}]}}"""
 
     if after_graph_ends:
         delay = timedelta(seconds=100)

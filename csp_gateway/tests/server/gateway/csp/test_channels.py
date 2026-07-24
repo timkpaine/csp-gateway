@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Dict, List, Optional, get_type_hints
+from typing import Optional, get_type_hints
 
 import csp
 import numpy as np
@@ -34,7 +34,7 @@ class SimpleOrderChild(SimpleOrder):
 
 class MyCompositeStruct(_Base):
     order: SimpleOrder
-    order_list: List[SimpleOrder]
+    order_list: list[SimpleOrder]
 
 
 class MyEnum(Enum):
@@ -56,15 +56,15 @@ class MyStruct(_Base):
 
 class MyGatewayChannels(GatewayChannels):
     my_static: float = 0.0
-    my_static_dict: Dict[str, float] = {}
-    my_static_list: List[str] = []
+    my_static_dict: dict[str, float] = {}
+    my_static_list: list[str] = []
     my_channel: ts[MyStruct] = None
     s_my_channel: ts[State[MyStruct]] = None
-    my_list_channel: ts[List[MyStruct]] = None
+    my_list_channel: ts[list[MyStruct]] = None
     s_my_list_channel: ts[State[MyStruct]] = None
-    my_enum_basket: Dict[MyEnum, ts[MyStruct]] = None
-    my_str_basket: Dict[str, ts[MyStruct]] = None
-    my_enum_basket_list: Dict[MyEnum, ts[List[MyStruct]]] = None
+    my_enum_basket: dict[MyEnum, ts[MyStruct]] = None
+    my_str_basket: dict[str, ts[MyStruct]] = None
+    my_enum_basket_list: dict[MyEnum, ts[list[MyStruct]]] = None
     my_array_channel: ts[Numpy1DArray[float]] = None
 
 
@@ -111,10 +111,10 @@ def test_snapshot_model_type_hints():
     type_hints = get_type_hints(snapshot_model)
     assert len(type_hints) == 6
     assert type_hints["my_channel"] == Optional[MyStruct]
-    assert type_hints["my_list_channel"] == Optional[List[MyStruct]]
-    assert type_hints["my_enum_basket"] == Optional[Dict[MyEnum, MyStruct]]
-    assert type_hints["my_str_basket"] == Optional[Dict[str, MyStruct]]
-    assert type_hints["my_enum_basket_list"] == Optional[Dict[MyEnum, List[MyStruct]]]
+    assert type_hints["my_list_channel"] == Optional[list[MyStruct]]
+    assert type_hints["my_enum_basket"] == Optional[dict[MyEnum, MyStruct]]
+    assert type_hints["my_str_basket"] == Optional[dict[str, MyStruct]]
+    assert type_hints["my_enum_basket_list"] == Optional[dict[MyEnum, list[MyStruct]]]
     assert type_hints[_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD] == Optional[datetime]
 
 

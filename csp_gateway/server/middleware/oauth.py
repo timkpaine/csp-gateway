@@ -3,7 +3,7 @@
 import urllib.parse
 from datetime import timedelta
 from socket import gethostname
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import uuid4
 
 import httpx
@@ -43,20 +43,20 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
 
     issuer: str = Field(..., description="OAuth2/OIDC issuer URL")
     client_id: str = Field(..., description="OAuth2 client identifier")
-    client_secret: Optional[str] = Field(default=None, description="OAuth2 client secret")
+    client_secret: str | None = Field(default=None, description="OAuth2 client secret")
 
-    scopes: List[str] = Field(
+    scopes: list[str] = Field(
         default_factory=lambda: ["openid", "profile", "email"],
         description="OAuth2 scopes to request",
     )
 
     # Endpoint URLs (auto-discovered from issuer/.well-known/openid-configuration if not set)
-    token_url: Optional[str] = Field(default=None, description="Token endpoint URL")
-    authorize_url: Optional[str] = Field(default=None, description="Authorization endpoint URL")
-    userinfo_url: Optional[str] = Field(default=None, description="Userinfo endpoint URL")
-    introspection_url: Optional[str] = Field(default=None, description="Token introspection endpoint URL")
+    token_url: str | None = Field(default=None, description="Token endpoint URL")
+    authorize_url: str | None = Field(default=None, description="Authorization endpoint URL")
+    userinfo_url: str | None = Field(default=None, description="Userinfo endpoint URL")
+    introspection_url: str | None = Field(default=None, description="Token introspection endpoint URL")
 
-    audience: Optional[str] = Field(default=None, description="Expected audience claim for JWT validation")
+    audience: str | None = Field(default=None, description="Expected audience claim for JWT validation")
     verify_ssl: bool = Field(default=True, description="Verify SSL certificates")
 
     domain: str = Field(default_factory=gethostname)
@@ -66,15 +66,15 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
     unauthorized_status_message: str = "unauthorized"
 
     # Private attributes for runtime state
-    _identity_store: Dict[str, Dict[str, Any]] = PrivateAttr(default_factory=dict)
-    _oidc_config: Optional[Dict[str, Any]] = PrivateAttr(default=None)
-    _app_settings: Optional[GatewaySettings] = PrivateAttr(default=None)
+    _identity_store: dict[str, dict[str, Any]] = PrivateAttr(default_factory=dict)
+    _oidc_config: dict[str, Any] | None = PrivateAttr(default=None)
+    _app_settings: GatewaySettings | None = PrivateAttr(default=None)
 
     def info(self, settings: GatewaySettings) -> str:
         url = f"http://{gethostname()}:{settings.PORT}"
         return f"\tOAuth2: {url}/login (issuer: {self.issuer})"
 
-    def _get_oidc_config(self) -> Dict[str, Any]:
+    def _get_oidc_config(self) -> dict[str, Any]:
         """Fetch OIDC discovery document from issuer."""
         if self._oidc_config is not None:
             return self._oidc_config
@@ -106,7 +106,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
             return self.userinfo_url
         return self._get_oidc_config().get("userinfo_endpoint", f"{self.issuer}/userinfo")
 
-    async def _exchange_code_for_token(self, code: str, redirect_uri: str) -> Dict[str, Any]:
+    async def _exchange_code_for_token(self, code: str, redirect_uri: str) -> dict[str, Any]:
         """Exchange authorization code for tokens."""
         token_url = self._get_token_url()
         data = {
@@ -123,7 +123,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
             response.raise_for_status()
             return response.json()
 
-    async def _get_userinfo(self, access_token: str) -> Dict[str, Any]:
+    async def _get_userinfo(self, access_token: str) -> dict[str, Any]:
         """Fetch user info from userinfo endpoint."""
         userinfo_url = self._get_userinfo_url()
         async with httpx.AsyncClient(verify=self.verify_ssl) as client:
@@ -134,7 +134,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
             response.raise_for_status()
             return response.json()
 
-    async def _introspect_token(self, token: str) -> Dict[str, Any]:
+    async def _introspect_token(self, token: str) -> dict[str, Any]:
         """Introspect token to validate it."""
         if not self.introspection_url:
             # Try to get from OIDC config
@@ -159,10 +159,10 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
     async def get_identity_from_credentials(
         self,
         *,
-        cookies: Optional[Dict[str, str]] = None,
-        headers: Optional[Dict[str, str]] = None,
-        query_params: Optional[Dict[str, str]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        cookies: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        query_params: dict[str, str] | None = None,
+    ) -> dict[str, Any] | None:
         """Extract and validate OAuth2 credentials.
 
         Checks session cookie first, then Bearer token in Authorization header.
@@ -213,7 +213,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
 
         async def validate_credentials(
             request: Request,
-            token: Optional[str] = Security(oauth2_scheme),
+            token: str | None = Security(oauth2_scheme),
         ) -> str:
             """Validate OAuth2 token and return session UUID."""
             # Check for session cookie first

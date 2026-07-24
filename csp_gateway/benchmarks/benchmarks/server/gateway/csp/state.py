@@ -1,4 +1,3 @@
-import typing
 from datetime import datetime
 
 from csp import Enum, Struct
@@ -23,16 +22,16 @@ class CspSubStruct(Struct):
     subb: str = "b"
     subc: datetime = datetime.now()
     subd: str
-    sube: typing.Dict[str, str]
+    sube: dict[str, str]
     subf: MyEnum = MyEnum.A
 
 
-class NonCspStruct(object):
+class NonCspStruct:
     a: int = 0
     b: str
     c: datetime = datetime.now()
     d: str = ""
-    e: typing.Dict[str, str] = {"A": "hhello", "B": "bbye"}
+    e: dict[str, str] = {"A": "hhello", "B": "bbye"}
     f: MyEnum = MyEnum.A
     g: CspSubStruct = CspSubStruct()
 
@@ -46,9 +45,9 @@ class CspStruct(Struct):
     b: str
     c: datetime = datetime.now()
     d: str = ""
-    e: typing.Dict[str, str] = {"A": "hhello", "B": "bbye"}
+    e: dict[str, str] = {"A": "hhello", "B": "bbye"}
     f: MyEnum = MyEnum.A
-    h: typing.List[int] = [1, 2, 4]
+    h: list[int] = [1, 2, 4]
     i: list = [1, 2, 4]
     j: dict = {"a": "b"}
     g: CspSubStruct = CspSubStruct()
@@ -63,7 +62,6 @@ class StateInitialize:
             disable_duckdb_state()
         elif state_typ == StateType.DUCKDB:
             enable_duckdb_state()
-        return None
 
     def time_create(self, state_typ):
         _ = State[CspStruct](keyby="a")

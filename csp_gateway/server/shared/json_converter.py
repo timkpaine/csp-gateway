@@ -1,7 +1,7 @@
 import logging
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple, TypeVar, Union
+from typing import Any, Dict, TypeVar, Union
 
 import csp
 import numpy as np
@@ -21,8 +21,8 @@ from csp_gateway.utils import (
 )
 
 __all__ = (
-    "JSONConverter",
     "EncodedEngineCycle",
+    "JSONConverter",
     "read_engine_encoding_json_with_duckdb",
 )
 
@@ -38,7 +38,7 @@ class ChannelValueModel(BaseModel):
 
     channel: str
     value: Any
-    dict_basket_key: Optional[_KEY_TYPE] = None
+    dict_basket_key: _KEY_TYPE | None = None
     timestamp: datetime
 
 
@@ -78,7 +78,7 @@ def _convert_orjson_compatible(obj: Any):
     return obj
 
 
-def _create_snapshot_dict(all_data: List[ChannelValueModel]) -> Dict[str, Any]:
+def _create_snapshot_dict(all_data: list[ChannelValueModel]) -> dict[str, Any]:
     res = defaultdict(dict)
     res[_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD] = all_data[0].timestamp
     for data in all_data:
@@ -166,7 +166,7 @@ def _deserialize_snapshot_str(encoded_snapshot: ts[str], typ: "T", log_lagging_e
 
 
 def _deserialize_snapshot(
-    encoded_snapshot: Union[ts[str], ts[Dict[str, Any]]],
+    encoded_snapshot: ts[str] | ts[dict[str, Any]],
     typ: Any,
     log_lagging_engine_cycles: bool = False,
 ):
@@ -183,10 +183,10 @@ class JSONConverter(BaseModel):
     are included.
     """
 
-    decode_channels: List[str]
-    encode_channels: List[str]
+    decode_channels: list[str]
+    encode_channels: list[str]
     channels: ChannelsType
-    flag_updates: Dict[str, List[Tuple[str, bool]]] = Field(
+    flag_updates: dict[str, list[tuple[str, bool]]] = Field(
         default_factory=dict,
         description="""
         A mapping of channels to a list of tuples each containing:
@@ -194,7 +194,7 @@ class JSONConverter(BaseModel):
         Only works for non-dict basket channels
         """,
     )
-    decode_exclude_fields: Optional[Set[str]] = Field(
+    decode_exclude_fields: set[str] | None = Field(
         None,
         description="""
         Set of fields to exclude when we are decoding from a source.
@@ -202,7 +202,7 @@ class JSONConverter(BaseModel):
         """,
     )
     log_lagging_engine_cycles: bool = Field(False, description="Whether we log when engine cycles are lagging from the current engine time.")
-    _decode_channel_dict_basket_keys: Dict[str, List[_KEY_TYPE]] = PrivateAttr(default_factory=dict)
+    _decode_channel_dict_basket_keys: dict[str, list[_KEY_TYPE]] = PrivateAttr(default_factory=dict)
     _snapshot_type: type = PrivateAttr(default=None)
 
     def __init__(self, *a, **kw):
@@ -221,7 +221,7 @@ class JSONConverter(BaseModel):
         snapshot: ts[object],
         field: _KEY_TYPE,
         value_type: type,
-        keys: Optional[List[_KEY_TYPE]] = None,
+        keys: list[_KEY_TYPE] | None = None,
     ):
         if keys:
             if updates := self.flag_updates.get(field):
@@ -311,7 +311,7 @@ class JSONConverter(BaseModel):
 
         return self._create_encoding(csp.collect(all_data))
 
-    def decode(self, fat_pipe: Union[ts[str], ts[Dict[str, Any]]]) -> None:
+    def decode(self, fat_pipe: ts[str] | ts[dict[str, Any]]) -> None:
         """
         Takes in the fat pipe with all of the encoded channel ticks,
         then demultiplexes them, deserializes the values, and
@@ -337,7 +337,7 @@ class JSONConverter(BaseModel):
             self.channels.set_channel(field, output)
 
     @csp.node
-    def _create_encoding(self, all_data: ts[List[tuple]]) -> ts[EncodedEngineCycle]:
+    def _create_encoding(self, all_data: ts[list[tuple]]) -> ts[EncodedEngineCycle]:
         if csp.ticked(all_data):
             values = defaultdict(dict)
             for field, val in all_data:

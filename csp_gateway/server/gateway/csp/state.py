@@ -8,7 +8,7 @@ from collections import deque
 from enum import Enum as PyEnum
 from functools import lru_cache
 from pprint import pformat
-from typing import Any, Deque, Dict, List, Tuple, Union
+from typing import Any
 
 import csp
 import duckdb
@@ -47,17 +47,17 @@ _DUCKDB_SHARED_CONNECTION_LOCK = threading.Lock()
 log = logging.getLogger(__name__)
 
 __all__ = [
-    "StateType",
-    "State",
     "DefaultState",
     "DuckDBState",
+    "State",
+    "StateType",
     "build_track_state_node",
-    "modify_buffer_threshold",
-    "restore_buffer_threshold",
-    "modify_duckdb_threads",
-    "restore_duckdb_threads",
-    "enable_duckdb_state",
     "disable_duckdb_state",
+    "enable_duckdb_state",
+    "modify_buffer_threshold",
+    "modify_duckdb_threads",
+    "restore_buffer_threshold",
+    "restore_duckdb_threads",
 ]
 
 
@@ -150,7 +150,7 @@ class BaseState(abc.ABC):
     """Abstract class for State"""
 
     @abc.abstractmethod
-    def query(self, query: "Query" = None) -> List[Any]: ...
+    def query(self, query: "Query" = None) -> list[Any]: ...
 
     @abc.abstractmethod
     def __iter__(self) -> Any: ...
@@ -163,19 +163,19 @@ class BaseState(abc.ABC):
 
 
 class DefaultState(BaseState):
-    def __init__(self, keyby: Union[Tuple[str, ...], str]) -> None:
+    def __init__(self, keyby: tuple[str, ...] | str) -> None:
         super().__init__()
         # TODO psp?
-        self._records: Dict = {}
+        self._records: dict = {}
         self._keyby = keyby if isinstance(keyby, tuple) else (keyby,)
 
     @override
-    def query(self, query: "Query" = None) -> List[Any]:
+    def query(self, query: "Query" = None) -> list[Any]:
         # TODO
         max_depth = len(self._keyby)
         flattened = []
 
-        to_visit: Deque[Tuple[list, dict, int]] = deque()
+        to_visit: deque[tuple[list, dict, int]] = deque()
         to_visit.append(([], self._records, 0))
 
         while to_visit:
@@ -225,7 +225,7 @@ class DefaultState(BaseState):
         return pformat(self.query())
 
 
-class DuckDBState(object):
+class DuckDBState:
     """State implementation using DuckDB as the object store and query engine"""
 
     # NOTE: The duckdb system here is pretty fragile, we should think of building a generict DuckDB interface
@@ -242,7 +242,7 @@ class DuckDBState(object):
     # table for each instance of the DuckDBState class for any particular type
     TABLE_ID = Counter(1)
 
-    def __init__(self, typ: Struct, keyby: Union[Tuple[str, ...], str], schema: Dict[str, str] = {}) -> None:
+    def __init__(self, typ: Struct, keyby: tuple[str, ...] | str, schema: dict[str, str] = {}) -> None:
         super().__init__()
         # Type of record
         self._typ = typ
@@ -427,7 +427,7 @@ class DuckDBState(object):
             self._mem_file.truncate(0)
 
     @override
-    def query(self, query: "Query" = None) -> List[Any]:
+    def query(self, query: "Query" = None) -> list[Any]:
         """Run the query on the duckdb table and return results"""
         # Build the query to run
         query_str = self.construct_query(query)
@@ -490,7 +490,7 @@ class DuckDBState(object):
         return pformat(self.query())
 
 
-def _remove_optional(cls: Any) -> Tuple[Any, bool]:
+def _remove_optional(cls: Any) -> tuple[Any, bool]:
     if typing.get_origin(cls) is typing.Union:
         args = typing.get_args(cls)
         non_none_args = [arg for arg in args if arg is not type(None)]
@@ -499,7 +499,7 @@ def _remove_optional(cls: Any) -> Tuple[Any, bool]:
     return (cls, False)
 
 
-def get_duckdb_schema_obj(parent: Any, key: Any, cls: Any) -> Tuple[Any, bool]:
+def get_duckdb_schema_obj(parent: Any, key: Any, cls: Any) -> tuple[Any, bool]:
     """Create a schema for the passed type object"""
 
     annotation = parent.__full_metadata_typed__[key]
@@ -568,7 +568,7 @@ def get_duckdb_schema_obj(parent: Any, key: Any, cls: Any) -> Tuple[Any, bool]:
         return (cls, False)
 
 
-def get_duckdb_schema_struct(cls: Struct) -> Tuple[Dict, bool]:
+def get_duckdb_schema_struct(cls: Struct) -> tuple[dict, bool]:
     """Create a partial schema for the struct consisting of parts that can be json_serialized and
     stored in duckdb"""
 
@@ -589,7 +589,7 @@ def get_duckdb_schema_struct(cls: Struct) -> Tuple[Dict, bool]:
 
 # NOTE: NEVER access State object directly, always access through the __class_getitem__ API
 class State(BaseState):
-    def __init__(self, keyby: Union[Tuple[str, ...], str] = ("id",)) -> None:
+    def __init__(self, keyby: tuple[str, ...] | str = ("id",)) -> None:
         """Switch case between different state specializations based on the type of the records"""
 
         global _USE_DUCKDB_STATE
@@ -612,7 +612,7 @@ class State(BaseState):
         return self._state_type
 
     @override
-    def query(self, query: "Query" = None) -> List[Any]:
+    def query(self, query: "Query" = None) -> list[Any]:
         # NOTE: These try catch blocks for the experimental duckdb state specialization
         #       Remove them when duckdb state has become stable
         try:
@@ -639,14 +639,14 @@ class State(BaseState):
         return self._state_impl.__repr__()
 
     @classmethod
-    @lru_cache()
+    @lru_cache
     def __class_getitem__(cls: type, typ: type) -> Any:
-        new_cls = type("State[{}]".format(typ.__name__), (State,), {})
+        new_cls = type(f"State[{typ.__name__}]", (State,), {})
         new_cls._typ = typ
         return new_cls
 
 
-def build_track_state_node(edge: Any, keyby: Union[str, Tuple[str, ...]]) -> Any:
+def build_track_state_node(edge: Any, keyby: str | tuple[str, ...]) -> Any:
     @csp.node
     def _track_state_node(  # type: ignore[no-untyped-def]
         ts: ts[edge.tstype.typ], keyby: object

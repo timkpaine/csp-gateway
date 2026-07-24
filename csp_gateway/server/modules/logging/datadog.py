@@ -2,7 +2,6 @@ import logging
 from datetime import datetime, timezone
 from queue import Queue
 from threading import Thread
-from typing import Dict, List, Optional, Union
 
 import csp
 from csp import ts
@@ -43,8 +42,8 @@ __all__ = ("PublishDatadog",)
 
 def _log_result(
     data_type: str,
-    payload: Dict[str, Union[str, List[str]]],
-    res: Dict[str, Union[str, List[str]]],
+    payload: dict[str, str | list[str]],
+    res: dict[str, str | list[str]],
 ) -> None:
     """Logger for Datadog submission replies.
 
@@ -92,15 +91,15 @@ class PublishDatadog(GatewayModule):
     """
 
     # None of the channels are required
-    requires: Optional[ChannelSelection] = Field(default=[], description="List of required channels.")
-    events_channel: Optional[str] = Field(default=None, description="Channel for events.")
-    metrics_channel: Optional[str] = Field(default=None, description="Channel for metrics.")
+    requires: ChannelSelection | None = Field(default=[], description="List of required channels.")
+    events_channel: str | None = Field(default=None, description="Channel for events.")
+    metrics_channel: str | None = Field(default=None, description="Channel for metrics.")
     dd_latency_log_threshold_seconds: int = Field(
         default=30,
         description="Maximum time sending events/metrics to datadog can take before a warning is logged.",
     )
 
-    dd_tags: Optional[Dict[str, str]] = Field(default=None, description="Tags to be included with Datadog submissions.")
+    dd_tags: dict[str, str] | None = Field(default=None, description="Tags to be included with Datadog submissions.")
 
     @model_validator(mode="before")
     def check_import(cls, values):
@@ -137,11 +136,11 @@ class PublishDatadog(GatewayModule):
     @staticmethod
     @csp.node
     def _publish_datadog(
-        events: ts[List[MonitoringEvent]],
-        metrics: ts[List[MonitoringMetric]],
+        events: ts[list[MonitoringEvent]],
+        metrics: ts[list[MonitoringMetric]],
         dd_queue: Queue,
         dd_thread: Thread,
-        dd_tags: Dict[str, str],
+        dd_tags: dict[str, str],
     ):
         with csp.start():
             # send starting event to Datadog

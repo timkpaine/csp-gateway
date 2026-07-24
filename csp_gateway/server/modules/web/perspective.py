@@ -3,12 +3,7 @@ from datetime import date, datetime, timedelta
 from io import BytesIO
 from logging import getLogger
 from typing import (
-    Dict,
-    List,
     Literal,
-    Optional,
-    Set,
-    Tuple,
     TypeVar,
     Union,
 )
@@ -31,10 +26,10 @@ from csp_gateway.server.web import GatewayWebApp, get_default_responses
 from csp_gateway.utils import PickleableQueue, get_args, get_origin, get_thread
 
 __all__ = (
-    "psp_schema_to_arrow_schema",
-    "create_pyarrow_table",
-    "TableConfig",
     "MountPerspectiveTables",
+    "TableConfig",
+    "create_pyarrow_table",
+    "psp_schema_to_arrow_schema",
 )
 
 T = TypeVar("T")
@@ -128,16 +123,16 @@ def pull_data_thread(
             log.exception("Error processing perspective")
 
 
-ExcludedColumns = TypeAliasType("ExcludedColumns", "Union[Set[str], Dict[str, Union[bool, ExcludedColumns]]]")
+ExcludedColumns = TypeAliasType("ExcludedColumns", "set[str] | dict[str, bool | ExcludedColumns]")
 
-ViewConfig = Dict[
+ViewConfig = dict[
     Literal["table", "group_by", "split_by", "aggregates", "columns", "sort", "filter", "expressions"],
     Union[
         str,  # table
-        List[str],  # group_by, split_by, columns, expressions
-        Dict[str, str],  # aggregates
-        List[Dict[str, Union[str, Literal["asc", "desc"]]]],  # sort
-        List[Dict[str, Union[str, List[Union[str, int, float]]]]],  # filter
+        list[str],  # group_by, split_by, columns, expressions
+        dict[str, str],  # aggregates
+        list[dict[str, str | Literal["asc", "desc"]]],  # sort
+        list[dict[str, str | list[str | int | float]]],  # filter
     ],
 ]
 
@@ -145,11 +140,11 @@ ViewConfig = Dict[
 class TableConfig(BaseModel):
     """Configuration for a perspective table. When channel is omitted, defaults to using the table name as the channel."""
 
-    channel: Optional[str] = Field(None, description="The source channel name. Defaults to the table name if omitted.")
-    limit: Optional[int] = Field(None, description="Row limit for this table.")
-    index: Optional[Union[str, List[str]]] = Field(None, description="Index field(s) for this table.")
+    channel: str | None = Field(None, description="The source channel name. Defaults to the table name if omitted.")
+    limit: int | None = Field(None, description="Row limit for this table.")
+    index: str | list[str] | None = Field(None, description="Index field(s) for this table.")
     architecture: Literal["server", "client-server"] = Field("client-server", description="Perspective data architecture for this table.")
-    excluded_columns: Optional[ExcludedColumns] = Field(None, description="Columns to exclude from the schema.")
+    excluded_columns: ExcludedColumns | None = Field(None, description="Columns to exclude from the schema.")
 
 
 # Backwards compat alias
@@ -177,9 +172,9 @@ def _is_channel_selection_input(v) -> bool:
 
 
 class MountPerspectiveTables(GatewayModule):
-    requires: Optional[ChannelSelection] = []
+    requires: ChannelSelection | None = []
 
-    tables: Dict[str, TableConfig] = Field(
+    tables: dict[str, TableConfig] = Field(
         default={},
         description=(
             "Dictionary mapping table name to a TableConfig. Each entry configures a perspective table. "
@@ -196,26 +191,26 @@ class MountPerspectiveTables(GatewayModule):
         "Channels not explicitly listed in 'tables' will use defaults. "
         "This is the successor to the old 'tables' field when it was a ChannelSelection.",
     )
-    _unused_tables: Optional[List[str]] = PrivateAttr(default_factory=list)
+    _unused_tables: list[str] | None = PrivateAttr(default_factory=list)
 
-    server_views: Optional[Dict[str, ViewConfig]] = Field(
+    server_views: dict[str, ViewConfig] | None = Field(
         default_factory=dict, description="Optional dict mapping new table name to a dict with table and view information"
     )
 
     # Legacy per-table config fields (still functional; tables entries take precedence)
-    limits: Dict[str, int] = Field(
+    limits: dict[str, int] = Field(
         description="Dict mapping table name to [perspective limit](https://perspective-dev.github.io/guide/explanation/table/options.html)",
         default={},
     )
-    default_limit: Optional[int] = Field(None, description="Default limit for all tables, i.e. 1000")
-    indexes: Dict[str, Optional[Union[str, List[str]]]] = Field(
+    default_limit: int | None = Field(None, description="Default limit for all tables, i.e. 1000")
+    indexes: dict[str, str | list[str] | None] = Field(
         description="Dict mapping table name to [perspective index](https://perspective-dev.github.io/guide/explanation/table/options.html). If a multi-index is provided, will create a new computed index field.",
         default={},
     )
-    default_index: Optional[Union[str, List[str]]] = Field(
+    default_index: str | list[str] | None = Field(
         None, description="Default index field for all tables, i.e. 'id'. If a multi-index is provided, will create a new computed index field."
     )
-    architectures: Dict[str, Literal["server", "client-server"]] = Field(
+    architectures: dict[str, Literal["server", "client-server"]] = Field(
         description="Dict mapping table name to [perspective data architecture](https://perspective-dev.github.io/guide/explanation/architecture.html), default is client-server",
         default={},
     )
@@ -223,7 +218,7 @@ class MountPerspectiveTables(GatewayModule):
         "client-server",
         description="Default architecture for all tables, i.e. 'client-server'",
     )
-    excluded_table_columns: Dict[str, ExcludedColumns] = Field(
+    excluded_table_columns: dict[str, ExcludedColumns] = Field(
         default={},
         description=(
             "Dictionary from table name to columns (which are attributes on a GatewayStruct) to exclude from perspective. "
@@ -233,8 +228,8 @@ class MountPerspectiveTables(GatewayModule):
         ),
     )
 
-    layouts: Dict[str, str] = Field(default={})
-    default_layout: Optional[str] = Field(
+    layouts: dict[str, str] = Field(default={})
+    default_layout: str | None = Field(
         None,
         description="Default layout to use for all tables if no specific layout is provided.",
     )
@@ -277,18 +272,18 @@ class MountPerspectiveTables(GatewayModule):
     _server: Server = PrivateAttr(default=None)
     _client: Client = PrivateAttr(default=None)
 
-    _layouts: Dict[str, str] = PrivateAttr(default={})
-    _schema_insts: Dict[str, Dict] = PrivateAttr(default_factory=dict)
-    _arrow_schema_insts: Dict[str, Dict] = PrivateAttr(default_factory=dict)
-    _arrow_schema_date_conversions: Dict[str, Set[str]] = PrivateAttr(default_factory=dict)
-    _table_insts: Dict[str, Table] = PrivateAttr(default={})
+    _layouts: dict[str, str] = PrivateAttr(default={})
+    _schema_insts: dict[str, dict] = PrivateAttr(default_factory=dict)
+    _arrow_schema_insts: dict[str, dict] = PrivateAttr(default_factory=dict)
+    _arrow_schema_date_conversions: dict[str, set[str]] = PrivateAttr(default_factory=dict)
+    _table_insts: dict[str, Table] = PrivateAttr(default={})
     # Mapping from table name to (computed index field name, list of fields used to compute index)
-    _computed_indexes: Dict[str, Tuple[str, List[str]]] = PrivateAttr(default={})
+    _computed_indexes: dict[str, tuple[str, list[str]]] = PrivateAttr(default={})
 
     _queue: PickleableQueue = PrivateAttr(default_factory=PickleableQueue)
 
     @field_validator("server_views", mode="after")
-    def _validate_server_views(cls, v: Dict[str, ViewConfig]) -> Dict[str, ViewConfig]:
+    def _validate_server_views(cls, v: dict[str, ViewConfig]) -> dict[str, ViewConfig]:
         for new_table_name, view_config in v.items():
             # Must specify table
             if "table" not in view_config:
@@ -514,7 +509,7 @@ class MountPerspectiveTables(GatewayModule):
                 s_buffer = {}
             csp.schedule_alarm(alarm, self.update_interval, True)
 
-    def _get_tables(self) -> Dict[str, Dict[str, str]]:
+    def _get_tables(self) -> dict[str, dict[str, str]]:
         all_tables = {table_name: None for table_name in self._client.get_hosted_table_names() if table_name not in self._unused_tables}
         for table_name in all_tables:
             table = self._client.open_table(table_name)
@@ -522,7 +517,7 @@ class MountPerspectiveTables(GatewayModule):
             all_tables[table_name] = {col: schema[col] for col in table.columns()}
         return all_tables
 
-    def _get_table_sizes(self) -> Dict[str, int]:
+    def _get_table_sizes(self) -> dict[str, int]:
         all_tables = {table_name: None for table_name in self._client.get_hosted_table_names()}
         for table_name in all_tables:
             table = self._client.open_table(table_name)
@@ -560,7 +555,7 @@ class MountPerspectiveTables(GatewayModule):
         @api_router.get(
             "{}/{}".format(self._route, "tables"),
             responses=get_default_responses(),
-            response_model=Dict[str, Dict[str, str]],
+            response_model=dict[str, dict[str, str]],
             tags=["Utility"],
         )
         async def get_perspective_table_names():
@@ -577,7 +572,7 @@ class MountPerspectiveTables(GatewayModule):
         @api_router.get(
             "{}/{}".format(self._route, "layouts"),
             responses=get_default_responses(),
-            response_model=Dict[str, str],
+            response_model=dict[str, str],
             tags=["Utility"],
         )
         async def get_perspective_layouts():
@@ -591,14 +586,14 @@ class MountPerspectiveTables(GatewayModule):
         @api_router.get(
             "{}/{}".format(self._route, "meta"),
             responses=get_default_responses(),
-            response_model=Dict[
+            response_model=dict[
                 str,
                 Union[
                     None,
                     int,  # limit
                     str,  # index, architecture
-                    List[str],  # index, unused tables
-                    Dict[str, Union[str, int, List[str], Dict[str, str]]],
+                    list[str],  # index, unused tables
+                    dict[str, str | int | list[str] | dict[str, str]],
                 ],
             ],
             tags=["Utility"],

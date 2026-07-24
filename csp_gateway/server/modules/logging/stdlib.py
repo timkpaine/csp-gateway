@@ -13,15 +13,12 @@ from __future__ import annotations
 import logging
 import logging.config
 import os
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+from typing import Any
 
 import csp
 from pydantic import Field, PrivateAttr, field_validator
 
 from csp_gateway.server import ChannelSelection, ChannelsType, GatewayModule
-
-if TYPE_CHECKING:
-    pass
 
 __all__ = (
     "Logging",
@@ -48,14 +45,14 @@ def is_stdlib_logging_configured() -> bool:
 
 
 def configure_stdlib_logging(
-    console_level: Union[str, int] = logging.INFO,
-    file_level: Union[str, int] = logging.DEBUG,
-    root_level: Union[str, int] = logging.DEBUG,
+    console_level: str | int = logging.INFO,
+    file_level: str | int = logging.DEBUG,
+    root_level: str | int = logging.DEBUG,
     console_formatter: str = "colorlog",
     file_formatter: str = "whenAndWhere",
-    log_file: Optional[str] = None,
+    log_file: str | None = None,
     use_colors: bool = True,
-    logger_levels: Optional[Dict[str, Union[str, int]]] = None,
+    logger_levels: dict[str, str | int] | None = None,
 ) -> bool:
     """Configure stdlib logging early in application startup.
 
@@ -117,17 +114,17 @@ def _build_logging_config(
     root_level: int = logging.DEBUG,
     console_formatter: str = "colorlog",
     file_formatter: str = "whenAndWhere",
-    log_file: Optional[str] = None,
+    log_file: str | None = None,
     use_colors: bool = True,
-    logger_levels: Optional[Dict[str, Union[str, int]]] = None,
-) -> Dict[str, Any]:
+    logger_levels: dict[str, str | int] | None = None,
+) -> dict[str, Any]:
     """Build a logging configuration dictionary.
 
     Returns:
         Dict compatible with logging.config.dictConfig()
     """
     # Default formatters matching custom.yaml
-    formatters: Dict[str, Any] = {
+    formatters: dict[str, Any] = {
         "simple": {"format": "[%(asctime)s][%(threadName)s][%(name)s][%(levelname)s]: %(message)s"},
         "whenAndWhere": {"format": "[%(asctime)s][%(threadName)s][%(name)s][%(filename)s:%(lineno)s][%(levelname)s]: %(message)s"},
     }
@@ -158,7 +155,7 @@ def _build_logging_config(
             console_formatter = "simple"
 
     # Build handlers
-    handlers: Dict[str, Any] = {
+    handlers: dict[str, Any] = {
         "console": {
             "level": console_level,
             "class": "logging.StreamHandler",
@@ -184,14 +181,14 @@ def _build_logging_config(
         root_handlers.append("file")
 
     # Build loggers config
-    loggers: Dict[str, Any] = {}
+    loggers: dict[str, Any] = {}
     if logger_levels:
         for logger_name, level in logger_levels.items():
             if isinstance(level, str):
                 level = logging.getLevelName(level.upper())
             loggers[logger_name] = {"level": level}
 
-    config: Dict[str, Any] = {
+    config: dict[str, Any] = {
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": formatters,
@@ -265,7 +262,7 @@ class Logging(GatewayModule):
         default="whenAndWhere",
         description="Formatter for file output.",
     )
-    log_file: Optional[str] = Field(
+    log_file: str | None = Field(
         default=None,
         description="Path to log file. If None and use_hydra_output_dir is True, logs to hydra output.",
     )
@@ -277,21 +274,21 @@ class Logging(GatewayModule):
         default=True,
         description="Whether to use colorlog for console output.",
     )
-    logger_levels: Dict[str, Union[str, int]] = Field(
+    logger_levels: dict[str, str | int] = Field(
         default_factory=lambda: {"uvicorn.error": logging.CRITICAL},
         description="Dict mapping logger names to their levels.",
     )
 
     # No channel requirements - this module only configures logging
-    requires: Optional[ChannelSelection] = Field(default=[])
+    requires: ChannelSelection | None = Field(default=[])
 
     # Private attribute to track if this instance configured logging
     _configured_by_this_instance: bool = PrivateAttr(default=False)
-    _resolved_log_file: Optional[str] = PrivateAttr(default=None)
+    _resolved_log_file: str | None = PrivateAttr(default=None)
 
     @field_validator("console_level", "file_level", "root_level", mode="before")
     @classmethod
-    def _convert_log_level(cls, v: Union[str, int]) -> int:
+    def _convert_log_level(cls, v: str | int) -> int:
         if isinstance(v, str):
             level = logging.getLevelName(v.upper())
             if isinstance(level, int):
@@ -309,7 +306,7 @@ class Logging(GatewayModule):
         super().__init__(**data)
         self._configure_logging_early()
 
-    def _get_hydra_output_dir(self) -> Optional[str]:
+    def _get_hydra_output_dir(self) -> str | None:
         """Try to get the hydra output directory."""
         try:
             from hydra.core.hydra_config import HydraConfig
@@ -360,7 +357,6 @@ class Logging(GatewayModule):
 
         Logging is configured at instantiation time, not during connect().
         """
-        pass
 
 
 class LogChannels(GatewayModule):
@@ -368,11 +364,11 @@ class LogChannels(GatewayModule):
     log_states: bool = False
     log_level: int = logging.INFO
     log_name: str = str(__name__)
-    requires: Optional[ChannelSelection] = []
+    requires: ChannelSelection | None = []
 
     @field_validator("log_level", mode="before")
     @classmethod
-    def _convert_log_level(cls, v: Union[str, int]) -> int:
+    def _convert_log_level(cls, v: str | int) -> int:
         if isinstance(v, str):
             level = logging.getLevelName(v.upper())
             if isinstance(level, int):

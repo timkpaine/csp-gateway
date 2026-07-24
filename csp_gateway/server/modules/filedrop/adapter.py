@@ -1,9 +1,10 @@
 import csv
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional, TypeVar
+from typing import Any, TypeVar
 
 import orjson
 import pyarrow.parquet as pq
@@ -24,8 +25,8 @@ except ImportError:
 import csp
 
 __all__ = (
-    "FileDropType",
     "FileDropAdapterConfiguration",
+    "FileDropType",
     "filedrop_adapter_def",
 )
 
@@ -49,13 +50,13 @@ class FileDropAdapterConfiguration:
     # Format of files to expect to load properly i.e parquet, json, csv
     filedrop_type: FileDropType
     # List of extensions to filter, empty list means all extensions are allowed
-    extensions: List[str]
+    extensions: list[str]
     # custom loader for loading files into list of struct like data
-    loader: Optional[Callable[[str], List[Any]]]
+    loader: Callable[[str], list[Any]] | None
     # deserialize each data point to data type expected by channel type
-    deserializer: Optional[Callable[[Any], Any]]
+    deserializer: Callable[[Any], Any] | None
     # Extra args to the type adapter deserializer
-    type_adapter_args: Dict[str, Any]
+    type_adapter_args: dict[str, Any]
 
 
 class FileReaderBase:
@@ -91,7 +92,7 @@ class FileReaderBase:
             for s in structs:
                 yield s
 
-    def read_impl(self, src_path: str) -> List[dict]:
+    def read_impl(self, src_path: str) -> list[dict]:
         """File type specific implementation"""
 
         raise Exception(f"read not implemented for {self}")
@@ -100,7 +101,7 @@ class FileReaderBase:
 class FileReaderCsv(FileReaderBase):
     """File reader for json file type"""
 
-    def read_impl(self, src_path: str) -> List[Any]:
+    def read_impl(self, src_path: str) -> list[Any]:
         data = []
         with open(src_path, "r") as f:
             reader = csv.DictReader(f)
@@ -112,7 +113,7 @@ class FileReaderCsv(FileReaderBase):
 class FileReaderJson(FileReaderBase):
     """File reader for json file type"""
 
-    def read_impl(self, src_path: str) -> List[Any]:
+    def read_impl(self, src_path: str) -> list[Any]:
         with open(src_path, "rb") as f:
             data = orjson.loads(f.read())
         if isinstance(data, list):
@@ -125,7 +126,7 @@ class FileReaderJson(FileReaderBase):
 class FileReaderParquet(FileReaderBase):
     """File reader for parquet file type"""
 
-    def read_impl(self, src_path: str) -> List[Any]:
+    def read_impl(self, src_path: str) -> list[Any]:
         table = pq.read_table(src_path)
         return table.to_pylist()
 
@@ -137,7 +138,7 @@ class FileReaderCustom(FileReaderBase):
         super().__init__(config, ts_typ)
         self._loader = config.loader
 
-    def read_impl(self, src_path: str) -> List[Any]:
+    def read_impl(self, src_path: str) -> list[Any]:
         return self._loader(src_path)
 
 
@@ -216,7 +217,7 @@ _filedrop_adapter_def = py_push_adapter_def(
     _FileDropImpl,
     csp.ts[object],
     config=FileDropAdapterConfiguration,
-    ts_typ=List[T],
+    ts_typ=list[T],
 )
 
 

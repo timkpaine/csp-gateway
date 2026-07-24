@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from typing import Dict, Type
 
 import csp
 import orjson
@@ -34,11 +33,11 @@ class MySmallGatewayChannels(GatewayChannels):
     example: ts[int] = None
     struct_with_str: ts[MyStrStruct] = None
     s_example: ts[State[int]] = None
-    my_str_basket: Dict[str, ts[float]] = None
+    my_str_basket: dict[str, ts[float]] = None
 
 
 class MySmallGateway(Gateway):
-    channels_model: Type[Channels] = MySmallGatewayChannels
+    channels_model: type[Channels] = MySmallGatewayChannels
 
 
 class MySetStrStructModule(GatewayModule):

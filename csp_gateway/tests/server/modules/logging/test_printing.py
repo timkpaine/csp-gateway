@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from typing import Dict, List
 
 import csp
 import numpy as np
@@ -19,22 +18,22 @@ from csp_gateway.testing.shared_helpful_classes import (
 
 class MyPrintGatewayChannels(GatewayChannels):
     my_static: float = 0.0
-    my_static_dict: Dict[str, float] = {}
-    my_static_list: List[str] = []
+    my_static_dict: dict[str, float] = {}
+    my_static_list: list[str] = []
     my_channel: ts[int] = None
     s_my_channel: ts[State[int]] = None
     my_list_channel: ts[[int]] = None
     s_my_list_channel: ts[State[int]] = None
-    my_enum_basket: Dict[MyEnum, ts[int]] = None
-    my_str_basket: Dict[str, ts[int]] = None
-    my_enum_basket_list: Dict[MyEnum, ts[[int]]] = None
+    my_enum_basket: dict[MyEnum, ts[int]] = None
+    my_str_basket: dict[str, ts[int]] = None
+    my_enum_basket_list: dict[MyEnum, ts[[int]]] = None
     my_array_channel: ts[Numpy1DArray[float]] = None
 
 
 class MyPrintSetModule(GatewayModule):
     my_data: ts[int]
     my_data2: ts[int]
-    my_list_data: List[int]
+    my_list_data: list[int]
     by_key: bool = True
 
     def dynamic_keys(self):

@@ -1,6 +1,5 @@
 import os
 from datetime import datetime, timedelta
-from typing import List
 
 import csp
 import sqlalchemy as db
@@ -27,7 +26,7 @@ class MyTestStruct2(GatewayStruct):
 
 class GWC(GatewayChannels):
     test_channel: ts[MyTestStruct] = None
-    test_channel_2d: ts[List[MyTestStruct]] = None
+    test_channel_2d: ts[list[MyTestStruct]] = None
     test_channel_struct2: ts[MyTestStruct2] = None
 
 

@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Type, TypeVar
+from typing import Any, TypeVar
 
 import csp
 from csp import Struct
@@ -12,25 +12,25 @@ from .psp import PerspectiveUtilityMixin
 IdType = str
 
 __all__ = (
-    "GatewayStruct",
-    "IdType",
     "GatewayLookupMixin",
     "GatewayPydanticMixin",
+    "GatewayStruct",
     "GatewayStructMixins",
-    "is_gateway_struct_like",
+    "IdType",
     "global_lookup",
+    "is_gateway_struct_like",
 )
 
 T = TypeVar("T")
 
 # Global registry: maps ID -> instance for all GatewayLookupMixin instances
-_global_registry: Dict[str, Any] = {}
+_global_registry: dict[str, Any] = {}
 
 # Class-specific registry: maps (class, ID) -> instance
-_class_registry: Dict[tuple, Any] = {}
+_class_registry: dict[tuple, Any] = {}
 
 
-def global_lookup(id: IdType, cls: Optional[Type[T]] = None) -> Optional[T]:
+def global_lookup(id: IdType, cls: type[T] | None = None) -> T | None:
     """Look up a GatewayStruct instance by ID.
 
     Args:
@@ -82,7 +82,7 @@ class GatewayLookupMixin:
         return str(cls.id_generator.next())
 
     @classmethod
-    def lookup(cls, id: IdType) -> Optional[Any]:
+    def lookup(cls, id: IdType) -> Any | None:
         """Look up an instance by ID, scoped to this class.
 
         Args:

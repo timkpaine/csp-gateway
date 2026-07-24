@@ -1,7 +1,7 @@
 import asyncio
 from asyncio import AbstractEventLoop, Future as AsyncFuture
 from concurrent.futures import Future as ConcurrentFuture
-from typing import Any, Dict, Union
+from typing import Any, Union
 
 import csp
 from csp import ts
@@ -47,7 +47,7 @@ def on_request(value: ts[object], future: ts[object]):  # type: ignore[no-untype
 on_request_node = csp.node(on_request)
 
 
-def on_request_dict_basket(value: Dict[Any, ts[object]], future: ts[object]):  # type: ignore[no-untyped-def]
+def on_request_dict_basket(value: dict[Any, ts[object]], future: ts[object]):  # type: ignore[no-untyped-def]
     with csp.start():
         csp.make_passive(value)
 
@@ -96,7 +96,7 @@ def wait_for_next(value: ts[object], future: ts[object]):
 wait_for_next_node = csp.node(wait_for_next)
 
 
-def wait_for_next_dict_basket(value: Dict[Any, ts[object]], future: ts[object]):
+def wait_for_next_dict_basket(value: dict[Any, ts[object]], future: ts[object]):
     with csp.state():
         s_futures = []
 

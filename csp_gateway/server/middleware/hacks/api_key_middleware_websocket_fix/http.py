@@ -1,5 +1,4 @@
 from base64 import b64decode
-from typing import Optional
 
 from fastapi.exceptions import HTTPException
 from fastapi.openapi.models import (
@@ -28,8 +27,8 @@ class HTTPBase(SecurityBase):
         self,
         *,
         scheme: str,
-        scheme_name: Optional[str] = None,
-        description: Optional[str] = None,
+        scheme_name: str | None = None,
+        description: str | None = None,
         auto_error: bool = True,
     ):
         self.model = HTTPBaseModel(scheme=scheme, description=description)
@@ -37,7 +36,7 @@ class HTTPBase(SecurityBase):
         self.auto_error = auto_error
 
     @handle_exc_for_ws
-    async def __call__(self, request: HTTPConnection) -> Optional[HTTPAuthorizationCredentials]:
+    async def __call__(self, request: HTTPConnection) -> HTTPAuthorizationCredentials | None:
         authorization = request.headers.get("Authorization")
         scheme, credentials = get_authorization_scheme_param(authorization)
         if not (authorization and scheme and credentials):
@@ -52,9 +51,9 @@ class HTTPBasic(HTTPBase):
     def __init__(
         self,
         *,
-        scheme_name: Optional[str] = None,
-        realm: Optional[str] = None,
-        description: Optional[str] = None,
+        scheme_name: str | None = None,
+        realm: str | None = None,
+        description: str | None = None,
         auto_error: bool = True,
     ):
         self.model = HTTPBaseModel(scheme="basic", description=description)
@@ -65,7 +64,7 @@ class HTTPBasic(HTTPBase):
     @handle_exc_for_ws
     async def __call__(  # type: ignore
         self, request: HTTPConnection
-    ) -> Optional[HTTPBasicCredentials]:
+    ) -> HTTPBasicCredentials | None:
         authorization = request.headers.get("Authorization")
         scheme, param = get_authorization_scheme_param(authorization)
         if self.realm:
@@ -100,9 +99,9 @@ class HTTPBearer(HTTPBase):
     def __init__(
         self,
         *,
-        bearerFormat: Optional[str] = None,
-        scheme_name: Optional[str] = None,
-        description: Optional[str] = None,
+        bearerFormat: str | None = None,
+        scheme_name: str | None = None,
+        description: str | None = None,
         auto_error: bool = True,
     ):
         self.model = HTTPBearerModel(bearerFormat=bearerFormat, description=description)
@@ -110,7 +109,7 @@ class HTTPBearer(HTTPBase):
         self.auto_error = auto_error
 
     @handle_exc_for_ws
-    async def __call__(self, request: HTTPConnection) -> Optional[HTTPAuthorizationCredentials]:
+    async def __call__(self, request: HTTPConnection) -> HTTPAuthorizationCredentials | None:
         authorization = request.headers.get("Authorization")
         scheme, credentials = get_authorization_scheme_param(authorization)
         if not (authorization and scheme and credentials):
@@ -133,8 +132,8 @@ class HTTPDigest(HTTPBase):
     def __init__(
         self,
         *,
-        scheme_name: Optional[str] = None,
-        description: Optional[str] = None,
+        scheme_name: str | None = None,
+        description: str | None = None,
         auto_error: bool = True,
     ):
         self.model = HTTPBaseModel(scheme="digest", description=description)
@@ -142,7 +141,7 @@ class HTTPDigest(HTTPBase):
         self.auto_error = auto_error
 
     @handle_exc_for_ws
-    async def __call__(self, request: HTTPConnection) -> Optional[HTTPAuthorizationCredentials]:
+    async def __call__(self, request: HTTPConnection) -> HTTPAuthorizationCredentials | None:
         authorization = request.headers.get("Authorization")
         scheme, credentials = get_authorization_scheme_param(authorization)
         if not (authorization and scheme and credentials):

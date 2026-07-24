@@ -1,5 +1,3 @@
-from typing import List, Optional
-
 from pydantic import AnyHttpUrl, Field
 
 from csp_gateway import __version__
@@ -11,8 +9,8 @@ except ImportError:
 
 
 __all__ = (
-    "Settings",
     "GatewaySettings",
+    "Settings",
 )
 
 
@@ -22,7 +20,7 @@ class Settings(BaseSettings):
     model_config = dict(case_sensitive=True)
 
     API_STR: str = "/api/v1"
-    BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = []
+    BACKEND_CORS_ORIGINS: list[AnyHttpUrl] = []
 
     TITLE: str = "Gateway"
     DESCRIPTION: str = "# Welcome to CSP Gateway API\nContains REST/Websocket interfaces to underlying CSP Gateway engine"
@@ -45,27 +43,27 @@ class Settings(BaseSettings):
 
     # UI customization fields that let downstream applications white-label the
     # default UI from server-side config alone, without a custom Javascript bundle.
-    HEADER_LOGO: Optional[str] = Field(
+    HEADER_LOGO: str | None = Field(
         default=None,
         description="Header logo image, given as an http(s) URL, a data URI, an absolute "
         "URL path, or a local file path (local files are served automatically).",
     )
-    FOOTER_LOGO: Optional[str] = Field(
+    FOOTER_LOGO: str | None = Field(
         default=None,
         description="Footer logo image, given as an http(s) URL, a data URI, an absolute "
         "URL path, or a local file path (local files are served automatically).",
     )
-    CUSTOM_JS: List[str] = Field(
+    CUSTOM_JS: list[str] = Field(
         default_factory=list,
         description="Custom Javascript files to inject into the UI, given as URLs or local "
         "file paths (local files are served automatically). Loaded after the main bundle.",
     )
-    CUSTOM_CSS: List[str] = Field(
+    CUSTOM_CSS: list[str] = Field(
         default_factory=list,
         description="Custom CSS files to inject into the UI, given as URLs or local file "
         "paths (local files are served automatically). Loaded after the main stylesheet.",
     )
-    CUSTOM_STATIC_DIR: Optional[str] = Field(
+    CUSTOM_STATIC_DIR: str | None = Field(
         default=None,
         description="Local directory served at <root_path>/custom. The entire directory is exposed "
         "as public static content (useful for assets like logos, e.g. /custom/logo.svg); its top-level "
@@ -82,11 +80,11 @@ class Settings(BaseSettings):
     # applies them to the middleware with a DeprecationWarning. Remove these
     # fields (and the `_apply_legacy_auth_settings()` shim in gateway.py) in a
     # future major release.
-    AUTHENTICATE: Optional[bool] = Field(
+    AUTHENTICATE: bool | None = Field(
         default=None,
         description="DEPRECATED. Use `MountAPIKeyMiddleware` (set it to None or omit from modules) to disable auth.",
     )
-    API_KEY: Optional[str] = Field(
+    API_KEY: str | None = Field(
         default=None,
         description="DEPRECATED. Set `api_key` on `MountAPIKeyMiddleware` directly.",
     )

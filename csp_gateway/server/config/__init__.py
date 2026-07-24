@@ -19,7 +19,7 @@ __all__ = (
 def load_config(
     config_dir: str = "",
     config_name: str = "",
-    overrides: Optional[List[str]] = None,
+    overrides: list[str] | None = None,
     *,
     overwrite: bool = True,
     basepath: str = "",

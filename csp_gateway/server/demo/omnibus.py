@@ -10,7 +10,7 @@ from logging import INFO, basicConfig
 from pathlib import Path
 from random import choice
 from string import ascii_lowercase
-from typing import Annotated, Dict, List
+from typing import Annotated
 
 import csp
 import numpy as np
@@ -56,7 +56,6 @@ __all__ = (
     "ExampleModule",
     "ExampleModuleCustomTable",
     "ExampleModuleFeedback",
-    "ExampleModuleCustomTable",
 )
 
 
@@ -76,7 +75,7 @@ class ExampleDataBase(csp.Struct):
     z: str = ""
     internal_csp_struct: ExampleCspStruct = ExampleCspStruct()
     data: Numpy1DArray[float] = np.array([])
-    mapping: Dict[str, int] = {}
+    mapping: dict[str, int] = {}
     dt: datetime = datetime.today()
     d: date = datetime.today().date()
 
@@ -109,16 +108,16 @@ class ExampleEnum(Enum):
 
 
 class ExampleGatewayChannels(GatewayChannels):
-    metadata: Dict[str, str] = {"name": "Demo"}
+    metadata: dict[str, str] = {"name": "Demo"}
 
     example: ts[ExampleData] = None
-    example_list: ts[List[ExampleData]] = None
+    example_list: ts[list[ExampleData]] = None
     never_ticks: ts[ExampleData] = None
 
     s_example: ts[State[ExampleData]] = None
 
-    basket: Dict[ExampleEnum, ts[ExampleData]] = None
-    str_basket: Dict[str, ts[ExampleData]] = None
+    basket: dict[ExampleEnum, ts[ExampleData]] = None
+    str_basket: dict[str, ts[ExampleData]] = None
 
     # FIXME
     # basket_list: Dict[ExampleEnum, ts[[ExampleData]]] = None
@@ -164,7 +163,7 @@ class ExampleModule(GatewayModule):
     def subscribe_list(
         self,
         data: ts[ExampleData],
-    ) -> ts[List[ExampleData]]:
+    ) -> ts[list[ExampleData]]:
         if csp.ticked(data):
             return [data]
 
@@ -306,7 +305,7 @@ if __name__ == "__main__":
             MountPerspectiveTables(
                 perspective_field="perspective",
                 layouts={
-                    "Server Defined Layout": '{"sizes":[1],"detail":{"main":{"type":"split-area","orientation":"vertical","children":[{"type":"split-area","orientation":"horizontal","children":[{"type":"tab-area","widgets":["EXAMPLE_LIST_GENERATED_4"],"currentIndex":0},{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_1"],"currentIndex":0}],"sizes":[0.3,0.7]},{"type":"split-area","orientation":"horizontal","children":[{"type":"tab-area","widgets":["EXAMPLE_GENERATED_3"],"currentIndex":0},{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_0"],"currentIndex":0}],"sizes":[0.3,0.7]}],"sizes":[0.5,0.5]}},"viewers":{"EXAMPLE_LIST_GENERATED_4":{"version":"3.3.4","plugin":"Datagrid","plugin_config":{"columns":{},"edit_mode":"READ_ONLY","scroll_lock":false},"columns_config":{},"title":"example_list","group_by":[],"split_by":[],"columns":["timestamp","x","y","data","mapping","dt","d","internal_csp_struct.z"],"filter":[],"sort":[["timestamp","desc"]],"expressions":{},"aggregates":{},"table":"example_list","settings":false},"PERSPECTIVE_GENERATED_ID_1":{"version":"3.3.4","plugin":"X Bar","plugin_config":{},"columns_config":{},"title":"example_list (*)","group_by":["x"],"split_by":[],"columns":["y"],"filter":[],"sort":[["x","asc"]],"expressions":{},"aggregates":{"y":"median"},"table":"example_list","settings":false},"EXAMPLE_GENERATED_3":{"version":"3.3.4","plugin":"Datagrid","plugin_config":{"columns":{},"edit_mode":"READ_ONLY","scroll_lock":false},"columns_config":{},"title":"example","group_by":[],"split_by":[],"columns":["timestamp","x","y","data","mapping","dt","d","internal_csp_struct.z"],"filter":[],"sort":[["timestamp","desc"]],"expressions":{},"aggregates":{},"table":"example","settings":false},"PERSPECTIVE_GENERATED_ID_0":{"version":"3.3.4","plugin":"Treemap","plugin_config":{},"columns_config":{},"title":"example (*)","group_by":["x"],"split_by":[],"columns":["y","x",null],"filter":[],"sort":[["timestamp","desc"]],"expressions":{},"aggregates":{},"table":"example","settings":false}}}'  # noqa: E501
+                    "Server Defined Layout": '{"sizes":[1],"detail":{"main":{"type":"split-area","orientation":"vertical","children":[{"type":"split-area","orientation":"horizontal","children":[{"type":"tab-area","widgets":["EXAMPLE_LIST_GENERATED_4"],"currentIndex":0},{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_1"],"currentIndex":0}],"sizes":[0.3,0.7]},{"type":"split-area","orientation":"horizontal","children":[{"type":"tab-area","widgets":["EXAMPLE_GENERATED_3"],"currentIndex":0},{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_0"],"currentIndex":0}],"sizes":[0.3,0.7]}],"sizes":[0.5,0.5]}},"viewers":{"EXAMPLE_LIST_GENERATED_4":{"version":"3.3.4","plugin":"Datagrid","plugin_config":{"columns":{},"edit_mode":"READ_ONLY","scroll_lock":false},"columns_config":{},"title":"example_list","group_by":[],"split_by":[],"columns":["timestamp","x","y","data","mapping","dt","d","internal_csp_struct.z"],"filter":[],"sort":[["timestamp","desc"]],"expressions":{},"aggregates":{},"table":"example_list","settings":false},"PERSPECTIVE_GENERATED_ID_1":{"version":"3.3.4","plugin":"X Bar","plugin_config":{},"columns_config":{},"title":"example_list (*)","group_by":["x"],"split_by":[],"columns":["y"],"filter":[],"sort":[["x","asc"]],"expressions":{},"aggregates":{"y":"median"},"table":"example_list","settings":false},"EXAMPLE_GENERATED_3":{"version":"3.3.4","plugin":"Datagrid","plugin_config":{"columns":{},"edit_mode":"READ_ONLY","scroll_lock":false},"columns_config":{},"title":"example","group_by":[],"split_by":[],"columns":["timestamp","x","y","data","mapping","dt","d","internal_csp_struct.z"],"filter":[],"sort":[["timestamp","desc"]],"expressions":{},"aggregates":{},"table":"example","settings":false},"PERSPECTIVE_GENERATED_ID_0":{"version":"3.3.4","plugin":"Treemap","plugin_config":{},"columns_config":{},"title":"example (*)","group_by":["x"],"split_by":[],"columns":["y","x",null],"filter":[],"sort":[["timestamp","desc"]],"expressions":{},"aggregates":{},"table":"example","settings":false}}}'
                 },
                 limits={"str_basket": 20},
                 architectures={"basket": "server"},

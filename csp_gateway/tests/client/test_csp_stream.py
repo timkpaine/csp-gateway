@@ -8,7 +8,7 @@ import socket
 import sys
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import csp
 import pytest
@@ -24,8 +24,8 @@ from csp_gateway.client.csp_stream import (
 class SampleStruct(GatewayStruct):
     """A simple GatewayStruct for testing."""
 
-    value: Optional[int] = None
-    name: Optional[str] = None
+    value: int | None = None
+    name: str | None = None
 
 
 def test_gateway_stream_adapter_manager_init():
@@ -445,8 +445,8 @@ def test_stream_csp_integration_subscribe_and_receive(csp_stream_free_port):
     p = multiprocessing.Process(target=_run_gateway_for_csp_stream, args=(str(port),))
     p.start()
 
-    received_data: List[Dict[str, Any]] = []
-    test_exception: List[Exception] = []
+    received_data: list[dict[str, Any]] = []
+    test_exception: list[Exception] = []
 
     try:
         # Wait for server to start
@@ -512,8 +512,8 @@ def test_stream_csp_integration_dynamic_subscribe_unsubscribe(csp_stream_free_po
     p = multiprocessing.Process(target=_run_gateway_for_csp_stream, args=(str(port),))
     p.start()
 
-    received_data: List[Dict[str, Any]] = []
-    test_exception: List[Exception] = []
+    received_data: list[dict[str, Any]] = []
+    test_exception: list[Exception] = []
 
     try:
         # Wait for server to start

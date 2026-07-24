@@ -1,5 +1,3 @@
-from typing import List, Optional, Set, Union
-
 from ccflow import BaseModel
 from csp.impl.types.tstype import isTsType
 from pydantic import Field, model_validator
@@ -31,8 +29,8 @@ class ChannelSelection(BaseModel):
         validate(v): Validates and coerces the input value to a ChannelSelection instance.
     """
 
-    include: Optional[List[str]] = None
-    exclude: Set[str] = Field(default_factory=set)
+    include: list[str] | None = None
+    exclude: set[str] = Field(default_factory=set)
 
     @model_validator(mode="before")
     def validate_requires(cls, v):
@@ -44,12 +42,12 @@ class ChannelSelection(BaseModel):
 
     def select_from(
         self,
-        channels: Union[Channels, ChannelsType],
+        channels: Channels | ChannelsType,
         *,
         static_fields: bool = False,  # Select only static fields
         state_channels: bool = False,  # Select only state channels
         all_fields: bool = False,  # Select all fields in include and not in exclude
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Select fields from the given channels based on the specified criteria.
 
