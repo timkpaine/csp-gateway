@@ -21,6 +21,7 @@
     "react-modern-drawer": "^1.4.0"
   },
   "devDependencies": {
+<<<<<<< before updating
     "@perspective-dev/client": "~4.5.1",
     "@perspective-dev/react": "~4.5.1",
     "@perspective-dev/server": "~4.5.1",
@@ -46,5 +47,16 @@
     "@perspective-dev/workspace": "~4.5.1",
     "react": "19.2.6",
     "react-dom": "19.2.6"
+=======
+    "@playwright/test": "^1.62.0",
+    "cpy": "^13.2.2",
+    "esbuild": "^0.28.1",
+    "lightningcss": "^1.33.0",
+    "http-server": "^14.1.1",
+    "nodemon": "^3.1.10",
+    "npm-run-all": "^4.1.5",
+    "prettier": "^3.9.6",
+    "typescript": "^7.0.2"
+>>>>>>> after updating
   }
 }
