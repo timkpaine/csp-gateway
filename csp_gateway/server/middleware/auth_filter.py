@@ -36,7 +36,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import csp
 from csp import ts
@@ -85,7 +85,7 @@ class AuthFilterMiddleware(GatewayModule):
         next_filter_timeout: Timeout in seconds for /next filtering. Default 30s.
     """
 
-    filter_fields: List[str] = Field(
+    filter_fields: list[str] = Field(
         default_factory=list,
         description="List of struct attribute names to filter on (e.g., ['user'])",
     )
@@ -93,21 +93,21 @@ class AuthFilterMiddleware(GatewayModule):
         default="token",
         description="Cookie name for session UUID (should match auth middleware's api_key_name)",
     )
-    auth_middleware_class: Optional[str] = Field(
+    auth_middleware_class: str | None = Field(
         default=None,
         description="Fully qualified class name of auth middleware (optional)",
     )
-    identity_cache_channels: Optional[ChannelSelection] = Field(
+    identity_cache_channels: ChannelSelection | None = Field(
         default=None,
         description="Channels to maintain per-identity cache for /last endpoints. "
         "When set, /last returns the most recent record matching user's identity.",
     )
-    send_validation_channels: Optional[ChannelSelection] = Field(
+    send_validation_channels: ChannelSelection | None = Field(
         default=None,
         description="Channels to validate /send requests. When set, rejects sends "
         "where the struct's identity field doesn't match the authenticated user.",
     )
-    next_filter_channels: Optional[ChannelSelection] = Field(
+    next_filter_channels: ChannelSelection | None = Field(
         default=None,
         description="Channels to filter /next requests. When set, loops until a record matching the user's identity arrives.",
     )
@@ -117,11 +117,11 @@ class AuthFilterMiddleware(GatewayModule):
     )
 
     # List of auth middlewares implementing IdentityAwareMiddlewareMixin
-    _auth_middlewares: List[IdentityAwareMiddlewareMixin] = PrivateAttr(default_factory=list)
+    _auth_middlewares: list[IdentityAwareMiddlewareMixin] = PrivateAttr(default_factory=list)
     _app: Any = PrivateAttr(default=None)
     _channels: Any = PrivateAttr(default=None)
     # Per-identity cache: {channel_name: {identity_value: last_record}}
-    _identity_cache: Dict[str, Dict[Any, Any]] = PrivateAttr(default_factory=dict)
+    _identity_cache: dict[str, dict[Any, Any]] = PrivateAttr(default_factory=dict)
     # Track which channels are cached
     _cached_channels: set = PrivateAttr(default_factory=set)
     # Track which channels have send validation enabled
@@ -140,7 +140,7 @@ class AuthFilterMiddleware(GatewayModule):
                 if maybe_edge is None:
                     continue
                 if isinstance(maybe_edge, dict):
-                    for key in maybe_edge.keys():
+                    for key in maybe_edge:
                         self._send_validated_channels.add(f"{field}/{key}")
                 else:
                     self._send_validated_channels.add(field)
@@ -152,7 +152,7 @@ class AuthFilterMiddleware(GatewayModule):
                 if maybe_edge is None:
                     continue
                 if isinstance(maybe_edge, dict):
-                    for key in maybe_edge.keys():
+                    for key in maybe_edge:
                         self._next_filtered_channels.add(f"{field}/{key}")
                 else:
                     self._next_filtered_channels.add(field)
@@ -212,13 +212,13 @@ class AuthFilterMiddleware(GatewayModule):
         if identity_value is not None:
             self._identity_cache[channel_name][identity_value] = item
 
-    def get_cached_last(self, channel_name: str, identity_value: Any) -> Optional[Any]:
+    def get_cached_last(self, channel_name: str, identity_value: Any) -> Any | None:
         """Get the cached last value for a channel and identity."""
         if channel_name not in self._identity_cache:
             return None
         return self._identity_cache[channel_name].get(identity_value)
 
-    def _handle_cached_last(self, request: Request, identity: Dict[str, Any]) -> Optional[Response]:
+    def _handle_cached_last(self, request: Request, identity: dict[str, Any]) -> Response | None:
         """Handle /last requests for cached channels by serving from cache.
 
         Returns a Response if this is a cached channel request, None otherwise.
@@ -277,7 +277,7 @@ class AuthFilterMiddleware(GatewayModule):
                 media_type="application/json",
             )
 
-    async def _validate_send_request(self, request: Request, identity: Dict[str, Any]) -> Optional[Response]:
+    async def _validate_send_request(self, request: Request, identity: dict[str, Any]) -> Response | None:
         """Validate /send requests to ensure identity field matches authenticated user.
 
         Returns a 403 Response if validation fails, None otherwise.
@@ -355,9 +355,9 @@ class AuthFilterMiddleware(GatewayModule):
     async def _handle_filtered_next(
         self,
         request: Request,
-        identity: Dict[str, Any],
+        identity: dict[str, Any],
         call_next: Any,
-    ) -> Optional[Response]:
+    ) -> Response | None:
         """Handle /next requests by looping until matching record arrives.
 
         Returns a Response if this is a filtered next request, None otherwise.
@@ -440,7 +440,7 @@ class AuthFilterMiddleware(GatewayModule):
                     headers=dict(response.headers.items()),
                 )
 
-    def _find_auth_middlewares(self, app: GatewayWebApp) -> List[IdentityAwareMiddlewareMixin]:
+    def _find_auth_middlewares(self, app: GatewayWebApp) -> list[IdentityAwareMiddlewareMixin]:
         """Find all authentication middlewares that implement IdentityAwareMiddlewareMixin.
 
         Returns a list of auth middlewares, allowing for multiple auth methods
@@ -465,7 +465,7 @@ class AuthFilterMiddleware(GatewayModule):
                     auth_middlewares.append(module)
         return auth_middlewares
 
-    async def get_identity_from_request(self, request: Request) -> Optional[Dict[str, Any]]:
+    async def get_identity_from_request(self, request: Request) -> dict[str, Any] | None:
         """Extract user identity from request using auth middlewares.
 
         Checks all registered auth middlewares in order, returning the first
@@ -498,7 +498,7 @@ class AuthFilterMiddleware(GatewayModule):
 
         return None
 
-    async def get_identity_from_websocket(self, websocket: WebSocket) -> Optional[Dict[str, Any]]:
+    async def get_identity_from_websocket(self, websocket: WebSocket) -> dict[str, Any] | None:
         """Extract user identity from WebSocket using auth middlewares.
 
         Checks all registered auth middlewares in order, returning the first
@@ -530,7 +530,7 @@ class AuthFilterMiddleware(GatewayModule):
 
         return None
 
-    def filter_struct(self, data: Dict[str, Any], identity: Dict[str, Any]) -> bool:
+    def filter_struct(self, data: dict[str, Any], identity: dict[str, Any]) -> bool:
         """Check if a struct record should be included based on identity.
 
         Returns True if the record should be included, False otherwise.
@@ -539,16 +539,12 @@ class AuthFilterMiddleware(GatewayModule):
             return True
 
         for field in self.filter_fields:
-            # Check if struct has this field
-            if field in data:
-                # Check if identity has this field
-                if field in identity:
-                    # Filter: only include if values match
-                    if data[field] != identity[field]:
-                        return False
+            # Only filter out when both struct and identity have the field and their values differ
+            if field in data and field in identity and data[field] != identity[field]:
+                return False
         return True
 
-    def filter_response_data(self, data: Any, identity: Optional[Dict[str, Any]]) -> Any:
+    def filter_response_data(self, data: Any, identity: dict[str, Any] | None) -> Any:
         """Filter response data based on user identity.
 
         Args:
@@ -651,7 +647,7 @@ class AuthFilterMiddleware(GatewayModule):
 
         app.app.add_middleware(FilterResponseMiddleware)
 
-    async def filter_websocket_data(self, data: str, websocket: WebSocket) -> Optional[str]:
+    async def filter_websocket_data(self, data: str, websocket: WebSocket) -> str | None:
         """Filter WebSocket response data based on authenticated user.
 
         Args:

@@ -1,9 +1,10 @@
 import logging
 import multiprocessing
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from io import StringIO
-from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
+from typing import Any
 
 import csp
 import numpy as np
@@ -45,18 +46,18 @@ class MyGatewayChannels(GatewayChannels):
     my_channel_mid: ts[MyStruct] = None
     my_channel_dup: ts[MyStruct] = None
 
-    my_keys: List[str] = []
+    my_keys: list[str] = []
     my_static: float = 0.0
-    my_static_dict: Dict[str, float] = {}
-    my_static_list: List[str] = []
-    my_static_dict_of_objects: Dict[str, Any] = {}
+    my_static_dict: dict[str, float] = {}
+    my_static_list: list[str] = []
+    my_static_dict_of_objects: dict[str, Any] = {}
     my_channel: ts[MyStruct] = None
     s_my_channel: ts[State[MyStruct]] = None
-    my_list_channel: ts[List[MyStruct]] = None
+    my_list_channel: ts[list[MyStruct]] = None
     s_my_list_channel: ts[State[MyStruct]] = None
-    my_enum_basket: Dict[MyEnum, ts[MyStruct]] = None
-    my_str_basket: Dict[str, ts[MyStruct]] = None
-    my_enum_basket_list: Dict[MyEnum, ts[List[MyStruct]]] = None
+    my_enum_basket: dict[MyEnum, ts[MyStruct]] = None
+    my_str_basket: dict[str, ts[MyStruct]] = None
+    my_enum_basket_list: dict[MyEnum, ts[list[MyStruct]]] = None
     my_array_channel: ts[Numpy1DArray[float]] = None
 
     def dynamic_keys(self):
@@ -64,13 +65,13 @@ class MyGatewayChannels(GatewayChannels):
 
 
 class MyGateway(Gateway):
-    channels_model: Type[Channels] = MyGatewayChannels  # type: ignore[assignment]
+    channels_model: type[Channels] = MyGatewayChannels  # type: ignore[assignment]
 
 
 class MySetModule(GatewayModule):
     my_data: ts[MyStruct]
     my_data2: ts[MyStruct]
-    my_list_data: ts[List[MyStruct]]
+    my_list_data: ts[list[MyStruct]]
     by_key: bool = True
 
     def dynamic_keys(self):
@@ -206,8 +207,8 @@ class MyGetModule(GatewayModule):
 
 
 class MyGetModuleDynamicKeys(MyGetModule):
-    requires: Optional[ChannelSelection] = []
-    my_keys: List[str] = []
+    requires: ChannelSelection | None = []
+    my_keys: list[str] = []
 
     def dynamic_keys(self):
         return {MyGatewayChannels.my_str_basket: self.my_keys}
@@ -242,11 +243,11 @@ class MyInfiniteShutdownModule(GatewayModule):
 
 
 class MyGetModuleListRequires(MyGetModule):
-    requires: Optional[ChannelSelection] = []
+    requires: ChannelSelection | None = []
 
 
 class MyGetModuleListRequiresAnnotated(MyGetModule):
-    requires: Optional[ChannelSelection] = []
+    requires: ChannelSelection | None = []
 
 
 class MyBuildFailureModule(GatewayModule):
@@ -255,7 +256,7 @@ class MyBuildFailureModule(GatewayModule):
 
 
 class MyAssertStartDetectorModule(GatewayModule):
-    gateway: Dict[str, Gateway] = Field(default_factory=dict)
+    gateway: dict[str, Gateway] = Field(default_factory=dict)
 
     @csp.node
     def _assert_started(self, timer: ts[bool]):
@@ -409,7 +410,7 @@ def test_get_set_block_set(by_key, override):
         block_set_channels_until=datetime(2020, 1, 2),
     )
     out = csp.run(gateway.graph, starttime=datetime(2020, 1, 1), endtime=timedelta(1))
-    for _, output in out.items():
+    for output in out.values():
         assert len(output) == 0
 
 
@@ -474,7 +475,7 @@ def test_requires_fails():
     with pytest.raises(ValidationError):
         MyGetModuleDynamicKeys(requires=99)
 
-    getter = MyGetModuleDynamicKeys(requires=dict(exclude=[MyGatewayChannels.my_array_channel]))
+    getter = MyGetModuleDynamicKeys(requires={"exclude": [MyGatewayChannels.my_array_channel]})
     gateway = MyGateway(modules=[getter], channels=MyGatewayChannels(my_keys=["my_key", "my_key2"]))
     with pytest.raises(NoProviderException):
         csp.run(gateway.graph, starttime=datetime(2020, 1, 1), endtime=timedelta(1))
@@ -754,15 +755,15 @@ def test_shutdown_infinite():
 class MySetModuleDynamicChannels(GatewayModule):
     scalar_channel_name: str
     list_channel_name: str
-    connect_channels_assertion: Optional[Callable[[MyGatewayChannels], None]] = None
+    connect_channels_assertion: Callable[[MyGatewayChannels], None] | None = None
 
-    def dynamic_channels(self) -> Optional[Dict[str, Union[Type[GatewayStruct], Type[List[GatewayStruct]]]]]:
+    def dynamic_channels(self) -> dict[str, type[GatewayStruct] | type[list[GatewayStruct]]] | None:
         return {
-            self.list_channel_name: List[MyStruct],
+            self.list_channel_name: list[MyStruct],
             self.scalar_channel_name: MyStruct,
         }
 
-    def dynamic_state_channels(self) -> Optional[Set[str]]:
+    def dynamic_state_channels(self) -> set[str] | None:
         return {self.scalar_channel_name, self.list_channel_name}
 
     def connect(self, channels: MyGatewayChannels) -> None:

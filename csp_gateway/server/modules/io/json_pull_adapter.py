@@ -20,7 +20,7 @@ class JSONPullAdapterImpl(PullInputAdapter):
         super().__init__()
 
     def start(self, start_time, end_time):
-        self._file = open(self._filename, "r")
+        self._file = open(self._filename)  # noqa: SIM115 -- handle spans adapter lifecycle, closed in stop()
         for line in self._file:
             self._next_row = line
             json_dict = orjson.loads(line)

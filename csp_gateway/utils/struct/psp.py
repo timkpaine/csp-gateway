@@ -1,36 +1,39 @@
 import _thread
 import itertools
+import types
+from collections.abc import Callable
 from datetime import date, datetime
 from enum import Enum as PyEnum
 from logging import getLogger
-from typing import Any, Callable, Dict, GenericAlias, List, Optional, Set, Tuple, Union, _GenericAlias, get_args, get_origin
+from typing import Any, Union, get_args, get_origin
 
 import orjson
 from csp import Enum, Struct
 from csp.impl.enum import EnumMeta
 from csp.impl.types.container_type_normalizer import ContainerTypeNormalizer
 from numpy import ndarray
+from typing_extensions import TypeAliasType
 
 __all__ = (
     "CustomJsonifier",
+    "ExcludedColumns",
+    "PerspectiveUtilityMixin",
+    "psp_flatten",
     "psp_flatten_dict",
     "psp_flatten_list",
-    "psp_flatten",
-    "ExcludedColumns",
     "psp_schema",
-    "PerspectiveUtilityMixin",
 )
 
 log = getLogger(__name__)
 
-CustomJsonifier = Callable[[Any], Tuple[Any, bool]]
+CustomJsonifier = Callable[[Any], tuple[Any, bool]]
 
 
 # We expose these functions separate from the class definition
 # so that they can be called recursively.
 # However, the top level call should always come from a
 # a PerspectiveUtilityMixin subclass or instance of such.
-def psp_flatten_dict(obj: Dict[str, Any]) -> Any:
+def psp_flatten_dict(obj: dict[str, Any]) -> Any:
     """Flatten dicts of values into a top level dict"""
 
     # Base template to use for creating copies later
@@ -57,7 +60,7 @@ def psp_flatten_dict(obj: Dict[str, Any]) -> Any:
                     if isinstance(res_val, dict):
                         # Merge the sub-dict with parent key
                         for k, v in res_val.items():
-                            delta_dict["{}.{}".format(obj_key, k)] = v
+                            delta_dict[f"{obj_key}.{k}"] = v
                         delta_list.append(delta_dict)
                     elif isinstance(res_val, list) and len(res) == 0:
                         # Key needs to be deleted, use empty dict as delta
@@ -83,7 +86,7 @@ def psp_flatten_dict(obj: Dict[str, Any]) -> Any:
     return ret
 
 
-def psp_flatten_list(obj: List[Any]) -> List[Any]:
+def psp_flatten_list(obj: list[Any]) -> list[Any]:
     """Flatten list of complex types (sub-lists, dicts) to a top level list"""
 
     ret = []
@@ -112,10 +115,10 @@ def psp_flatten(obj: Any) -> Any:
     return ret
 
 
-ExcludedColumns = Union[Set[str], Dict[str, Union[bool, "ExcludedColumns"]]]
+ExcludedColumns = TypeAliasType("ExcludedColumns", "set[str] | dict[str, bool | ExcludedColumns]")
 
 
-def _is_excluded(field: str, excluded_columns: ExcludedColumns) -> Union[bool, ExcludedColumns]:
+def _is_excluded(field: str, excluded_columns: ExcludedColumns) -> bool | ExcludedColumns:
     if isinstance(excluded_columns, set):
         return field in excluded_columns
 
@@ -123,14 +126,12 @@ def _is_excluded(field: str, excluded_columns: ExcludedColumns) -> Union[bool, E
 
 
 def _is_optional(t: type) -> bool:
-    if not isinstance(t, (GenericAlias, _GenericAlias)):
-        return False
-    if get_origin(t) is not Union:
+    # Accept both typing.Optional[X]/typing.Union[X, None] and the PEP 604 ``X | None`` form.
+    # The former have get_origin() is typing.Union; the latter is a types.UnionType.
+    if get_origin(t) not in (Union, types.UnionType):
         return False
     args = list(get_args(t))
-    if len(args) != 2 or type(None) not in args:
-        return False
-    return True
+    return not (len(args) != 2 or type(None) not in args)
 
 
 def _get_type_from_optional(t: type):
@@ -139,7 +140,7 @@ def _get_type_from_optional(t: type):
     return args[0]
 
 
-def psp_schema(cls, excluded_columns: Optional[ExcludedColumns] = None) -> Dict[str, type]:
+def psp_schema(cls, excluded_columns: ExcludedColumns | None = None) -> dict[str, type]:
     """Returns the perspective schema for a class.
 
     Args:
@@ -243,7 +244,7 @@ def psp_schema(cls, excluded_columns: Optional[ExcludedColumns] = None) -> Dict[
 
                 # add subschema
                 for subkey, subvalue in struct_items:
-                    add["{}.{}".format(field, subkey)] = subvalue
+                    add[f"{field}.{subkey}"] = subvalue
             else:
                 # TODO deal with dropped
                 log.warning(f"Type {value} on has no perspective conversion, ignoring in perspective tables: {cls.__name__}.{field}")
@@ -252,8 +253,8 @@ def psp_schema(cls, excluded_columns: Optional[ExcludedColumns] = None) -> Dict[
     for to_remove in remove:
         schema.pop(to_remove)
 
-    for key in schema.keys():
-        if schema[key] is object and _is_optional(schema_annotated[key]):
+    for key, value in schema.items():
+        if value is object and _is_optional(schema_annotated[key]):
             schema[key] = _get_type_from_optional(schema_annotated[key])
 
     schema.update(add)
@@ -261,7 +262,7 @@ def psp_schema(cls, excluded_columns: Optional[ExcludedColumns] = None) -> Dict[
 
 
 class PerspectiveUtilityMixin:
-    def psp_flatten(self, custom_jsonifier: Optional[CustomJsonifier] = None) -> List[Dict[str, Any]]:
+    def psp_flatten(self, custom_jsonifier: CustomJsonifier | None = None) -> list[dict[str, Any]]:
         def _callback(obj):
             """Callback helper that either calls custom_jsonifier or a default set of conversions"""
             if custom_jsonifier:
@@ -283,7 +284,7 @@ class PerspectiveUtilityMixin:
         return flat_obj
 
     @classmethod
-    def psp_schema(cls, excluded_columns: Optional[ExcludedColumns] = None) -> Dict[str, type]:
+    def psp_schema(cls, excluded_columns: ExcludedColumns | None = None) -> dict[str, type]:
         """Return the perspective schema.
 
         Args:

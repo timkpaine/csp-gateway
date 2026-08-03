@@ -1,7 +1,6 @@
 from datetime import timedelta
 from secrets import token_urlsafe
 from socket import gethostname
-from typing import List, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Security
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -20,7 +19,7 @@ from .hacks.api_key_middleware_websocket_fix.api_key import (
 
 
 class MountAPIKeyMiddleware(AuthenticationMiddleware):
-    api_key: Optional[Union[str, List[str]]] = Field(
+    api_key: str | list[str] | None = Field(
         token_urlsafe(32),
         description="The API key(s) for access. Can be a single string or a list of valid keys. The default is auto-generated, but user-provided value(s) can be used.",
     )
@@ -92,9 +91,8 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
 
         @public_router.get("/login", response_class=HTMLResponse, include_in_schema=False)
         async def get_login_page(token: str = "", request: Request = None):
-            if token:
-                if token != "":
-                    return RedirectResponse(url=app.root_path_url(request, f"{app.settings.API_STR}/auth/login?token={token}"))
+            if token and token != "":
+                return RedirectResponse(url=app.root_path_url(request, f"{app.settings.API_STR}/auth/login?token={token}"))
             return app.templates.TemplateResponse(
                 request,
                 "login.html.j2",

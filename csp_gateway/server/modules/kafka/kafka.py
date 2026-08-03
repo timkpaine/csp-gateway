@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional, Union, get_args, get_origin
+from typing import Any, get_args, get_origin
 
 import csp
 import orjson
@@ -29,10 +29,10 @@ from csp_gateway.server.shared.json_converter import _convert_orjson_compatible
 from .utils import KafkaChannelProcessor
 
 __all__ = (
-    "ReplayEngineKafka",
     "KafkaConfiguration",
     "KafkaStartOffset",
     "ReadWriteKafka",
+    "ReplayEngineKafka",
 )
 
 
@@ -44,7 +44,7 @@ class KafkaConfiguration(BaseModel):
     """
 
     broker: str = Field(description="broker URL")
-    start_offset: Optional[Union[KafkaStartOffset, timedelta, datetime]] = Field(
+    start_offset: KafkaStartOffset | timedelta | datetime | None = Field(
         None,
         description="""Signifies where to start the stream playback from (defaults to KafkaStartOffset.LATEST ). Can be
                              one of the KafkaStartOffset enum types,
@@ -64,7 +64,7 @@ class KafkaConfiguration(BaseModel):
         False,
         description="Whether to be in debug mode. If True, start_offset is set to None",
     )
-    group_id: Optional[str] = Field(
+    group_id: str | None = Field(
         None,
         description="""
         If set, will cause the adapter to behave as a consume-once consumer.
@@ -87,7 +87,7 @@ class KafkaConfiguration(BaseModel):
 
     auth: bool = Field(False, description="Determines whether to use authentication")
     security_protocol: str = Field("SASL_SSL", description="Security protocol, only used if auth is set to True")
-    sasl_kerberos_keytab: Optional[FilePath] = Field(
+    sasl_kerberos_keytab: FilePath | None = Field(
         None,
         description="""
         Location of the Kerberos keytab for Kerberos authentication.
@@ -95,7 +95,7 @@ class KafkaConfiguration(BaseModel):
         """,
     )
     sasl_kerberos_principal: str = Field("", description="Name of kerberos principal, only used if auth is set to True")
-    ssl_ca_location: Optional[FilePath] = Field(
+    ssl_ca_location: FilePath | None = Field(
         "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
         description="""
         Location of the PEM key for broker validation.
@@ -104,7 +104,7 @@ class KafkaConfiguration(BaseModel):
     )
     sasl_kerberos_service_name: str = Field("kafka", description="Kerberos service name, only used if auth is set to True")
 
-    rd_kafka_conf_options: Optional[Dict] = Field(
+    rd_kafka_conf_options: dict | None = Field(
         None,
         description="""
         Extra configuration options that will be directly passed to the C++ Kafka consumers and producers.
@@ -143,11 +143,11 @@ class ReadWriteKafka(GatewayModule):
     """
 
     config: KafkaConfiguration
-    requires: Optional[ChannelSelection] = []
-    publish_channel_to_topic_and_key: Dict[str, Dict[str, str]] = {}
-    subscribe_channel_to_topic_and_key: Dict[str, Dict[str, str]] = {}
+    requires: ChannelSelection | None = []
+    publish_channel_to_topic_and_key: dict[str, dict[str, str]] = {}
+    subscribe_channel_to_topic_and_key: dict[str, dict[str, str]] = {}
 
-    publish_channel_processors: Dict[str, KafkaChannelProcessor] = Field(
+    publish_channel_processors: dict[str, KafkaChannelProcessor] = Field(
         default={},
         description=(
             "Dictionary mapping channel to KafkaChannelProcessor that "
@@ -156,7 +156,7 @@ class ReadWriteKafka(GatewayModule):
             "If the procesing function returns None for a tick, that tick is not published to Kafka"
         ),
     )
-    subscribe_channel_processors: Dict[str, KafkaChannelProcessor] = Field(
+    subscribe_channel_processors: dict[str, KafkaChannelProcessor] = Field(
         default={},
         description=(
             "Dictionary mapping channel to KafkaChannelProcessor processor that "
@@ -251,7 +251,7 @@ class ReadWriteKafka(GatewayModule):
         return self.deserialize_to_target(json_dict, ts_typ=ts_typ)
 
     @deprecated(details="Use serialize_to_python instead.")
-    def serialize_to_dict(self, x: Any) -> Dict[str, Any]:
+    def serialize_to_dict(self, x: Any) -> dict[str, Any]:
         """Serializes an object to a dictionary compatible with
         orjson for encoding to json."""
         return self.serialize_to_python(x)

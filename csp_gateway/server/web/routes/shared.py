@@ -1,17 +1,17 @@
 import asyncio
-from typing import Any, Dict, List, Union, get_args, get_origin
+from typing import Any, get_args, get_origin
 
 from fastapi.responses import Response
 from pydantic import BaseModel
 
 __all__ = (
-    "prepare_response",
-    "get_next_tick",
     "get_fully_qualified_type_name",
+    "get_next_tick",
+    "prepare_response",
 )
 
 
-def get_fully_qualified_type_name(model: Union[BaseModel, List[BaseModel], None]) -> str:
+def get_fully_qualified_type_name(model: BaseModel | list[BaseModel] | None) -> str:
     """
     Get the fully qualified type name for a model.
 
@@ -43,7 +43,7 @@ def prepare_response(
     is_list_model: bool = False,
     is_dict_basket: bool = False,
     wrap_in_response: bool = True,
-) -> List[Dict[Any, Any]]:
+) -> list[dict[Any, Any]]:
     # If we've ticked
     if res:
         # Convert the dict basket to just the list of values

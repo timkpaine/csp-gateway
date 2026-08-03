@@ -1,6 +1,6 @@
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Any, List, Union
+from typing import Any
 from unittest import mock
 
 import csp
@@ -40,7 +40,7 @@ class MyGatewayChannelsWithNumpyStruct(MyGatewayChannels):
 
 
 class ProcessMyFlagTrue(KafkaChannelProcessor):
-    def process(self, obj: Union[List[GatewayStruct], GatewayStruct], topic: str, key: str) -> Any:
+    def process(self, obj: list[GatewayStruct] | GatewayStruct, topic: str, key: str) -> Any:
         if isinstance(obj, list):
             return obj if all(getattr(val, "my_flag", False) is True for val in obj) else None
         return obj if getattr(obj, "my_flag", False) is True else None
@@ -50,7 +50,7 @@ class FloatKafkaChannelProcessor(KafkaChannelProcessor):
     goal_float: float
     key: str
 
-    def process(self, obj: Union[List[GatewayStruct], GatewayStruct], topic: str, key: str) -> bool:
+    def process(self, obj: list[GatewayStruct] | GatewayStruct, topic: str, key: str) -> bool:
         if key == self.key:
             obj.foo = self.goal_float
             return obj

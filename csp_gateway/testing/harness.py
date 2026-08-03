@@ -1,16 +1,11 @@
+from collections.abc import Callable, Sequence
 from datetime import datetime, timedelta
 from inspect import getframeinfo, stack
+from logging import getLogger
 from pprint import pprint
 from typing import (
     Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Sequence,
-    Tuple,
     TypeVar,
-    Union,
     get_origin,
 )
 
@@ -22,9 +17,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from csp_gateway import ChannelSelection, GatewayChannels, GatewayModule
 
+logger = getLogger(__name__)
+
 __all__ = ("GatewayTestHarness",)
 
-ChannelType = Union[str, Tuple[str, Any]]
+ChannelType = str | tuple[str, Any]
 T = TypeVar("T")
 
 
@@ -72,14 +69,13 @@ class BaseGatewayTestEvent(BaseModel):
                 caller = getframeinfo(stack()[2][0])
                 self._lineno = caller.lineno
                 self._filename = caller.filename
-            except Exception:
-                pass
+            except Exception as e:  # noqa: BLE001 -- best-effort caller introspection for test diagnostics
+                logger.debug("Could not determine caller location for test harness event: %s", e)
 
-    def apply(self, now, values, tick_counts, ticked_values, *args, **kwargs) -> Optional[bool]:
+    def apply(self, now, values, tick_counts, ticked_values, *args, **kwargs) -> bool | None:
         """Function to run inside the csp graph during runtime.
         If the function returns True, it will reset the state of ticked values and counts.
         """
-        ...
 
 
 class GatewayResetEvent(BaseGatewayTestEvent):
@@ -90,9 +86,7 @@ class GatewayResetEvent(BaseGatewayTestEvent):
 
 
 class GatewayDelayEvent(BaseGatewayTestEvent):
-    delay: Union[timedelta, datetime] = Field(
-        timedelta(seconds=1), description="Time to wait before applying the event or the time to apply the event."
-    )
+    delay: timedelta | datetime = Field(timedelta(seconds=1), description="Time to wait before applying the event or the time to apply the event.")
 
 
 class GatewayDataEvent(BaseGatewayTestEvent):
@@ -122,7 +116,7 @@ class GatewayPrintTickCountsEvent(BaseGatewayTestEvent):
 
 
 class GatewayAssertTickCountsEqualEvent(BaseGatewayTestEvent):
-    tick_counts: Dict[ChannelType, int]
+    tick_counts: dict[ChannelType, int]
 
     def apply(self, now, values, tick_counts, *args, **kwargs):
         assert tick_counts == self.tick_counts
@@ -171,7 +165,7 @@ class GatewayAssertAttrEqualEvent(BaseGatewayTestEvent):
 
 class GatewayAssertAttrsEqualEvent(BaseGatewayTestEvent):
     channel: ChannelType
-    values: Dict[str, Any]
+    values: dict[str, Any]
     almost: bool = False
 
     def apply(self, now, values, tick_counts, *args, **kwargs):
@@ -234,7 +228,7 @@ class GatewayAssertIdxAttrEqualEvent(BaseGatewayTestEvent):
 class GatewayAssertIdxAttrsEqualEvent(BaseGatewayTestEvent):
     channel: ChannelType
     idx: int
-    values: Dict[str, Any]
+    values: dict[str, Any]
     almost: bool = False
 
     def apply(self, now, values, tick_counts, *args, **kwargs):
@@ -267,7 +261,7 @@ class GatewayAssertIdxAttrUnsetEvent(BaseGatewayTestEvent):
 
 class GatewayAssertTickedEvents(BaseGatewayTestEvent):
     channel: ChannelType
-    assert_func: Callable[[Sequence[Tuple[datetime, Any]]], None]
+    assert_func: Callable[[Sequence[tuple[datetime, Any]]], None]
 
     def apply(self, now, values, tick_counts, ticked_values, *args, **kwargs):
         self.assert_func(ticked_values[self.channel])
@@ -276,13 +270,13 @@ class GatewayAssertTickedEvents(BaseGatewayTestEvent):
 class GatewayEvaluateCallableEvent(BaseGatewayTestEvent):
     f: Callable[[], None]
 
-    def apply(self, now, values, tick_counts, ticked_values, *args, **kwargs) -> Optional[bool]:
+    def apply(self, now, values, tick_counts, ticked_values, *args, **kwargs) -> bool | None:
         self.f()
         return None
 
 
 @csp.node
-def _curve(data: List[Tuple[Union[datetime, timedelta], "T"]]) -> ts["T"]:
+def _curve(data: list[tuple[datetime | timedelta, "T"]]) -> ts["T"]:
     """TODO: csp.curve doesn't allow mixing datetime and timedelta at the moment. Switch to csp.curve once supported."""
     with csp.alarms():
         alarm = csp.alarm(object)
@@ -298,9 +292,9 @@ def _curve(data: List[Tuple[Union[datetime, timedelta], "T"]]) -> ts["T"]:
 class GatewayTestHarness(GatewayModule):
     name: str = "GatewayTestHarness"
     test_channels: ChannelSelection = Field(description="List of channels to test (both inputs and outputs)")
-    events: List[BaseGatewayTestEvent] = []
+    events: list[BaseGatewayTestEvent] = []
     verbose: bool = False
-    test_dynamic_keys: Dict[str, List[str]] = {}
+    test_dynamic_keys: dict[str, list[str]] = {}
 
     is_performance_test: bool = Field(
         default=False,
@@ -330,9 +324,8 @@ class GatewayTestHarness(GatewayModule):
                     delta += event.delay
                 else:
                     # event.delay is a datetime.
-                    if reference_time is not None:
-                        if event_time > event.delay:
-                            raise ValueError(f"Trying to move backwards in time from {event_time} to {event.delay}.")
+                    if reference_time is not None and event_time > event.delay:
+                        raise ValueError(f"Trying to move backwards in time from {event_time} to {event.delay}.")
 
                     reference_time = event.delay
                     delta = timedelta(0)
@@ -354,11 +347,11 @@ class GatewayTestHarness(GatewayModule):
                 basket = channels.get_channel(channel)
 
                 # Split the data events for the basket by basket key.
-                basket_curve_data = {k: [] for k in basket.keys()}
+                basket_curve_data = {k: [] for k in basket}
                 if curve_data[channel]:
                     for delta, basket_events in curve_data[channel]:
                         if not isinstance(basket_events, dict):
-                            raise ValueError(f"Event values for dictionary baskets should be a dictionary, got {basket_events}.")
+                            raise TypeError(f"Event values for dictionary baskets should be a dictionary, got {basket_events}.")
 
                         for k, v in basket_events.items():
                             if k not in basket:
@@ -373,7 +366,7 @@ class GatewayTestHarness(GatewayModule):
                     # Channel output
                     channel_values[(channel, k)] = v
                     if self.verbose:
-                        csp.print(f"Update {str((channel, k))}", v)
+                        csp.print(f"Update {(channel, k)!s}", v)
 
                     # Channel input
                     typ = v.tstype.typ
@@ -404,7 +397,7 @@ class GatewayTestHarness(GatewayModule):
         self._run_test_events(event_curve, channel_values)
 
     @csp.node
-    def _run_test_events(self, event: ts[BaseGatewayTestEvent], channel_values: Dict[object, ts[object]]):
+    def _run_test_events(self, event: ts[BaseGatewayTestEvent], channel_values: dict[object, ts[object]]):
         with csp.state():
             s_values = {}
             print(f"Starting {self.name}")
@@ -428,16 +421,16 @@ class GatewayTestHarness(GatewayModule):
                 current_values = {k: v[-1][1] for k, v in s_values.items() if len(v) > 0}
                 tick_counts = {k: len(v) for k, v in s_values.items()}
                 reset = event.apply(csp.now(), current_values, tick_counts, ticked_values=s_values)
-            except AssertionError as e:
+            except AssertionError:
                 print(f"Assertion failed in test at {event._filename}:{event._lineno}")
-                raise e
-            except Exception as e:
+                raise
+            except Exception:
                 print(f"Exception in test at {event._filename}:{event._lineno}")
-                raise e
+                raise
             if reset:
                 s_values = {}
 
-    def advance(self, *, delay: Union[timedelta, datetime] = timedelta(seconds=1), msg: str = "", pre_msg: str = "") -> None:  # noqa: B008
+    def advance(self, *, delay: timedelta | datetime = timedelta(seconds=1), msg: str = "", pre_msg: str = "") -> None:
         """Convenience function to reset the state, and advance to the next part of the test by adding a delay.
         Optional messages are printed to help delimit sections of the test.
 
@@ -454,7 +447,7 @@ class GatewayTestHarness(GatewayModule):
     def reset(self):
         self.events.append(GatewayResetEvent(track_stack=not self.is_performance_test))
 
-    def delay(self, delay: Union[timedelta, datetime]):
+    def delay(self, delay: timedelta | datetime):
         """Move forward in time.
 
         Args:
@@ -539,7 +532,7 @@ class GatewayTestHarness(GatewayModule):
     def assert_len(self, channel, value):
         self.events.append(GatewayAssertLenEvent(channel=channel, value=value, track_stack=not self.is_performance_test))
 
-    def assert_ticked_values(self, channel, assert_func: Callable[[Sequence[Tuple[datetime, Any]]], None]):
+    def assert_ticked_values(self, channel, assert_func: Callable[[Sequence[tuple[datetime, Any]]], None]):
         """Apply an assert_func to the ticked values on a particular channel.
 
         :param channel: Channel to apply the assert_func on.

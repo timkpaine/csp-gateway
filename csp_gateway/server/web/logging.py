@@ -6,16 +6,17 @@ that redact sensitive information like tokens and passwords.
 
 import logging
 import re
-from typing import Any, Dict, List, Optional, Pattern
+from re import Pattern
+from typing import Any
 
 __all__ = (
+    "SENSITIVE_PATTERNS",
     "SecretRedactingFormatter",
     "get_secure_log_config",
-    "SENSITIVE_PATTERNS",
 )
 
 # Patterns to redact from logs (query params and headers)
-SENSITIVE_PATTERNS: List[Pattern] = [
+SENSITIVE_PATTERNS: list[Pattern] = [
     # Query parameters
     re.compile(r"(\?|&)(token|api_key|apikey|api-key|password|secret|access_token|refresh_token|id_token)=([^&\s]+)", re.IGNORECASE),
     # Authorization headers in logs
@@ -45,10 +46,10 @@ class SecretRedactingFormatter(logging.Formatter):
 
     def __init__(
         self,
-        fmt: Optional[str] = None,
-        datefmt: Optional[str] = None,
+        fmt: str | None = None,
+        datefmt: str | None = None,
         style: str = "%",
-        additional_patterns: Optional[List[Pattern]] = None,
+        additional_patterns: list[Pattern] | None = None,
     ):
         """Initialize the formatter with optional additional patterns.
 
@@ -87,8 +88,8 @@ class SecretRedactingFormatter(logging.Formatter):
 def get_secure_log_config(
     log_level: str = "info",
     access_log: bool = True,
-    additional_patterns: Optional[List[Pattern]] = None,
-) -> Dict[str, Any]:
+    additional_patterns: list[Pattern] | None = None,
+) -> dict[str, Any]:
     """Get a uvicorn log configuration with secret redaction.
 
     This returns a log config dict suitable for passing to uvicorn's
@@ -115,7 +116,7 @@ def get_secure_log_config(
         patterns.extend(additional_patterns)
 
     # Standard uvicorn log config with our custom formatter
-    config: Dict[str, Any] = {
+    config: dict[str, Any] = {
         "version": 1,
         "disable_existing_loggers": False,
         "formatters": {

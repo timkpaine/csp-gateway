@@ -1,5 +1,3 @@
-from typing import Optional
-
 from fastapi.openapi.models import APIKey, APIKeyIn
 from fastapi.security.base import SecurityBase
 from starlette.exceptions import HTTPException
@@ -18,8 +16,8 @@ class APIKeyQuery(APIKeyBase):
         self,
         *,
         name: str,
-        scheme_name: Optional[str] = None,
-        description: Optional[str] = None,
+        scheme_name: str | None = None,
+        description: str | None = None,
         auto_error: bool = True,
     ):
         self.model: APIKey = APIKey(
@@ -31,7 +29,7 @@ class APIKeyQuery(APIKeyBase):
         self.auto_error = auto_error
 
     @handle_exc_for_ws
-    async def __call__(self, request: HTTPConnection) -> Optional[str]:
+    async def __call__(self, request: HTTPConnection) -> str | None:
         api_key = request.query_params.get(self.model.name)
         if not api_key:
             if self.auto_error:
@@ -46,8 +44,8 @@ class APIKeyHeader(APIKeyBase):
         self,
         *,
         name: str,
-        scheme_name: Optional[str] = None,
-        description: Optional[str] = None,
+        scheme_name: str | None = None,
+        description: str | None = None,
         auto_error: bool = True,
     ):
         self.model: APIKey = APIKey(
@@ -59,7 +57,7 @@ class APIKeyHeader(APIKeyBase):
         self.auto_error = auto_error
 
     @handle_exc_for_ws
-    async def __call__(self, request: HTTPConnection) -> Optional[str]:
+    async def __call__(self, request: HTTPConnection) -> str | None:
         api_key = request.headers.get(self.model.name)
         if not api_key:
             if self.auto_error:
@@ -74,8 +72,8 @@ class APIKeyCookie(APIKeyBase):
         self,
         *,
         name: str,
-        scheme_name: Optional[str] = None,
-        description: Optional[str] = None,
+        scheme_name: str | None = None,
+        description: str | None = None,
         auto_error: bool = True,
     ):
         self.model: APIKey = APIKey(
@@ -87,7 +85,7 @@ class APIKeyCookie(APIKeyBase):
         self.auto_error = auto_error
 
     @handle_exc_for_ws
-    async def __call__(self, request: HTTPConnection) -> Optional[str]:
+    async def __call__(self, request: HTTPConnection) -> str | None:
         api_key = request.cookies.get(self.model.name)
         if not api_key:
             if self.auto_error:

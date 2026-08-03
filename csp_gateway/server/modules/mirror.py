@@ -1,5 +1,3 @@
-from typing import Dict, Optional, Tuple
-
 from pydantic import Field, field_validator
 
 from csp_gateway.server import ChannelSelection, ChannelsType, GatewayModule
@@ -15,16 +13,16 @@ class Mirror(GatewayModule):
 
     requires: ChannelSelection = []
     selection: ChannelSelection = Field(default_factory=ChannelSelection)
-    encode_selection: Optional[ChannelSelection] = Field(
+    encode_selection: ChannelSelection | None = Field(
         default=None,
         description=("Optional selection that can be specified to override the selection to specify channels only for encoding."),
     )
-    decode_selection: Optional[ChannelSelection] = Field(
+    decode_selection: ChannelSelection | None = Field(
         default=None,
         description=("Optional selection that can be specified to override the selection to specify channels only for decoding."),
     )
     mirror_source: EngineReplay
-    state_channels: Dict[str, Tuple[str, ...]] = Field(
+    state_channels: dict[str, tuple[str, ...]] = Field(
         default_factory=dict,
         description="Set which channels should be state channels and what their keyby value is",
     )

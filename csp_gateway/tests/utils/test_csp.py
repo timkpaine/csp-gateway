@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from typing import Dict, List
 
 import csp
 import pytest
@@ -16,8 +15,8 @@ from csp_gateway.utils import (
 
 
 def test_dict_basket_type_checks():
-    test_dict_typ = Dict[int, str]
-    test_dict_basket_typ = Dict[int, csp.ts[int]]
+    test_dict_typ = dict[int, str]
+    test_dict_basket_typ = dict[int, csp.ts[int]]
     assert not is_dict_basket(test_dict_typ)
     assert is_dict_basket(test_dict_basket_typ)
 
@@ -33,8 +32,8 @@ def test_dict_basket_type_checks():
 
 
 def test_is_list_basket():
-    test_list_typ = List[int]
-    test_list_basket_typ = List[csp.ts[int]]
+    test_list_typ = list[int]
+    test_list_basket_typ = list[csp.ts[int]]
     assert not is_list_basket(test_list_typ)
     assert is_list_basket(test_list_basket_typ)
 

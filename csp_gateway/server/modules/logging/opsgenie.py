@@ -2,7 +2,7 @@ import json
 import logging
 from collections import deque
 from datetime import timedelta
-from typing import Dict, List, Literal, Optional
+from typing import Literal
 
 import csp
 from csp import ts
@@ -50,28 +50,28 @@ class PublishOpsGenie(GatewayModule):
     ops_api_key: str = Field(description="The API key for OpsGenie.")
 
     # None of the channels are required
-    requires: Optional[ChannelSelection] = Field(default=[], description="List of required channels.")
-    events_channel: Optional[str] = Field(default=None, description="Channel for events.")
-    metrics_channel: Optional[str] = Field(default=None, description="Channel for metrics.")
+    requires: ChannelSelection | None = Field(default=[], description="List of required channels.")
+    events_channel: str | None = Field(default=None, description="Channel for events.")
+    metrics_channel: str | None = Field(default=None, description="Channel for metrics.")
     _api_client: "opsgenie_sdk.api_client.ApiClient" = PrivateAttr()
 
-    ops_tags: Optional[Dict[str, str]] = Field(default=None, description="Tags to be included with OpsGenie alerts.")
-    ops_async_delay_sec: Optional[float] = Field(default=5.0, description="Delay in seconds for asynchronous operations.")
-    ops_sync_delay_sec: Optional[float] = Field(default=5.0, description="Delay in seconds for synchronous operations.")
+    ops_tags: dict[str, str] | None = Field(default=None, description="Tags to be included with OpsGenie alerts.")
+    ops_async_delay_sec: float | None = Field(default=5.0, description="Delay in seconds for asynchronous operations.")
+    ops_sync_delay_sec: float | None = Field(default=5.0, description="Delay in seconds for synchronous operations.")
 
     # heartbeat related
     ops_heartbeat_name: str = Field(description="The name of the heartbeat.")
-    ops_heartbeat_interval: Optional[int] = Field(default=1, description="The interval at which heartbeats are sent.")
-    ops_heartbeat_interval_unit: Optional[Literal["minutes", "hours", "days"]] = Field(
+    ops_heartbeat_interval: int | None = Field(default=1, description="The interval at which heartbeats are sent.")
+    ops_heartbeat_interval_unit: Literal["minutes", "hours", "days"] | None = Field(
         default="minutes", description="The unit of the heartbeat interval."
     )
-    ops_heartbeat_alert_level: Optional[OpsGenieLevel] = Field(default=OpsGenieLevel.P2, description="The alert level for heartbeat issues.")
-    ops_heartbeat_metric_name: Optional[str] = Field(default="heartbeat", description="The metric name for heartbeat.")
-    ops_alert_min_level: Optional[OpsGenieLevel] = Field(
+    ops_heartbeat_alert_level: OpsGenieLevel | None = Field(default=OpsGenieLevel.P2, description="The alert level for heartbeat issues.")
+    ops_heartbeat_metric_name: str | None = Field(default="heartbeat", description="The metric name for heartbeat.")
+    ops_alert_min_level: OpsGenieLevel | None = Field(
         default=OpsGenieLevel.P3,
         description="The minimum alert level for OpsGenie alerts.",
     )
-    ops_alias_tags: Dict[str, List[str]] = Field(default={}, description="Tags to be used as OpsGenie alis for event_agregation")
+    ops_alias_tags: dict[str, list[str]] = Field(default={}, description="Tags to be used as OpsGenie alis for event_agregation")
     ops_alias_separator: str = Field(default=":", description="Separator to build OpsGenie alias.")
     ops_category_tag: str = Field(default="event_group", description="Tag that identifies event type.")
 
@@ -164,7 +164,7 @@ class PublishOpsGenie(GatewayModule):
             self._publish_heartbeat(metrics)
 
     @csp.node
-    def _publish_heartbeat(self, data: ts[List[MonitoringMetric]]):
+    def _publish_heartbeat(self, data: ts[list[MonitoringMetric]]):
         with csp.alarms():
             alarm = csp.alarm(bool)
 
@@ -186,7 +186,7 @@ class PublishOpsGenie(GatewayModule):
                     _request_timeout=self.ops_sync_delay_sec,
                 )
                 log.info("Disabled heartbeat '%s' on shutdown", self.ops_heartbeat_name)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- best-effort heartbeat disable on shutdown
                 log.error("Failed to disable heartbeat '%s' on shutdown: %s", self.ops_heartbeat_name, e)
 
         if csp.ticked(data):
@@ -246,8 +246,7 @@ class PublishOpsGenie(GatewayModule):
             s_alarm_scheduled = False
 
     @csp.node
-    def _publish_alerts(self, data: ts[List[MonitoringEvent]]):
-        """ """
+    def _publish_alerts(self, data: ts[list[MonitoringEvent]]):
         with csp.alarms():
             alarm = csp.alarm(bool)
 
@@ -290,8 +289,8 @@ class PublishOpsGenie(GatewayModule):
                                 True,
                             )
                             s_alarm_scheduled = True
-                    except Exception as e:
-                        log.error(e, exc_info=True)
+                    except Exception:
+                        log.exception("Error creating OpsGenie alert")
                 else:
                     log.trace(
                         "Ignoring MonitoringEvent alert level %s (logging level %s) below threshold %s",

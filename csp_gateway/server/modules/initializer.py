@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Any, Dict
+from typing import Any
 
 import csp
 
@@ -30,7 +30,7 @@ class Initialize(GatewayModule):
     # "value" should be a list of lists of GatewayStruct (where each entry in the outer list is one tick)
 
     @csp.node
-    def tick_engine_cycle(self) -> csp.ts[Dict[str, object]]:
+    def tick_engine_cycle(self) -> csp.ts[dict[str, object]]:
         with csp.alarms():
             a_send = csp.alarm(object)
 

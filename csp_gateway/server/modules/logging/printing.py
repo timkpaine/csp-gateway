@@ -1,5 +1,3 @@
-from typing import Optional
-
 import csp
 from pydantic import Field
 
@@ -14,7 +12,7 @@ class PrintChannels(GatewayModule):
     """
 
     selection: ChannelSelection = Field(default_factory=ChannelSelection)
-    requires: Optional[ChannelSelection] = []
+    requires: ChannelSelection | None = []
 
     def connect(self, channels: ChannelsType):
         for field in self.selection.select_from(channels):
