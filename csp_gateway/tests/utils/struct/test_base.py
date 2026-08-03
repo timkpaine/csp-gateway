@@ -1,6 +1,6 @@
 import decimal
 from datetime import date, datetime, timezone
-from typing import Annotated, Any, Dict, List
+from typing import Annotated, Any
 
 import numpy as np
 import pytest
@@ -61,8 +61,8 @@ class MyCspStruct(Struct):
 
 class MyCompositeStruct(GatewayStruct):
     order: SimpleOrder
-    order_list: List[SimpleOrder]
-    order_dict: Dict[str, SimpleOrder]
+    order_list: list[SimpleOrder]
+    order_dict: dict[str, SimpleOrder]
     csp_struct: MyCspStruct
 
 
@@ -118,14 +118,14 @@ def wrap_validator_dict(val: Any, handler: ValidatorFunctionWrapHandler):
 
 
 # Transform a number into a list of MyPydanticModel
-def list_transformer(v: Any) -> List[MyPydanticModel]:
+def list_transformer(v: Any) -> list[MyPydanticModel]:
     if isinstance(v, int):
         return [MyPydanticModel(x=v)]
     return [MyPydanticModel(x=x) for x in v]
 
 
 # Transform a number into a dict of MyPydanticModel
-def dict_transformer(v: Any) -> Dict[str, MyPydanticModel]:
+def dict_transformer(v: Any) -> dict[str, MyPydanticModel]:
     if isinstance(v, int):
         return {"key": MyPydanticModel(x=v)}
     return {k: MyPydanticModel(x=v[k]) for k in v}
@@ -133,17 +133,17 @@ def dict_transformer(v: Any) -> Dict[str, MyPydanticModel]:
 
 class StructB(GatewayStruct):
     # Test List annotations
-    list_field: List[MyPydanticModel]
-    list_annotated: Annotated[List[MyPydanticModel], BeforeValidator(list_transformer)]
+    list_field: list[MyPydanticModel]
+    list_annotated: Annotated[list[MyPydanticModel], BeforeValidator(list_transformer)]
     list_annotated_wrapped: Annotated[
-        List[MyPydanticModel],
+        list[MyPydanticModel],
         Field(default=None),
         WrapValidator(wrap_validator_list),
     ]
     # Test Dict annotations
-    dict_field: Dict[str, MyPydanticModel]
-    dict_annotated: Annotated[Dict[str, MyPydanticModel], BeforeValidator(dict_transformer)]
-    dict_annotated_wrapped: Annotated[Dict[str, MyPydanticModel], Field(default=None), WrapValidator(wrap_validator_dict)]
+    dict_field: dict[str, MyPydanticModel]
+    dict_annotated: Annotated[dict[str, MyPydanticModel], BeforeValidator(dict_transformer)]
+    dict_annotated_wrapped: Annotated[dict[str, MyPydanticModel], Field(default=None), WrapValidator(wrap_validator_dict)]
 
 
 class InnerNestedModel(BaseModel):
@@ -177,7 +177,7 @@ def middle_validator(val: Any, handler: ValidatorFunctionWrapHandler):
 class OuterPydanticModel(BaseModel):
     # Add validation to middle field using Annotated
     middle: Annotated[MiddleNestedModel, WrapValidator(middle_validator)]
-    tags: Dict[str, str] = {}
+    tags: dict[str, str] = {}
 
 
 # Create validators
@@ -212,7 +212,7 @@ class MiddleNestedStruct(GatewayStruct):
 class OuterStruct(GatewayStruct):
     # Top level struct with nested GatewayStruct
     middle: MiddleNestedStruct
-    tags: Dict[str, str] = {}
+    tags: dict[str, str] = {}
 
 
 # Create validators that work with pydantic models (since GatewayStruct.to_pydantic() converts to pydantic)
@@ -237,7 +237,7 @@ def test_exclude_id():
     o = SimpleOrderChild(timestamp=now, symbol="foo", quantity=100, settlement_date=now.date())
     # Since we exclude id from the set, the GatewayStruct automatically
     # consructs a new one on initialization
-    o2 = SimpleOrderChild.type_adapter().validate_python(o.to_dict(), context=dict(force_new_id=True))
+    o2 = SimpleOrderChild.type_adapter().validate_python(o.to_dict(), context={"force_new_id": True})
     assert o2.id != o.id
 
 
@@ -247,7 +247,7 @@ def test_exclude_id_timestamp_recursive():
     o2 = SimpleOrder(timestamp=now, symbol="bar", quantity=200, settlement_date=now.date())
 
     m = MyCompositeStruct(order=o, order_list=[o, o2])
-    m2 = MyCompositeStruct.type_adapter().validate_python(m.to_dict(), context=dict(force_new_timestamp=True, force_new_id=True))
+    m2 = MyCompositeStruct.type_adapter().validate_python(m.to_dict(), context={"force_new_timestamp": True, "force_new_id": True})
     assert m2.id != m.id
     assert m2.order.id != o.id
     assert m2.order_list[0].id != o.id
@@ -275,7 +275,7 @@ def test_int_to_str_coercion():
     class SmallStruct(GatewayStruct):
         z: str
 
-    my_model = SmallStruct.type_adapter().validate_python(dict(z=12345))
+    my_model = SmallStruct.type_adapter().validate_python({"z": 12345})
     assert my_model.z == "12345"
 
 

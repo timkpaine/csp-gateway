@@ -1,5 +1,6 @@
+from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import Any, Awaitable, Callable, Optional, Tuple, TypeVar
+from typing import Any, TypeVar
 
 from fastapi.exceptions import HTTPException, WebSocketException
 from starlette.requests import HTTPConnection
@@ -8,8 +9,8 @@ from starlette.websockets import WebSocket
 
 
 def get_authorization_scheme_param(
-    authorization_header_value: Optional[str],
-) -> Tuple[str, str]:
+    authorization_header_value: str | None,
+) -> tuple[str, str]:
     if not authorization_header_value:
         return "", ""
     scheme, _, param = authorization_header_value.partition(" ")
@@ -26,7 +27,7 @@ def handle_exc_for_ws(func: _SecurityDepFunc) -> _SecurityDepFunc:
             return await func(self, request)
         except HTTPException as e:
             if not isinstance(request, WebSocket):
-                raise e
+                raise
             # close before accepted with result a HTTP 403 so the exception argument is ignored
             # ref: https://asgi.readthedocs.io/en/latest/specs/www.html#close-send-event
             raise WebSocketException(code=WS_1008_POLICY_VIOLATION, reason=e.detail) from None

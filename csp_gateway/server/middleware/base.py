@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from fnmatch import fnmatch
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any
 
 from ccflow import PyObjectPath
 from fastapi import Request
@@ -12,10 +13,10 @@ __all__ = ("AuthenticationMiddleware", "IdentityAwareMiddlewareMixin")
 
 
 class AuthenticationMiddleware(GatewayModule):
-    scope: Optional[Union[str, List[str]]] = "*"
-    check: Optional[Union[PyObjectPath, Callable]] = None
+    scope: str | list[str] | None = "*"
+    check: PyObjectPath | Callable | None = None
 
-    def get_check_callable(self) -> Optional[Callable]:
+    def get_check_callable(self) -> Callable | None:
         """Return the check callable from PyObjectPath or direct callable."""
         if self.check is None:
             return None
@@ -84,7 +85,7 @@ class IdentityAwareMiddlewareMixin:
     # Note: cookie_name should be defined as a Pydantic Field in subclasses
     # e.g., cookie_name: str = Field(default="token", description="Cookie name")
 
-    async def get_identity(self, session_uuid: str) -> Optional[Dict[str, Any]]:
+    async def get_identity(self, session_uuid: str) -> dict[str, Any] | None:
         """Get identity from store by session UUID.
 
         This async method looks up a session UUID and returns the associated
@@ -107,10 +108,10 @@ class IdentityAwareMiddlewareMixin:
     async def get_identity_from_credentials(
         self,
         *,
-        cookies: Optional[Dict[str, str]] = None,
-        headers: Optional[Dict[str, str]] = None,
-        query_params: Optional[Dict[str, str]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        cookies: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        query_params: dict[str, str] | None = None,
+    ) -> dict[str, Any] | None:
         """Extract and validate credentials, returning identity if valid.
 
         This async method extracts credentials from the provided request data

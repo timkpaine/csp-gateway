@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import List, TypeVar, Union, get_args, get_origin  # noqa: TYP001
+from typing import TypeVar, get_args, get_origin
 
 import csp
 from csp import Outputs, ts
@@ -16,13 +16,13 @@ __all__ = (
     "_get_dict_basket_value_type",
     "_is_dict_basket",
     "_is_list_basket",
+    "get_args",
     "get_dict_basket_key_type",
     "get_dict_basket_value_tstype",
     "get_dict_basket_value_type",
+    "get_origin",
     "is_dict_basket",
     "is_list_basket",
-    "get_args",
-    "get_origin",
     "set_alarm_and_fetch_alarm_time",
     "to_list",
 )
@@ -78,13 +78,13 @@ def _get_dict_basket_value_type(val: type) -> type:
 
 
 @csp.node
-def to_list(x: ts["T"]) -> ts[List["T"]]:
+def to_list(x: ts["T"]) -> ts[list["T"]]:
     if csp.ticked(x):
         return [x]
 
 
 @csp.node
-def set_alarm_and_fetch_alarm_time(time: Union[datetime, timedelta]) -> Outputs(alarm_time=ts[datetime], alarm_ticked=ts[bool]):
+def set_alarm_and_fetch_alarm_time(time: datetime | timedelta) -> Outputs(alarm_time=ts[datetime], alarm_ticked=ts[bool]):
     with csp.alarms():
         engine_start: ts[bool] = csp.alarm(bool)
         alarm: ts[bool] = csp.alarm(bool)

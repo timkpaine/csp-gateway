@@ -1,5 +1,5 @@
 import abc
-from typing import Any, List, Union, get_args, get_origin
+from typing import Any, get_args, get_origin
 
 import csp
 from ccflow import BaseModel
@@ -16,7 +16,7 @@ class KafkaChannelProcessor(BaseModel, abc.ABC):
     """
 
     @abc.abstractmethod
-    def process(self, obj: Union[List[GatewayStruct], GatewayStruct], topic: str, key: str) -> Any:
+    def process(self, obj: list[GatewayStruct] | GatewayStruct, topic: str, key: str) -> Any:
         raise NotImplementedError()
 
     def apply_process(self, typ: Any, obj: ts[object], topic: str, key: str) -> ts[object]:

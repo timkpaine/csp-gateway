@@ -1,6 +1,5 @@
 import os
 import os.path
-from typing import Optional
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -19,7 +18,7 @@ from csp_gateway.server.web import GatewayWebApp
 
 
 class MountOutputsFolder(GatewayModule):
-    dir: Optional[str] = None
+    dir: str | None = None
 
     def connect(self, channels: GatewayChannels) -> None:
         if self.dir is None:
@@ -53,7 +52,7 @@ class MountOutputsFolder(GatewayModule):
                         request, "files.html.j2", context={"files": files_paths, "pid": os.getpid()}, media_type="text/html"
                     )
 
-                def iterfile():  #
+                def iterfile():
                     with open(file_or_dir, "rb") as fp:
                         yield from fp
 
@@ -66,4 +65,4 @@ class MountOutputsFolder(GatewayModule):
                     media_type = None
 
                 return StreamingResponse(iterfile(), media_type=media_type)
-            raise HTTPException(status_code=404, detail="Not found: {}".format(request.url._url))
+            raise HTTPException(status_code=404, detail=f"Not found: {request.url._url}")

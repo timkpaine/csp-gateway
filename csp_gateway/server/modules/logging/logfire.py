@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any
 
 import csp
 from csp import ts
@@ -43,7 +43,7 @@ log = logging.getLogger(__name__)
 
 # Global flag to track if logfire has been configured
 _logfire_configured = False
-_logfire_handler: Optional[Any] = None
+_logfire_handler: Any | None = None
 
 
 def is_logfire_configured() -> bool:
@@ -56,10 +56,10 @@ def is_logfire_configured() -> bool:
 
 
 def configure_logfire_early(
-    token: Optional[str] = None,
-    service_name: Optional[str] = "csp-gateway",
-    send_to_logfire: Optional[bool] = None,
-    console: Optional[Union[bool, Dict[str, Any]]] = None,
+    token: str | None = None,
+    service_name: str | None = "csp-gateway",
+    send_to_logfire: bool | None = None,
+    console: bool | dict[str, Any] | None = None,
     **configure_kwargs: Any,
 ) -> bool:
     """Configure Logfire early in application startup, before hydra runs.
@@ -101,7 +101,7 @@ def configure_logfire_early(
         return False
 
     # Build configure kwargs
-    kwargs: Dict[str, Any] = {}
+    kwargs: dict[str, Any] = {}
     if token is not None:
         kwargs["token"] = token
     if service_name is not None:
@@ -133,7 +133,7 @@ def configure_logfire_early(
 
         return True
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- optional logfire integration must never crash the app
         log.warning(f"Failed to configure logfire early: {e}")
         return False
 
@@ -177,11 +177,11 @@ class Logfire(GatewayModule):
             capture_logging: true
     """
 
-    token: Optional[str] = Field(
+    token: str | None = Field(
         default=None,
         description="Logfire API token. If None, uses LOGFIRE_TOKEN env var.",
     )
-    project_name: Optional[str] = Field(
+    project_name: str | None = Field(
         default=None,
         description="Logfire project name (required when using a project-scoped write token).",
     )
@@ -205,21 +205,21 @@ class Logfire(GatewayModule):
         default=logging.INFO,
         description="Minimum log level to capture.",
     )
-    send_to_logfire: Optional[bool] = Field(
+    send_to_logfire: bool | None = Field(
         default=None,
         description="Whether to send data to Logfire. Defaults to True if token is available.",
     )
-    console: Optional[Union[bool, Dict[str, Any]]] = Field(
+    console: bool | dict[str, Any] | None = Field(
         default=None,
         description="Console output configuration.",
     )
-    base_url: Optional[str] = Field(
+    base_url: str | None = Field(
         default=None,
         description="Base URL for Logfire API (for enterprise/self-hosted instances).",
     )
 
     # No channel requirements - this module only configures instrumentation
-    requires: Optional[ChannelSelection] = Field(default=[])
+    requires: ChannelSelection | None = Field(default=[])
 
     # Private attribute to track if this instance configured logfire
     _configured_by_this_instance: bool = PrivateAttr(default=False)
@@ -232,7 +232,7 @@ class Logfire(GatewayModule):
 
     @field_validator("log_level", mode="before")
     @classmethod
-    def _convert_log_level(cls, v: Union[str, int]) -> int:
+    def _convert_log_level(cls, v: str | int) -> int:
         if isinstance(v, str):
             level = logging.getLevelName(v.upper())
             if isinstance(level, int):
@@ -258,7 +258,7 @@ class Logfire(GatewayModule):
             log.debug("Logfire already configured, skipping")
             return
 
-        kwargs: Dict[str, Any] = {"service_name": self.service_name}
+        kwargs: dict[str, Any] = {"service_name": self.service_name}
 
         # Use project_name if specified
         if self.project_name is not None:
@@ -306,7 +306,7 @@ class Logfire(GatewayModule):
 
         # Configure logfire if not already done
         if not _logfire_configured:
-            kwargs: Dict[str, Any] = {"service_name": self.service_name}
+            kwargs: dict[str, Any] = {"service_name": self.service_name}
             if self.project_name is not None:
                 kwargs["project_name"] = self.project_name
             if self.token is not None:
@@ -323,7 +323,7 @@ class Logfire(GatewayModule):
                 logfire.configure(**kwargs)
                 _logfire_configured = True
                 log.info("Logfire configured via LogfireIntegration")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- optional logfire integration must never crash the app
                 log.warning(f"Failed to configure logfire: {e}")
                 return
 
@@ -340,10 +340,10 @@ class Logfire(GatewayModule):
             try:
                 logfire.instrument_pydantic()
                 log.debug("Pydantic instrumentation enabled")
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- optional logfire integration must never crash the app
                 log.warning(f"Failed to instrument Pydantic: {e}")
 
-    def rest(self, app: "GatewayWebApp") -> None:
+    def rest(self, app: GatewayWebApp) -> None:
         """Instrument the FastAPI application with Logfire.
 
         This is called after the web application is built.
@@ -361,7 +361,7 @@ class Logfire(GatewayModule):
             fastapi_app = getattr(app, "app", app)
             logfire.instrument_fastapi(fastapi_app)
             log.info("FastAPI instrumentation enabled")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- optional logfire integration must never crash the app
             log.warning(f"Failed to instrument FastAPI: {e}")
 
 
@@ -395,7 +395,7 @@ class PublishLogfire(GatewayModule):
         default=logging.INFO,
         description="Log level for channel data.",
     )
-    service_name: Optional[str] = Field(
+    service_name: str | None = Field(
         default=None,
         description="Optional service name override for channel logs.",
     )
@@ -409,7 +409,7 @@ class PublishLogfire(GatewayModule):
     )
 
     # No channels required - we select from what's available
-    requires: Optional[ChannelSelection] = Field(default=[])
+    requires: ChannelSelection | None = Field(default=[])
 
     @model_validator(mode="before")
     def check_import(cls, values):
@@ -419,7 +419,7 @@ class PublishLogfire(GatewayModule):
 
     @field_validator("log_level", mode="before")
     @classmethod
-    def _convert_log_level(cls, v: Union[str, int]) -> int:
+    def _convert_log_level(cls, v: str | int) -> int:
         if isinstance(v, str):
             level = logging.getLevelName(v.upper())
             if isinstance(level, int):
@@ -487,7 +487,7 @@ class PublishLogfire(GatewayModule):
             value = data
 
             # Build attributes dict
-            attributes: Dict[str, Any] = {
+            attributes: dict[str, Any] = {
                 "channel": channel_name,
             }
 
@@ -518,6 +518,6 @@ class PublishLogfire(GatewayModule):
                 elif log_level <= logging.INFO:
                     logfire.info(f"Channel tick: {channel_name}", **attributes)
                 elif log_level <= logging.WARNING:
-                    logfire.warn(f"Channel tick: {channel_name}", **attributes)
+                    logfire.warning(f"Channel tick: {channel_name}", **attributes)
                 else:
                     logfire.error(f"Channel tick: {channel_name}", **attributes)

@@ -3,9 +3,10 @@
 import base64
 import logging
 import platform
+from collections.abc import Callable
 from datetime import timedelta
 from socket import gethostname
-from typing import Any, Callable, Dict, Optional
+from typing import Any
 from uuid import uuid4
 
 from ccflow import PyObjectPath
@@ -25,7 +26,7 @@ __all__ = ("MountSimpleAuthMiddleware",)
 log = logging.getLogger(__name__)
 
 
-def _validate_host_unix(username: str, password: str) -> Optional[Dict[str, Any]]:
+def _validate_host_unix(username: str, password: str) -> dict[str, Any] | None:
     """Validate credentials on Unix/Linux/macOS using PAM.
 
     Tries pamela first, falls back to python-pam.
@@ -64,7 +65,7 @@ def _validate_host_unix(username: str, password: str) -> Optional[Dict[str, Any]
     return None
 
 
-def _get_unix_user_info(username: str) -> Dict[str, Any]:
+def _get_unix_user_info(username: str) -> dict[str, Any]:
     """Get Unix user info from pwd database."""
     try:
         import pwd
@@ -82,7 +83,7 @@ def _get_unix_user_info(username: str) -> Dict[str, Any]:
         return {"user": username}
 
 
-def _validate_host_windows(username: str, password: str) -> Optional[Dict[str, Any]]:
+def _validate_host_windows(username: str, password: str) -> dict[str, Any] | None:
     """Validate credentials on Windows using pywin32.
 
     Args:
@@ -118,7 +119,7 @@ def _validate_host_windows(username: str, password: str) -> Optional[Dict[str, A
                     "home": user_info.get("home_dir", ""),
                     "comment": user_info.get("comment", ""),
                 }
-            except Exception:
+            except Exception:  # noqa: BLE001 -- optional win32 user-info lookup is best-effort
                 return {"user": username}
 
         except win32security.error:
@@ -127,7 +128,7 @@ def _validate_host_windows(username: str, password: str) -> Optional[Dict[str, A
     except ImportError:
         log.warning("pywin32 package not installed. Install with: pip install pywin32")
         return None
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- windows auth degrades gracefully to None
         log.debug(f"Windows authentication failed for {username}: {e}")
         return None
 
@@ -162,7 +163,7 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
         validator is tried first. If it returns None, host auth is attempted.
     """
 
-    external_validator: Optional[PyObjectPath] = Field(
+    external_validator: PyObjectPath | None = Field(
         default=None,
         description="Path to external validation function (ccflow.PyObjectPath as string).",
     )
@@ -182,8 +183,8 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
     unauthorized_status_message: str = "unauthorized"
 
     # Private attributes
-    _identity_store: Dict[str, Dict[str, Any]] = PrivateAttr(default_factory=dict)
-    _app_settings: Optional[GatewaySettings] = PrivateAttr(default=None)
+    _identity_store: dict[str, dict[str, Any]] = PrivateAttr(default_factory=dict)
+    _app_settings: GatewaySettings | None = PrivateAttr(default=None)
     _app_module: Any = PrivateAttr(default=None)
 
     @field_validator("external_validator")
@@ -213,7 +214,7 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
         auth_type = "Host" if self.use_host_auth else "External"
         return f"\tSimple Auth ({auth_type}): {url}/login ({', '.join(methods)})"
 
-    def _validate_host(self, username: str, password: str) -> Optional[Dict[str, Any]]:
+    def _validate_host(self, username: str, password: str) -> dict[str, Any] | None:
         """Validate credentials against host/system authentication.
 
         Uses platform-appropriate authentication:
@@ -233,7 +234,7 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
         else:  # Linux, Darwin (macOS), etc.
             return _validate_host_unix(username, password)
 
-    def _validate_credentials(self, username: str, password: str) -> Optional[Dict[str, Any]]:
+    def _validate_credentials(self, username: str, password: str) -> dict[str, Any] | None:
         """Validate credentials using configured method(s).
 
         Tries external validator first (if configured), then host auth (if enabled).
@@ -259,16 +260,16 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
 
         return None
 
-    def _invoke_external(self, username: str, password: str, settings: GatewaySettings, module) -> Optional[Dict[str, Any]]:
+    def _invoke_external(self, username: str, password: str, settings: GatewaySettings, module) -> dict[str, Any] | None:
         """Invoke external validator function."""
         if self.external_validator is None:
             return None
         try:
             return self.external_validator.object(username, password, settings, module)
-        except Exception:
+        except Exception:  # noqa: BLE001 -- external validator may raise anything; treat as auth failure
             return None
 
-    def _create_session(self, identity: Dict[str, Any]) -> str:
+    def _create_session(self, identity: dict[str, Any]) -> str:
         """Create a new session and return the session UUID."""
         session_uuid = str(uuid4())
         while session_uuid in self._identity_store:
@@ -279,10 +280,10 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
     async def get_identity_from_credentials(
         self,
         *,
-        cookies: Optional[Dict[str, str]] = None,
-        headers: Optional[Dict[str, str]] = None,
-        query_params: Optional[Dict[str, str]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        cookies: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        query_params: dict[str, str] | None = None,
+    ) -> dict[str, Any] | None:
         """Extract and validate SimpleAuth credentials.
 
         Checks session cookie first, then HTTP Basic Auth header.
@@ -316,7 +317,7 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
                     identity = self._validate_credentials(username, password)
                     if identity and isinstance(identity, dict):
                         return identity
-                except Exception:
+                except Exception:  # noqa: BLE001, S110
                     pass
 
         return None
@@ -324,12 +325,13 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
     def validate(self) -> Callable:
         """Return a FastAPI dependency function for credential validation."""
         basic_security = HTTPBasic(auto_error=False)
+        basic_credentials_security = Security(basic_security)
         cookie_security = Security(APIKeyCookie(name=self.cookie_name, auto_error=False))
 
         async def validate_credentials(
             request: Request,
-            basic_credentials: Optional[HTTPBasicCredentials] = Security(basic_security),
-            session_cookie: Optional[str] = cookie_security,
+            basic_credentials: HTTPBasicCredentials | None = basic_credentials_security,
+            session_cookie: str | None = cookie_security,
         ) -> str:
             """Validate credentials and return session UUID."""
             # Check for existing session cookie first

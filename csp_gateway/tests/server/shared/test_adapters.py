@@ -1,6 +1,5 @@
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Tuple
 from unittest import mock
 
 import csp
@@ -159,7 +158,7 @@ def test_sql_polling_adapter_poll_with_callback():
     def custom_poll(connection: str, query: str, logger_name: str):
         return (connection, query, logger_name)
 
-    def callback(tup: Tuple[str, str, str]):
+    def callback(tup: tuple[str, str, str]):
         return tup[-1]
 
     connection = "MY_MOCK_CONNECTION"

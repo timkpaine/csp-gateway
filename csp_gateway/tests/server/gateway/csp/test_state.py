@@ -30,16 +30,16 @@ class CspSubStruct(Struct):
     subb: str = "b"
     subc: datetime = datetime.now()
     subd: str
-    sube: typing.Dict[str, str]
+    sube: dict[str, str]
     subf: MyEnum = MyEnum.A
 
 
-class NonCspStruct(object):
+class NonCspStruct:
     a: int = 0
     b: str
     c: datetime = datetime.now()
     d: str = ""
-    e: typing.Dict[str, str] = {"A": "hhello", "B": "bbye"}
+    e: dict[str, str] = {"A": "hhello", "B": "bbye"}
     f: MyEnum = MyEnum.A
     g: CspSubStruct = CspSubStruct()
 
@@ -53,9 +53,9 @@ class CspStruct(Struct):
     b: str
     c: datetime = datetime.now()
     d: str = ""
-    e: typing.Dict[str, str] = {"A": "hhello", "B": "bbye"}
+    e: dict[str, str] = {"A": "hhello", "B": "bbye"}
     f: MyEnum = MyEnum.A
-    h: typing.List[int] = [1, 2, 4]
+    h: list[int] = [1, 2, 4]
     i: list = [1, 2, 4]
     j: dict = {"a": "b"}
     g: CspSubStruct = CspSubStruct()
@@ -550,3 +550,28 @@ def test_duckdb_threads_spawn_expected_os_threads():
         assert wait_for_delta(base, 0) == 0
     finally:
         restore_duckdb_threads()
+
+
+class _OptStruct(Struct):
+    a: int | None = None
+    b: int | None = None
+    c: int = 0
+
+
+def test_remove_optional_supports_pep604_union():
+    # Both the classic typing.Optional/Union[X, None] and the PEP 604 ``X | None`` form must be
+    # recognized and unwrapped to their inner type.
+    assert state_module._remove_optional(typing.Optional[int]) == (int, True)  # noqa: UP045
+    assert state_module._remove_optional(int | None) == (int, True)
+    # Non-optional types are returned unchanged.
+    assert state_module._remove_optional(int) == (int, False)
+
+
+def test_duckdb_schema_includes_pep604_optional_fields():
+    # A struct with a PEP 604 ``int | None`` field must not have that field silently dropped from the
+    # DuckDB schema (regression: _remove_optional previously only matched typing.Union).
+    schema, use_duckdb = state_module.get_duckdb_schema_struct(_OptStruct)
+    assert use_duckdb
+    assert schema.get("a") == "BIGINT"  # typing.Optional[int]
+    assert schema.get("b") == "BIGINT"  # int | None
+    assert schema.get("c") == "BIGINT"

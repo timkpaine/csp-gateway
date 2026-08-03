@@ -1,6 +1,5 @@
 import itertools
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Type
 
 import csp
 import pytest
@@ -14,13 +13,13 @@ class MyStruct(GatewayStruct):
 
 
 class MyGatewayChannels(GatewayChannels):
-    my_str_basket: Dict[str, ts[MyStruct]] = None
+    my_str_basket: dict[str, ts[MyStruct]] = None
     my_channel1: ts[MyStruct] = None
     my_channel2: ts[MyStruct] = None
 
 
 class MyGateway(Gateway):
-    channels_model: Type[Channels] = MyGatewayChannels  # type: ignore[assignment]
+    channels_model: type[Channels] = MyGatewayChannels  # type: ignore[assignment]
 
 
 class MySetModuleFeedback(GatewayModule):
@@ -41,7 +40,7 @@ class MySetModuleFeedback(GatewayModule):
 
 class MySetModuleDict(GatewayModule):
     my_data: ts[MyStruct]
-    my_dep: Optional[str] = None
+    my_dep: str | None = None
     my_key: str
     by_key: bool = True
     filter_ticks: int = 2
@@ -70,7 +69,7 @@ class MySetModuleDict(GatewayModule):
 
 
 class MyGetModule(GatewayModule):
-    requires: Optional[ChannelSelection] = []  # so that we dont error if a channel isnt provided
+    requires: ChannelSelection | None = []  # so that we dont error if a channel isnt provided
 
     def connect(self, channels: MyGatewayChannels) -> None:
         for k, v in channels.get_channel(MyGatewayChannels.my_str_basket).items():

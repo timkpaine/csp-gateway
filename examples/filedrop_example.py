@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import csp
 
@@ -25,10 +25,10 @@ class MyStruct(GatewayStruct):
 
 class GWC(GatewayChannels):
     data: csp.ts[MyStruct] = None
-    list_data: csp.ts[List[MyStruct]] = None
+    list_data: csp.ts[list[MyStruct]] = None
     dict_data: dict[str, csp.ts[MyStruct]] = None
 
-    def dynamic_keys(self) -> Optional[Dict[str, List[Any]]]:
+    def dynamic_keys(self) -> dict[str, list[Any]] | None:
         """Define dynamic dictionary keys by field, driven by data from the channels."""
         keys = ["a", "b", "c"]
         return {

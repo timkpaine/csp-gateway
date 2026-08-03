@@ -1,5 +1,4 @@
 import json
-from typing import List
 
 import pytest
 import starlette.responses
@@ -44,7 +43,7 @@ def test_get_fully_qualified_type_name_with_model():
 
 def test_get_fully_qualified_type_name_with_list_model():
     """Test that get_fully_qualified_type_name extracts the type from a List."""
-    fq_name = get_fully_qualified_type_name(List[ExampleData])
+    fq_name = get_fully_qualified_type_name(list[ExampleData])
     assert fq_name == "csp_gateway.server.demo.omnibus.ExampleData"
 
 

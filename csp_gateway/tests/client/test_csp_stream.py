@@ -8,7 +8,8 @@ import socket
 import sys
 import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from logging import getLogger
+from typing import Any
 
 import csp
 import pytest
@@ -20,12 +21,14 @@ from csp_gateway.client.csp_stream import (
     _create_stream_csp_graph,
 )
 
+logger = getLogger(__name__)
+
 
 class SampleStruct(GatewayStruct):
     """A simple GatewayStruct for testing."""
 
-    value: Optional[int] = None
-    name: Optional[str] = None
+    value: int | None = None
+    name: str | None = None
 
 
 def test_gateway_stream_adapter_manager_init():
@@ -445,8 +448,8 @@ def test_stream_csp_integration_subscribe_and_receive(csp_stream_free_port):
     p = multiprocessing.Process(target=_run_gateway_for_csp_stream, args=(str(port),))
     p.start()
 
-    received_data: List[Dict[str, Any]] = []
-    test_exception: List[Exception] = []
+    received_data: list[dict[str, Any]] = []
+    test_exception: list[Exception] = []
 
     try:
         # Wait for server to start
@@ -476,7 +479,7 @@ def test_stream_csp_integration_subscribe_and_receive(csp_stream_free_port):
             if "received" in results:
                 for timestamp, data in results["received"]:
                     received_data.append(data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- capture any graph exception for later assertion
             test_exception.append(e)
 
     finally:
@@ -485,8 +488,8 @@ def test_stream_csp_integration_subscribe_and_receive(csp_stream_free_port):
 
         try:
             httpx.post(shutdown_url, timeout=1, follow_redirects=True)
-        except Exception:
-            pass
+        except httpx.RequestError as e:
+            logger.debug("Error shutting down gateway during test cleanup: %s", e)
         p.join(timeout=10)
         if p.is_alive():
             os.kill(p.pid, signal.SIGKILL)
@@ -512,8 +515,8 @@ def test_stream_csp_integration_dynamic_subscribe_unsubscribe(csp_stream_free_po
     p = multiprocessing.Process(target=_run_gateway_for_csp_stream, args=(str(port),))
     p.start()
 
-    received_data: List[Dict[str, Any]] = []
-    test_exception: List[Exception] = []
+    received_data: list[dict[str, Any]] = []
+    test_exception: list[Exception] = []
 
     try:
         # Wait for server to start
@@ -552,7 +555,7 @@ def test_stream_csp_integration_dynamic_subscribe_unsubscribe(csp_stream_free_po
             if "received" in results:
                 for timestamp, data in results["received"]:
                     received_data.append(data)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 -- capture any graph exception for later assertion
             test_exception.append(e)
 
     finally:
@@ -561,8 +564,8 @@ def test_stream_csp_integration_dynamic_subscribe_unsubscribe(csp_stream_free_po
 
         try:
             httpx.post(shutdown_url, timeout=1, follow_redirects=True)
-        except Exception:
-            pass
+        except httpx.RequestError as e:
+            logger.debug("Error shutting down gateway during test cleanup: %s", e)
         p.join(timeout=10)
         if p.is_alive():
             os.kill(p.pid, signal.SIGKILL)

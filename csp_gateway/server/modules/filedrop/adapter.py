@@ -1,9 +1,10 @@
 import csv
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional, TypeVar
+from typing import Any, TypeVar
 
 import orjson
 import pyarrow.parquet as pq
@@ -24,8 +25,8 @@ except ImportError:
 import csp
 
 __all__ = (
-    "FileDropType",
     "FileDropAdapterConfiguration",
+    "FileDropType",
     "filedrop_adapter_def",
 )
 
@@ -49,13 +50,13 @@ class FileDropAdapterConfiguration:
     # Format of files to expect to load properly i.e parquet, json, csv
     filedrop_type: FileDropType
     # List of extensions to filter, empty list means all extensions are allowed
-    extensions: List[str]
+    extensions: list[str]
     # custom loader for loading files into list of struct like data
-    loader: Optional[Callable[[str], List[Any]]]
+    loader: Callable[[str], list[Any]] | None
     # deserialize each data point to data type expected by channel type
-    deserializer: Optional[Callable[[Any], Any]]
+    deserializer: Callable[[Any], Any] | None
     # Extra args to the type adapter deserializer
-    type_adapter_args: Dict[str, Any]
+    type_adapter_args: dict[str, Any]
 
 
 class FileReaderBase:
@@ -82,37 +83,32 @@ class FileReaderBase:
         """Generator to return stucts from a filepath"""
 
         should_read = True
-        if self.extensions:
-            if not any([src_path.endswith(suffix) for suffix in self.extensions]):
-                should_read = False
+        if self.extensions and not any(src_path.endswith(suffix) for suffix in self.extensions):
+            should_read = False
         if should_read:
             dicts = self.read_impl(src_path)
             structs = [self.deserializer(d) for d in dicts]
-            for s in structs:
-                yield s
+            yield from structs
 
-    def read_impl(self, src_path: str) -> List[dict]:
+    def read_impl(self, src_path: str) -> list[dict]:
         """File type specific implementation"""
 
-        raise Exception(f"read not implemented for {self}")
+        raise NotImplementedError(f"read not implemented for {self}")
 
 
 class FileReaderCsv(FileReaderBase):
     """File reader for json file type"""
 
-    def read_impl(self, src_path: str) -> List[Any]:
-        data = []
-        with open(src_path, "r") as f:
+    def read_impl(self, src_path: str) -> list[Any]:
+        with open(src_path) as f:
             reader = csv.DictReader(f)
-            for row in reader:
-                data.append(row)
-        return data
+            return list(reader)
 
 
 class FileReaderJson(FileReaderBase):
     """File reader for json file type"""
 
-    def read_impl(self, src_path: str) -> List[Any]:
+    def read_impl(self, src_path: str) -> list[Any]:
         with open(src_path, "rb") as f:
             data = orjson.loads(f.read())
         if isinstance(data, list):
@@ -125,7 +121,7 @@ class FileReaderJson(FileReaderBase):
 class FileReaderParquet(FileReaderBase):
     """File reader for parquet file type"""
 
-    def read_impl(self, src_path: str) -> List[Any]:
+    def read_impl(self, src_path: str) -> list[Any]:
         table = pq.read_table(src_path)
         return table.to_pylist()
 
@@ -137,7 +133,7 @@ class FileReaderCustom(FileReaderBase):
         super().__init__(config, ts_typ)
         self._loader = config.loader
 
-    def read_impl(self, src_path: str) -> List[Any]:
+    def read_impl(self, src_path: str) -> list[Any]:
         return self._loader(src_path)
 
 
@@ -170,7 +166,7 @@ class EventHandlerCustom(FileSystemEventHandler):
             try:
                 for data in self.file_reader.read(file_path):
                     self.adapter.push_tick(data)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- file-watch callback must not crash on a bad file
                 log.error(f"Failed to read data from {file_path} with exception: {e}, skipping")
 
 
@@ -216,7 +212,7 @@ _filedrop_adapter_def = py_push_adapter_def(
     _FileDropImpl,
     csp.ts[object],
     config=FileDropAdapterConfiguration,
-    ts_typ=List[T],
+    ts_typ=list[T],
 )
 
 

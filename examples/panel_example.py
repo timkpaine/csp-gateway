@@ -6,7 +6,7 @@ advantages/disadvantages to each approach."""
 import logging
 from datetime import timedelta
 from queue import Queue
-from typing import Any, Dict, Optional
+from typing import Any
 
 import csp
 import numpy as np
@@ -60,9 +60,9 @@ class ExamplePanelApp(BaseModel):
 
     port: int = Field(description="Port you want to serve the panel app on.")
 
-    _data: Optional[pd.DataFrame] = PrivateAttr(default=None)
+    _data: pd.DataFrame | None = PrivateAttr(default=None)
     _plotly_pane: pn.reactive.Reactive = PrivateAttr(default_factory=pn.pane.Plotly)
-    _plotly_data: Dict[str, Any] = PrivateAttr(default_factory=dict)
+    _plotly_data: dict[str, Any] = PrivateAttr(default_factory=dict)
     _queue: Queue = PrivateAttr(default_factory=Queue)
 
     def _create_panel(self):
@@ -83,7 +83,7 @@ class ExamplePanelApp(BaseModel):
         while True:
             timestamp, data = self._queue.get()
             if self._data is None:
-                self._plotly_data = {"data": [], "layout": dict(title="Timeseries of data", xaxis={"title": "timestamp"})}
+                self._plotly_data = {"data": [], "layout": {"title": "Timeseries of data", "xaxis": {"title": "timestamp"}}}
 
                 self._data = pd.DataFrame({"x": data.x, "y": data.y, "z": data.z}, index=[timestamp])
             else:

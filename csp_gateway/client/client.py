@@ -11,12 +11,13 @@ from asyncio import (
     wait_for,
     wrap_future,
 )
+from collections.abc import Callable
 from copy import deepcopy
 from enum import Enum
 from functools import lru_cache
 from importlib import import_module
 from threading import Thread
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, Union, cast
 
 from httpx import AsyncClient as httpx_AsyncClient, Response, get as GET, post as POST
 from jsonref import replace_refs
@@ -53,21 +54,21 @@ from ..utils import (
 )
 
 __all__ = (
-    "GatewayClientConfig",
-    "ResponseWrapper",
-    "ResponseType",
-    "ReturnType",
-    "BaseGatewayClient",
-    "SyncGatewayClientMixin",
-    "SyncGatewayClient",
-    "AsyncGatewayClientMixin",
-    "AsyncGatewayClient",
-    "Client",
     "AsyncClient",
+    "AsyncGatewayClient",
+    "AsyncGatewayClientMixin",
+    "BaseGatewayClient",
+    "Client",
     "ClientConfig",
-    "GatewayClient",
-    "GatewayClientConfiguration",
     "ClientConfiguration",
+    "GatewayClient",
+    "GatewayClientConfig",
+    "GatewayClientConfiguration",
+    "ResponseType",
+    "ResponseWrapper",
+    "ReturnType",
+    "SyncGatewayClient",
+    "SyncGatewayClientMixin",
 )
 
 log = logging.getLogger(__name__)
@@ -142,16 +143,14 @@ def _normalize_field(field: str) -> str:
     return field
 
 
-def _get_schema(spec: Dict[str, Any], path: str) -> Optional[Dict[str, Any]]:
+def _get_schema(spec: dict[str, Any], path: str) -> dict[str, Any] | None:
     if (paths := spec.get("paths")) is None:
         return None
 
     if (path_data := paths.get(path)) is None:
         # could be a lookup for an id, or a key
         base_path = path.rpartition("/")[0]
-        if (possible_path := paths.get(base_path + "/{id}")) is not None:
-            path_data = possible_path
-        elif (possible_path := paths.get(base_path + "/{key}")) is not None:
+        if (possible_path := paths.get(base_path + "/{id}")) is not None or (possible_path := paths.get(base_path + "/{key}")) is not None:
             path_data = possible_path
         else:
             return None
@@ -163,7 +162,7 @@ def _get_schema(spec: Dict[str, Any], path: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _get_type_name(spec: Dict[str, Any], path: str) -> Optional[str]:
+def _get_type_name(spec: dict[str, Any], path: str) -> str | None:
     """Get the fully qualified type name from the openapi_extra type_ field.
 
     Args:
@@ -180,9 +179,7 @@ def _get_type_name(spec: Dict[str, Any], path: str) -> Optional[str]:
     if (path_data := paths.get(path)) is None:
         # could be a lookup for an id, or a key
         base_path = path.rpartition("/")[0]
-        if (possible_path := paths.get(base_path + "/{id}")) is not None:
-            path_data = possible_path
-        elif (possible_path := paths.get(base_path + "/{key}")) is not None:
+        if (possible_path := paths.get(base_path + "/{id}")) is not None or (possible_path := paths.get(base_path + "/{key}")) is not None:
             path_data = possible_path
         else:
             return None
@@ -200,7 +197,7 @@ def _raiseIfNotMounted(foo: Callable) -> Callable:
         check_field = _normalize_field(field)
 
         if check_field and check_field not in self._mounted_apis[group]:
-            raise ServerRouteNotMountedException("Route not mounted in group {}: {}".format(group, field))
+            raise ServerRouteNotMountedException(f"Route not mounted in group {group}: {field}")
         return foo(self, field, *args, **kwargs)
 
     return _wrapped_foo
@@ -217,24 +214,22 @@ def _host(config) -> str:
             host = f"http://{host}"
         else:
             host = f"{config.protocol}://{host}"
-    if host.endswith("/"):
-        host = host[:-1]
-    if config.port:
-        if config.port not in (80, 443):
-            host += f":{config.port}"
+    host = host.removesuffix("/")
+    if config.port and config.port not in (80, 443):
+        host += f":{config.port}"
 
     return host
 
 
 class GatewayClientConfig(BaseModel):
-    model_config = dict(extra="forbid")  # To raise error on misspelling/misspecification
+    model_config = {"extra": "forbid"}  # To raise error on misspelling/misspecification
 
     protocol: Literal["http", "https"] = "http"
     host: str = "localhost"
-    port: Optional[int] = Field(default=8000, ge=1, le=65535, description="Port number for the gateway server")
+    port: int | None = Field(default=8000, ge=1, le=65535, description="Port number for the gateway server")
     api_route: str = "/api/v1"
     api_key: str = ""
-    bearer_token: Optional[str] = None
+    bearer_token: str | None = None
     return_type: ReturnType = Field(
         default=ReturnType.Raw,
         description="Determines how REST request responses should be returned. Options: 'raw' (JSON dict), 'pandas' (DataFrame), 'polars' (DataFrame), 'struct' (original type), 'wrapper' (ResponseWrapper object).",
@@ -267,15 +262,14 @@ class GatewayClientConfig(BaseModel):
 
 class ResponseWrapper(BaseModel):
     json_data: Any
-    openapi_schema: Optional[Dict[str, Any]] = None
-    type_name: Optional[str] = None
+    openapi_schema: dict[str, Any] | None = None
+    type_name: str | None = None
 
     @field_validator("openapi_schema", mode="after")
     def validate_openapi_schema(cls, v):
-        if v is not None:
-            # we have a list of items, so we get the properties for those
-            if (schema := v.get("items")) is not None:
-                return schema
+        # we have a list of items, so we get the properties for those
+        if v is not None and (schema := v.get("items")) is not None:
+            return schema
         return v
 
     def is_empty(self):
@@ -284,7 +278,7 @@ class ResponseWrapper(BaseModel):
     def as_json(self):
         return self.json_data
 
-    def as_struct(self) -> Union[Any, List[Any]]:
+    def as_struct(self) -> Any | list[Any]:
         """Convert JSON data to the original struct type using the type_ from openapi_extra.
 
         This method uses the fully qualified type name stored in openapi_extra to
@@ -349,7 +343,7 @@ class ResponseWrapper(BaseModel):
             res = pd.json_normalize(self.json_data)
             # we do this to not change the order of columns
             columns = {col: True for col in res.columns}
-            for col in pandas_dtypes.keys():
+            for col in pandas_dtypes:
                 if col not in columns:
                     columns[col] = True
             # We might have some columns missing data,
@@ -381,7 +375,7 @@ class ResponseWrapper(BaseModel):
         return pl.json_normalize(self.json_data, schema=polars_dtypes)
 
 
-ResponseType = Union[ResponseWrapper, Dict[str, Any], "PandasDataFrame", "PolarsDataFrame", List[Any], Any]
+ResponseType = Union[ResponseWrapper, dict[str, Any], "PandasDataFrame", "PolarsDataFrame", list[Any], Any]
 
 
 def _get_or_new_event_loop() -> AbstractEventLoop:
@@ -398,8 +392,8 @@ class BaseGatewayClient(BaseModel):
     # server configuration
     config: GatewayClientConfig = Field(default_factory=GatewayClientConfig)
 
-    http_args: Dict[str, Any] = Field(
-        default=dict(follow_redirects=True), description="Additional arguments to pass to httpx requests (e.g., headers, auth, etc.)"
+    http_args: dict[str, Any] = Field(
+        default={"follow_redirects": True}, description="Additional arguments to pass to httpx requests (e.g., headers, auth, etc.)"
     )
 
     # Additional initialization for bearer_token
@@ -413,8 +407,8 @@ class BaseGatewayClient(BaseModel):
 
     # openapi configureation
     _initialized: bool = PrivateAttr(default=False)
-    _openapi_spec: Dict[Any, Any] = PrivateAttr(default=None)
-    _mounted_apis: Dict[str, set] = PrivateAttr(
+    _openapi_spec: dict[Any, Any] = PrivateAttr(default=None)
+    _mounted_apis: dict[str, set] = PrivateAttr(
         default={
             "controls": set(),
             "last": set(),
@@ -429,8 +423,8 @@ class BaseGatewayClient(BaseModel):
     _initialized_streaming: Future = PrivateAttr(default=None)
     _request_queue: Queue = PrivateAttr(default=None)
     _event_loop_setup: bool = PrivateAttr(default=False)
-    _event_loop: Optional[AbstractEventLoop] = PrivateAttr(default=None)
-    _event_loop_thread: Optional[Thread] = PrivateAttr(default=None)
+    _event_loop: AbstractEventLoop | None = PrivateAttr(default=None)
+    _event_loop_thread: Thread | None = PrivateAttr(default=None)
 
     @model_validator(mode="after")
     def validate_client(self):
@@ -469,9 +463,9 @@ class BaseGatewayClient(BaseModel):
             # grab openapi spec
             openapi_url = f"{_host(self.config)}/openapi.json"
             openapi_params = {"token": self.config.api_key} if self.config.api_key else None
-            self._openapi_spec: Dict[Any, Any] = replace_refs(
+            self._openapi_spec: dict[Any, Any] = replace_refs(
                 cast(
-                    Dict[Any, Any],
+                    dict[Any, Any],
                     GET(openapi_url, params=openapi_params, **self.http_args),
                 ).json(),
             )
@@ -536,9 +530,9 @@ class BaseGatewayClient(BaseModel):
 
     def _handle_response(self, resp: Response, route: str) -> ResponseType:
         try:
-            resp_json = cast(Dict[str, Any], resp.json())
+            resp_json = cast(dict[str, Any], resp.json())
         except JSONDecodeError as e:
-            resp_json = dict(detail=str(e))
+            resp_json = {"detail": str(e)}
         if resp.status_code == 200:
             return_type = self.config.return_type
             if return_type in (ReturnType.Raw, ReturnType.JSON):
@@ -568,7 +562,7 @@ class BaseGatewayClient(BaseModel):
     def _get(
         self,
         route: str,
-        params: Dict[str, Any] = None,
+        params: dict[str, Any] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
     ) -> ResponseType:
         params = params or {}
@@ -578,7 +572,7 @@ class BaseGatewayClient(BaseModel):
     async def _getasync(
         self,
         route: str,
-        params: Dict[str, Any] = None,
+        params: dict[str, Any] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
     ) -> ResponseType:
         params = params or {}
@@ -591,8 +585,8 @@ class BaseGatewayClient(BaseModel):
     def _post(
         self,
         route: str,
-        params: Dict[str, Any] = None,
-        data: Dict[str, Any] = None,
+        params: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
     ) -> ResponseType:
         params = params or {}
@@ -604,8 +598,8 @@ class BaseGatewayClient(BaseModel):
     async def _postasync(
         self,
         route: str,
-        params: Dict[str, Any] = None,
-        data: Dict[str, Any] = None,
+        params: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
     ) -> ResponseType:
         params = params or {}
@@ -617,9 +611,9 @@ class BaseGatewayClient(BaseModel):
 
     def _stream(
         self,
-        channels: Optional[List[Union[str, Tuple[str, str]]]] = None,
-        callback: Callable = None,
-        timeout: Optional[float] = None,
+        channels: list[str | tuple[str, str]] | None = None,
+        callback: Callable | None = None,
+        timeout: float | None = None,
     ):
         if callback:
             it = aiter(self._streamAsync(channels=channels))
@@ -637,7 +631,7 @@ class BaseGatewayClient(BaseModel):
             except StopAsyncIteration:
                 return
 
-    async def _streamAsync(self, channels: Optional[List[Union[str, Tuple[str, str]]]] = None):
+    async def _streamAsync(self, channels: list[str | tuple[str, str]] | None = None):
         if not self._initialized_streaming.done():
             self._initializeStreaming()
 
@@ -653,11 +647,11 @@ class BaseGatewayClient(BaseModel):
         async for data in self._connectAsync():
             yield data
 
-    async def _subscribe(self, channel: str, key: Optional[str] = None):
+    async def _subscribe(self, channel: str, key: str | None = None):
         if not self._initialized_streaming:
             await self._initialized_streaming
 
-        subscription = dict(action="subscribe", channel=channel)
+        subscription = {"action": "subscribe", "channel": channel}
         if key is not None:
             subscription["key"] = key
 
@@ -672,11 +666,11 @@ class BaseGatewayClient(BaseModel):
             loop=self._event_loop,
         )
 
-    async def _unsubscribe(self, channel: str, key: Optional[str] = None):
+    async def _unsubscribe(self, channel: str, key: str | None = None):
         if not self._initialized_streaming:
             await self._initialized_streaming
 
-        subscription_removal = dict(action="unsubscribe", channel=channel)
+        subscription_removal = {"action": "unsubscribe", "channel": channel}
         if key is not None:
             subscription_removal["key"] = key
 
@@ -691,10 +685,10 @@ class BaseGatewayClient(BaseModel):
             loop=self._event_loop,
         )
 
-    async def _publish(self, channel: str, data: Union[Dict[str, Any], List[Any]], key: Optional[str] = None):
+    async def _publish(self, channel: str, data: dict[str, Any] | list[Any], key: str | None = None):
         if not self._initialized_streaming:
             await self._initialized_streaming
-        send_msg = dict(action="send", channel=channel, data=data)
+        send_msg = {"action": "send", "channel": channel, "data": data}
         if key is not None:
             send_msg["key"] = key
         if self._event_loop_setup:
@@ -718,9 +712,7 @@ class BaseGatewayClient(BaseModel):
         async for msg in ws:
             if msg.type == WSMsgType.TEXT:
                 yield ("out", loads(msg.data))
-            elif msg.type == WSMsgType.CLOSED:
-                break
-            elif msg.type == WSMsgType.ERROR:
+            elif msg.type == WSMsgType.CLOSED or msg.type == WSMsgType.ERROR:
                 break
 
     async def _clientRequests(self):
@@ -756,22 +748,21 @@ class BaseGatewayClient(BaseModel):
 
         route = self._buildroutews("stream")
 
-        async with self._aiohttp_session() as session:
-            async with session.ws_connect(route) as ws:
-                # merge async generators
-                merged = merge(self._websocketData(ws), self._clientRequests())
+        async with self._aiohttp_session() as session, session.ws_connect(route) as ws:
+            # merge async generators
+            merged = merge(self._websocketData(ws), self._clientRequests())
 
-                async with merged.stream() as streamer:
-                    async for direction, data in streamer:
-                        if direction == "in":
-                            # send to server
-                            await ws.send_json(data)
-                        elif direction == "out":
-                            # yield out to client
-                            yield data
-                        else:
-                            # ignore
-                            ...
+            async with merged.stream() as streamer:
+                async for direction, data in streamer:
+                    if direction == "in":
+                        # send to server
+                        await ws.send_json(data)
+                    elif direction == "out":
+                        # yield out to client
+                        yield data
+                    else:
+                        # ignore
+                        ...
 
     # Public Functions
 
@@ -790,34 +781,34 @@ class BaseGatewayClient(BaseModel):
     def lookup(self, field: str, id: str, timeout: float = _DEFAULT_TIMEOUT) -> ResponseType: ...
 
     @abstractmethod
-    def next(self, field: str = "", timeout: float = None) -> ResponseType: ...
+    def next(self, field: str = "", timeout: float | None = None) -> ResponseType: ...
 
     @abstractmethod
     def send(self, field: str = "", data: Any = None, timeout: float = _DEFAULT_TIMEOUT) -> ResponseType: ...
 
     @abstractmethod
-    def state(self, field: str = "", timeout: float = _DEFAULT_TIMEOUT, query: Optional[Query] = None) -> ResponseType: ...
+    def state(self, field: str = "", timeout: float = _DEFAULT_TIMEOUT, query: Query | None = None) -> ResponseType: ...
 
     @abstractmethod
-    def stream(self, channels: Optional[List[Union[str, Tuple[str, str]]]] = None, timeout: Optional[float] = None): ...
+    def stream(self, channels: list[str | tuple[str, str]] | None = None, timeout: float | None = None): ...
 
     # NOTE: sync version
     # def stream(self, channels: List[str] = None, callback: Callable = None):
 
     @abstractmethod
-    def subscribe(self, field: str = "", key: Optional[str] = None): ...
+    def subscribe(self, field: str = "", key: str | None = None): ...
 
     @abstractmethod
-    def publish(self, field: str, data: Any, key: Optional[str] = None): ...
+    def publish(self, field: str, data: Any, key: str | None = None): ...
 
     @abstractmethod
-    def unsubscribe(self, field: str = "", key: Optional[str] = None): ...
+    def unsubscribe(self, field: str = "", key: str | None = None): ...
 
 
 class SyncGatewayClientMixin:
     @_raiseIfNotMounted
     def controls(
-        self, field: str = "", data: Any = None, timeout: float = _DEFAULT_TIMEOUT, return_type_override: Optional[ReturnType] = None
+        self, field: str = "", data: Any = None, timeout: float = _DEFAULT_TIMEOUT, return_type_override: ReturnType | None = None
     ) -> ResponseType:
         if return_type_override is not None:
             old_return_type = self.config.return_type
@@ -831,7 +822,7 @@ class SyncGatewayClientMixin:
         return res
 
     @_raiseIfNotMounted
-    def last(self, field: str = "", timeout: float = _DEFAULT_TIMEOUT, return_type_override: Optional[ReturnType] = None) -> ResponseType:
+    def last(self, field: str = "", timeout: float = _DEFAULT_TIMEOUT, return_type_override: ReturnType | None = None) -> ResponseType:
         if return_type_override is not None:
             old_return_type = self.config.return_type
             self.config.return_type = return_type_override
@@ -841,7 +832,7 @@ class SyncGatewayClientMixin:
         return res
 
     @_raiseIfNotMounted
-    def lookup(self, field: str, id: str, timeout: float = _DEFAULT_TIMEOUT, return_type_override: Optional[ReturnType] = None) -> ResponseType:
+    def lookup(self, field: str, id: str, timeout: float = _DEFAULT_TIMEOUT, return_type_override: ReturnType | None = None) -> ResponseType:
         if return_type_override is not None:
             old_return_type = self.config.return_type
             self.config.return_type = return_type_override
@@ -851,7 +842,7 @@ class SyncGatewayClientMixin:
         return res
 
     @_raiseIfNotMounted
-    def next(self, field: str = "", timeout: float = None, return_type_override: Optional[ReturnType] = None) -> ResponseType:
+    def next(self, field: str = "", timeout: float | None = None, return_type_override: ReturnType | None = None) -> ResponseType:
         if return_type_override is not None:
             old_return_type = self.config.return_type
             self.config.return_type = return_type_override
@@ -862,7 +853,7 @@ class SyncGatewayClientMixin:
 
     @_raiseIfNotMounted
     def send(
-        self, field: str = "", data: Any = None, timeout: float = _DEFAULT_TIMEOUT, return_type_override: Optional[ReturnType] = None
+        self, field: str = "", data: Any = None, timeout: float = _DEFAULT_TIMEOUT, return_type_override: ReturnType | None = None
     ) -> ResponseType:
         if return_type_override is not None:
             old_return_type = self.config.return_type
@@ -874,7 +865,7 @@ class SyncGatewayClientMixin:
 
     @_raiseIfNotMounted
     def state(
-        self, field: str = "", timeout: float = _DEFAULT_TIMEOUT, query: Optional[Query] = None, return_type_override: Optional[ReturnType] = None
+        self, field: str = "", timeout: float = _DEFAULT_TIMEOUT, query: Query | None = None, return_type_override: ReturnType | None = None
     ) -> ResponseType:
         if return_type_override is not None:
             old_return_type = self.config.return_type
@@ -885,7 +876,7 @@ class SyncGatewayClientMixin:
             self.config.return_type = old_return_type
         return res
 
-    def stream(self, channels: Optional[List[Union[str, Tuple[str, str]]]] = None, callback: Callable = None, timeout: Optional[float] = None):
+    def stream(self, channels: list[str | tuple[str, str]] | None = None, callback: Callable | None = None, timeout: float | None = None):
         """Stream data from specified channels with optional key filtering for dict baskets.
 
         Establishes a synchronous streaming connection to receive real-time updates from the specified channels.
@@ -902,7 +893,7 @@ class SyncGatewayClientMixin:
         """
         self._stream(channels=channels, callback=callback, timeout=timeout)
 
-    def publish(self, field: str, data: Union[Dict[str, Any], List[Any]], key: Optional[str] = None):
+    def publish(self, field: str, data: dict[str, Any] | list[Any], key: str | None = None):
         """Publish data to a channel or specific key within a dict basket channel.
 
         This synchronous method sends data to a specific channel. For dict basket channels,
@@ -915,7 +906,7 @@ class SyncGatewayClientMixin:
         """
         self._event_loop.run_until_complete(self._publish(channel=field, data=data, key=key))
 
-    def subscribe(self, field: str = "", key: Optional[str] = None):
+    def subscribe(self, field: str = "", key: str | None = None):
         """Subscribe to a channel or specific key within a dict basket channel.
 
         This synchronous method subscribes to data updates from a specific channel. For dict basket channels,
@@ -927,7 +918,7 @@ class SyncGatewayClientMixin:
         """
         self._event_loop.run_until_complete(self._subscribe(channel=field, key=key))
 
-    def unsubscribe(self, field: str = "", key: Optional[str] = None):
+    def unsubscribe(self, field: str = "", key: str | None = None):
         """Unsubscribe from a channel or specific key within a dict basket channel.
 
         This synchronous method unsubscribes from data updates from a specific channel. For dict basket channels,
@@ -1044,8 +1035,6 @@ class SyncGatewayClient(SyncGatewayClientMixin, BaseGatewayClient):
         - unsubscribe
     """
 
-    ...
-
 
 class AsyncGatewayClientMixin:
     @_raiseIfNotMounted
@@ -1063,7 +1052,7 @@ class AsyncGatewayClientMixin:
         return await self._getasync("{}/{}/{}".format("lookup", field, id), timeout=timeout)
 
     @_raiseIfNotMounted
-    async def next(self, field: str = "", timeout: float = None) -> ResponseType:
+    async def next(self, field: str = "", timeout: float | None = None) -> ResponseType:
         return await self._getasync("{}/{}".format("next", field), timeout=timeout)
 
     @_raiseIfNotMounted
@@ -1071,11 +1060,11 @@ class AsyncGatewayClientMixin:
         return await self._postasync("{}/{}".format("send", field), data=data, timeout=timeout)
 
     @_raiseIfNotMounted
-    async def state(self, field: str = "", timeout: float = _DEFAULT_TIMEOUT, query: Optional[Query] = None) -> ResponseType:
+    async def state(self, field: str = "", timeout: float = _DEFAULT_TIMEOUT, query: Query | None = None) -> ResponseType:
         params = None if query is None else {"query": query.model_dump_json()}
         return await self._getasync("{}/{}".format("state", field), timeout=timeout, params=params)
 
-    async def stream(self, channels: List[Union[str, Tuple[str, str]]] = None, timeout: Optional[float] = None):
+    async def stream(self, channels: list[str | tuple[str, str]] | None = None, timeout: float | None = None):
         """Stream data from specified channels with optional key filtering for dict baskets.
 
         Establishes an asynchronous streaming connection to receive real-time updates from the specified channels.
@@ -1106,7 +1095,7 @@ class AsyncGatewayClientMixin:
                 except StopAsyncIteration:
                     break
 
-    async def publish(self, field: str, data: Union[Dict[str, Any], List[Any]], key: Optional[str] = None):
+    async def publish(self, field: str, data: dict[str, Any] | list[Any], key: str | None = None):
         """Publish data to a channel or specific key within a dict basket channel.
 
         This asynchronous method sends data to a specific channel. For dict basket channels,
@@ -1119,7 +1108,7 @@ class AsyncGatewayClientMixin:
         """
         await self._publish(channel=field, data=data, key=key)
 
-    async def subscribe(self, field: str, key: Optional[str] = None):
+    async def subscribe(self, field: str, key: str | None = None):
         """Subscribe to a channel or specific key within a dict basket channel.
 
         This asynchronous method subscribes to data updates from a specific channel. For dict basket channels,
@@ -1131,7 +1120,7 @@ class AsyncGatewayClientMixin:
         """
         await self._subscribe(channel=field, key=key)
 
-    async def unsubscribe(self, field: str, key: Optional[str] = None):
+    async def unsubscribe(self, field: str, key: str | None = None):
         """Unsubscribe from a channel or specific key within a dict basket channel.
 
         This asynchronous method unsubscribes from data updates from a specific channel. For dict basket channels,
@@ -1165,8 +1154,6 @@ class AsyncGatewayClient(AsyncGatewayClientMixin, BaseGatewayClient):
         - subscribe
         - unsubscribe
     """
-
-    ...
 
 
 Client = SyncGatewayClient

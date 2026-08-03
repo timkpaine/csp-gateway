@@ -1,6 +1,5 @@
 import os
 from datetime import datetime, timedelta
-from typing import List
 
 import csp
 import sqlalchemy as db
@@ -27,12 +26,13 @@ class MyTestStruct2(GatewayStruct):
 
 class GWC(GatewayChannels):
     test_channel: ts[MyTestStruct] = None
-    test_channel_2d: ts[List[MyTestStruct]] = None
+    test_channel_2d: ts[list[MyTestStruct]] = None
     test_channel_struct2: ts[MyTestStruct2] = None
 
 
 def test_sqla_writer():
-    open("db.sqlite", "w")  # create a fresh db to mess with
+    with open("db.sqlite", "w"):  # create a fresh db to mess with
+        pass
     cnx_details = SQLACnxDetails(engine="sqlite", host="db.sqlite")
     engine = create_engine(cnx_details.get_cnx_string())
     metadata = MetaData()
@@ -76,7 +76,8 @@ def test_sqla_writer():
 
 
 def test_struct_of_struct():
-    open("db.sqlite", "w")  # create a fresh db to mess with
+    with open("db.sqlite", "w"):  # create a fresh db to mess with
+        pass
     cnx_details = SQLACnxDetails(engine="sqlite", host="db.sqlite")
     engine = create_engine(cnx_details.get_cnx_string())
     metadata = MetaData()
@@ -114,7 +115,8 @@ def test_struct_of_struct():
 
 
 def test_sqla_writer_2d():
-    open("db.sqlite", "w")  # create a fresh db to mess with
+    with open("db.sqlite", "w"):  # create a fresh db to mess with
+        pass
     cnx_details = SQLACnxDetails(engine="sqlite", host="db.sqlite")
     engine = create_engine(cnx_details.get_cnx_string())
     metadata = MetaData()

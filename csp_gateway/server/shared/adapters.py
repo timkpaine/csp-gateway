@@ -1,7 +1,8 @@
 import logging
 import time
+from collections.abc import Callable
 from datetime import timedelta
-from typing import Any, Callable, Optional
+from typing import Any
 
 import pandas as pd
 import pyarrow as pa
@@ -12,9 +13,9 @@ from csp.impl.wiring import py_push_adapter_def
 from csp_gateway.utils import get_thread
 
 __all__ = (
-    "sql_polling_adapter_def",
     "poll_sql_for_arrow_tbl",
     "poll_sql_for_pandas_df",
+    "sql_polling_adapter_def",
 )
 
 
@@ -40,7 +41,7 @@ class PollingSQLAdapterImpl(PushInputAdapter):
         connection: str,
         query: str,
         poll: Callable[[str, str, logging.Logger], Any],
-        callback: Optional[Callable[[Any], Any]] = None,
+        callback: Callable[[Any], Any] | None = None,
         logger_name: str = __name__,
         failed_poll_msg: str = "Failed to poll sql database",
         connection_timeout_seconds: int = 0,

@@ -1,5 +1,3 @@
-from typing import List, Optional, Type, Union
-
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -13,8 +11,8 @@ class MountFieldRestRoutes(GatewayModule):
     This is not done generically across all static fields as they may not always be serializable.
     """
 
-    requires: Optional[ChannelSelection] = []
-    fields: List[str] = Field(description="Static fields on the Channels that should be exposed via REST. These must be JSON serializable.")
+    requires: ChannelSelection | None = []
+    fields: list[str] = Field(description="Static fields on the Channels that should be exposed via REST. These must be JSON serializable.")
     route: str = "/field"
 
     def connect(self, channels: GatewayChannels) -> None:
@@ -30,12 +28,12 @@ class MountFieldRestRoutes(GatewayModule):
             add_field_routes(api_router, field, self.route, model)
 
         @api_router.get(
-            "{}".format(self.route),
+            f"{self.route}",
             responses=get_default_responses(),
-            response_model=List[str],
+            response_model=list[str],
             include_in_schema=False,
         )
-        async def get_field(request: Request) -> List[str]:
+        async def get_field(request: Request) -> list[str]:
             """
             This endpoint will return a list of string values of all available channels under the `/field` route.
             """
@@ -46,7 +44,7 @@ def add_field_routes(
     api_router: APIRouter,
     field: str,
     route: str,
-    model: Union[BaseModel, Type],
+    model: BaseModel | type,
 ) -> None:
     async def get_field(request: Request) -> model:  # type: ignore[misc, valid-type]
         """
@@ -54,7 +52,7 @@ def add_field_routes(
         """
         # Throw 404 if not a supported channel
         if not hasattr(request.app.gateway.channels, field):
-            raise HTTPException(status_code=404, detail="Channel field not found: {}".format(field))
+            raise HTTPException(status_code=404, detail=f"Channel field not found: {field}")
 
         # Grab the request off the edge
         try:
@@ -62,16 +60,16 @@ def add_field_routes(
         except AttributeError:
             raise HTTPException(
                 status_code=404,
-                detail="Channel field not found: {}".format(field),
+                detail=f"Channel field not found: {field}",
             )
 
         return res
 
     api_router.get(
-        "{}/{}".format(route, field),
+        f"{route}/{field}",
         responses=get_default_responses(),
         response_model=model,
-        name="Get Channel field {}".format(field),
+        name=f"Get Channel field {field}",
     )(get_field)
 
     api_router.get(
