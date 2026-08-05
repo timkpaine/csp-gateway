@@ -6,9 +6,9 @@ from csp import ts
 from csp_gateway import GatewayModule, get_thread
 
 __all__ = (
-    "NeverDieModule",
     "CspDieModule",
     "LongStartModule",
+    "NeverDieModule",
 )
 
 

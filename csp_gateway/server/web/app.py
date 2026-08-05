@@ -2,10 +2,11 @@ import asyncio
 import os
 import signal
 import typing
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from logging import Logger, getLogger
 from os import path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any
 
 from csp.impl.types.tstype import isTsType
 from fastapi import APIRouter, FastAPI, HTTPException, Request
@@ -59,7 +60,7 @@ static_files_dir = build_files_dir
 images_files_dir = path.join(build_files_dir, "img")
 
 
-class GatewayWebApp(object):
+class GatewayWebApp:
     # Public
     app: FastAPI
     gateway: "Gateway"
@@ -67,7 +68,7 @@ class GatewayWebApp(object):
 
     # Private
     _uvicorn_server: Server
-    _controls: Dict[Callable[[Any, Optional[Any]], Any], Any]
+    _controls: dict[Callable[[Any, Any | None], Any], Any]
 
     def __init__(
         self,
@@ -75,7 +76,7 @@ class GatewayWebApp(object):
         csp_thread: Any,
         settings: Settings,
         ui: bool = True,
-        logger: Logger = None,
+        logger: Logger | None = None,
         _in_test: bool = False,
     ):
         # Instantiate a new FastAPI instance
@@ -103,10 +104,10 @@ class GatewayWebApp(object):
         self._controls = {}
 
         # local files (logos / custom js / css) served by url, keyed by url path
-        self._custom_asset_routes: Dict[str, str] = {}
+        self._custom_asset_routes: dict[str, str] = {}
 
         # raw UI customization config (root-relative URLs); populated in add_static_files
-        self._ui_config_raw: Dict[str, Any] = {}
+        self._ui_config_raw: dict[str, Any] = {}
 
         # update ui in settings
         self.settings = settings.model_copy(update={"ROOT_PATH": root_path})
@@ -174,7 +175,7 @@ class GatewayWebApp(object):
     def check_control(self, key, value=None):
         return key in self._controls and self._controls[key](value)
 
-    def get_routers(self) -> Dict[str, APIRouter]:
+    def get_routers(self) -> dict[str, APIRouter]:
         return self._routers
 
     def get_router(self, kind: str = "api"):
@@ -200,7 +201,7 @@ class GatewayWebApp(object):
 
         # Mount openapi
         @app_router.get("/openapi.json", include_in_schema=False)
-        def getOpenapi(request: Request) -> Dict[str, Any]:
+        def getOpenapi(request: Request) -> dict[str, Any]:
             root_path = request.scope.get("root_path", "")
             return get_openapi(
                 title=self.settings.TITLE,
@@ -225,7 +226,7 @@ class GatewayWebApp(object):
         return value.startswith(("http://", "https://", "data:"))
 
     @staticmethod
-    def _normalize_root_path(value: Optional[str]) -> str:
+    def _normalize_root_path(value: str | None) -> str:
         """Normalize a configured ROOT_PATH to '' or a leading-slash, no-trailing-slash path.
 
         '' / '/' -> '', 'watchtower' -> '/watchtower', '/watchtower/' -> '/watchtower'.
@@ -240,7 +241,7 @@ class GatewayWebApp(object):
         return value
 
     @staticmethod
-    def _join_root_path(root_path: str, url: Optional[str]) -> Optional[str]:
+    def _join_root_path(root_path: str, url: str | None) -> str | None:
         """Prefix a root-relative URL with the proxy root_path, leaving absolute URLs alone."""
         if not url or not root_path:
             return url
@@ -251,7 +252,7 @@ class GatewayWebApp(object):
         return url
 
     @staticmethod
-    def root_path_url(request: Optional[Request], url: str) -> str:
+    def root_path_url(request: Request | None, url: str) -> str:
         """Prefix a root-relative URL with the current request's proxy root_path.
 
         Use for redirect targets and template links so auth and navigation flows
@@ -260,7 +261,7 @@ class GatewayWebApp(object):
         root_path = request.scope.get("root_path", "") if request is not None else ""
         return GatewayWebApp._join_root_path(root_path, url) or url
 
-    def _prefixed_ui_config(self, root_path: str) -> Dict[str, Any]:
+    def _prefixed_ui_config(self, root_path: str) -> dict[str, Any]:
         """Return the UI config with all local asset URLs prefixed for the current root_path."""
         raw = self._ui_config_raw
         return {
@@ -272,7 +273,7 @@ class GatewayWebApp(object):
             "customJs": [self._join_root_path(root_path, js) for js in raw["customJs"]],
         }
 
-    def _resolve_asset(self, value: Optional[str], kind: str) -> Optional[str]:
+    def _resolve_asset(self, value: str | None, kind: str) -> str | None:
         """Resolve an asset reference to a URL, serving local files automatically."""
         if not value:
             return None
@@ -356,7 +357,7 @@ class GatewayWebApp(object):
         # Expose the UI customization config (title, logos, custom assets) for the frontend.
         # Public (no auth) so the UI shell can render before authentication.
         @public_router.get("/ui-config", include_in_schema=False)
-        async def get_ui_config(request: Request) -> Dict[str, Any]:
+        async def get_ui_config(request: Request) -> dict[str, Any]:
             return self._prefixed_ui_config(request.scope.get("root_path", ""))
 
         # Mount top level routes
@@ -470,7 +471,7 @@ class GatewayWebApp(object):
         else:
             return None
         if get_origin(typ) is list:
-            return List[get_args(typ)[0]]
+            return list[get_args(typ)[0]]
         return typ
 
     def add_last_api(self, field: str) -> None:
@@ -486,7 +487,7 @@ class GatewayWebApp(object):
 
         add_last_routes(api_router=api_router, field=field, model=model, subroute_key=subroute_key)
 
-    def add_last_available_channels(self, fields: Optional[Set[str]] = None) -> None:
+    def add_last_available_channels(self, fields: set[str] | None = None) -> None:
         api_router = self.get_router("last")
         add_last_available_channels(api_router=api_router, fields=fields)
 
@@ -502,7 +503,7 @@ class GatewayWebApp(object):
 
         add_next_routes(api_router=api_router, field=field, model=model, subroute_key=subroute_key)
 
-    def add_next_available_channels(self, fields: Optional[Set[str]] = None) -> None:
+    def add_next_available_channels(self, fields: set[str] | None = None) -> None:
         api_router = self.get_router("next")
         add_next_available_channels(api_router=api_router, fields=fields)
 
@@ -517,7 +518,7 @@ class GatewayWebApp(object):
 
         add_lookup_routes(api_router=api_router, field=field, model=model)
 
-    def add_lookup_available_channels(self, fields: Optional[Set[str]] = None) -> None:
+    def add_lookup_available_channels(self, fields: set[str] | None = None) -> None:
         api_router = self.get_router("lookup")
         add_lookup_available_channels(api_router=api_router, fields=fields)
 
@@ -534,7 +535,7 @@ class GatewayWebApp(object):
 
         add_send_routes(api_router=api_router, field=field, model=model, subroute_key=subroute_key)
 
-    def add_send_available_channels(self, fields: Optional[Set[str]] = None) -> None:
+    def add_send_available_channels(self, fields: set[str] | None = None) -> None:
         api_router = self.get_router("send")
         add_send_available_channels(api_router=api_router, fields=fields)
 
@@ -549,7 +550,7 @@ class GatewayWebApp(object):
 
         spec = self.gateway.channels._states.get(field) or self.gateway.channels_model._declared_states.get(field)
         if spec is None:
-            raise ValueError("Unknown state '{}' on {}".format(field, self.gateway.channels_model.__name__))
+            raise ValueError(f"Unknown state '{field}' on {self.gateway.channels_model.__name__}")
 
         if spec.source_field is not None:
             dict_basket = self._is_dict_basket_field(field=spec.source_field)
@@ -579,7 +580,7 @@ class GatewayWebApp(object):
             indexer=spec.indexer,
         )
 
-    def add_state_available_channels(self, fields: Optional[Set[str]] = None) -> None:
+    def add_state_available_channels(self, fields: set[str] | None = None) -> None:
         api_router = self.get_router("state")
         add_state_available_channels(api_router=api_router, fields=fields)
 
@@ -589,7 +590,7 @@ class GatewayWebApp(object):
         model = self._get_field_pydantic_type(field)
         add_stage_routes(api_router=api_router, field=field, model=model)
 
-    def add_stage_available_channels(self, fields: Optional[Set[str]] = None) -> None:
+    def add_stage_available_channels(self, fields: set[str] | None = None) -> None:
         api_router = self.get_router("stage")
         add_stage_available_channels(api_router=api_router, fields=fields)
 
@@ -597,7 +598,7 @@ class GatewayWebApp(object):
         api_router = self.get_router("controls")
         add_controls_routes(api_router, field=field)
 
-    def add_controls_available_channels(self, fields: Optional[Set[str]] = None) -> None:
+    def add_controls_available_channels(self, fields: set[str] | None = None) -> None:
         api_router = self.get_router("controls")
         add_controls_available_channels(api_router=api_router, fields=fields)
 
@@ -627,8 +628,8 @@ class GatewayWebApp(object):
         # Existing options
         host: str = "",  # NOTE: from settings
         port: int = 0,  # NOTE: from settings
-        log_config: typing.Optional[typing.Union[typing.Dict[str, typing.Any], str]] = None,
-        log_level: typing.Optional[typing.Union[str, int]] = "error",
+        log_config: dict[str, typing.Any] | str | None = None,
+        log_level: str | int | None = "error",
         # New Options
         timeout_notify: int = 0,  # NOTE: NEW
     ) -> None:
@@ -676,5 +677,5 @@ class GatewayWebApp(object):
             self.gateway._shutdown(user_initiated=True)
         except InterruptedError:
             self.gateway._shutdown(user_initiated=True)
-        except Exception:
+        except Exception:  # noqa: BLE001 -- top-level server boundary: any crash triggers unclean shutdown
             self.gateway._shutdown(user_initiated=False)

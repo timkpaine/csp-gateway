@@ -14,7 +14,7 @@ authors = [
 description = "csp-gateway is a framework for building high-performance streaming applications"
 readme = "README.md"
 license = { text = "Apache-2.0" }
-version = "2.8.0"
+version = "2.8.1"
 requires-python = ">=3.10"
 keywords = [
     "csp",
@@ -27,7 +27,6 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -86,7 +85,7 @@ server = [
     "atomic-counter>=0.1.3",
     "ccflow>=0.8.0,<1",
     "colorlog",
-    "csp>=0.14.0,<1",
+    "csp>=0.18.0,<1",
     "deprecation",
     "duckdb>=1.4.1",
     "fastapi>=0.110",
@@ -124,7 +123,7 @@ Repository = "https://github.com/Point72/csp-gateway"
 Homepage = "https://github.com/Point72/csp-gateway/wiki"
 
 [tool.bumpversion]
-current_version = "2.8.0"
+current_version = "2.8.1"
 commit = true
 tag = false
 commit_args = "-s"
@@ -228,6 +227,16 @@ line-length = 150
 extend-select = [
     "I",
 ]
+ignore = [
+    # csp Structs copy mutable class-level defaults per instance, and pydantic deep-copies field
+    # defaults, so mutable-class-default (RUF012) is a false positive throughout this codebase.
+    "RUF012",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Body",
+]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
@@ -254,4 +263,7 @@ section-order = [
 ]
 "csp_gateway/tests/*" = [
     "D",
+    # csp's canonical engine time is naive-UTC: test fixtures deliberately construct naive
+    # datetimes and assert against csp's naive outputs, so flake8-datetimez does not apply.
+    "DTZ",
 ]

@@ -1,5 +1,4 @@
 from datetime import date, datetime, timedelta, timezone
-from typing import Dict, List, Optional
 from unittest.mock import MagicMock
 
 import csp
@@ -31,7 +30,7 @@ class MyTestEnum(Enum):
 
 
 class MyTestSubStruct(GatewayStruct):
-    y: List[int]
+    y: list[int]
     x: int = 1
     z: float
 
@@ -43,23 +42,23 @@ class MyTestStruct(GatewayStruct):
 
 
 class MyTestOptionalSubStruct(GatewayStruct):
-    sub_a: Optional[int]
+    sub_a: int | None
 
 
 class MyTestOptionalStruct(GatewayStruct):
     i: int
-    i_o: Optional[int]
+    i_o: int | None
     ob: object
-    ob_op: Optional[object]
+    ob_op: object | None
     l_i: [int]
-    lt_i: List[int]
-    lt_i_op: Optional[List[int]]
+    lt_i: list[int]
+    lt_i_op: list[int] | None
     s: MyTestSubStruct
-    s_op: Optional[MyTestSubStruct]
+    s_op: MyTestSubStruct | None
     e: MyTestEnum
-    e_op: Optional[MyTestEnum]
+    e_op: MyTestEnum | None
     sub: MyTestOptionalSubStruct
-    sub_op: Optional[MyTestOptionalSubStruct]
+    sub_op: MyTestOptionalSubStruct | None
 
 
 class MyPyArrowStruct(GatewayStruct):
@@ -68,9 +67,9 @@ class MyPyArrowStruct(GatewayStruct):
 
 class GWC(GatewayChannels):
     test_channel: ts[MyTestStruct] = None
-    list_channel: ts[List[MyTestStruct]] = None
-    dict_channel: Dict[str, ts[MyTestStruct]] = None
-    dict_enum_channel: Dict[MyTestEnum, ts[MyTestStruct]] = None
+    list_channel: ts[list[MyTestStruct]] = None
+    dict_channel: dict[str, ts[MyTestStruct]] = None
+    dict_enum_channel: dict[MyTestEnum, ts[MyTestStruct]] = None
     index_channel: ts[MyTestStruct] = None
     limit_channel: ts[MyTestStruct] = None
     exclude_channel: ts[MyTestStruct] = None
@@ -83,8 +82,8 @@ class GWCUnused(GatewayChannels):
     b: ts[MyTestStruct] = None
     c: ts[[MyTestStruct]] = None
     d: ts[[MyTestStruct]] = None
-    e: Dict[MyTestEnum, ts[MyTestStruct]] = None
-    f: Dict[MyTestEnum, ts[MyTestStruct]] = None
+    e: dict[MyTestEnum, ts[MyTestStruct]] = None
+    f: dict[MyTestEnum, ts[MyTestStruct]] = None
 
 
 def test_inherited_container_annotation_schema():
@@ -92,7 +91,7 @@ def test_inherited_container_annotation_schema():
     from csp import Struct
 
     class BaseStruct(Struct):
-        arr: List[int]
+        arr: list[int]
 
     # Child has no own annotations for arr; relies on inherited annotation
     class ChildStruct(*GatewayStructMixins, BaseStruct):
@@ -125,7 +124,7 @@ def test_inherited_ndarray_annotation_schema():
 def test_inherited_container_on_gatewaystruct():
     # Parent defines a container field on GatewayStruct
     class ParentGS(GatewayStruct):
-        arr: List[int]
+        arr: list[int]
 
     # Child does not redeclare annotations
     class ChildGS(ParentGS):
@@ -418,7 +417,7 @@ def test_MountPerspectiveTables(use_external_perspective):
         limits={"limit_channel": 5},
         indexes={"index_channel": "id", "dict_channel": "id", "exclude_channel": None},
         layouts={
-            "Test Layout": '{"sizes":[1],"detail":{"main":{"type":"split-area","orientation":"horizontal","children":[{"type":"split-area","orientation":"vertical","children":[{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_1"],"currentIndex":0},{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_4"],"currentIndex":0}],"sizes":[0.5,0.5]},{"type":"split-area","orientation":"vertical","children":[{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_3"],"currentIndex":0},{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_5"],"currentIndex":0}],"sizes":[0.5,0.5]}],"sizes":[0.5,0.5]}},"mode":"globalFilters","viewers":{"PERSPECTIVE_GENERATED_ID_1":{"plugin":"Datagrid","plugin_config":{"columns":{},"editable":false,"scroll_lock":true},"settings":false,"theme":"Pro Dark","group_by":["id"],"split_by":[],"columns":["timestamp","x","y"],"filter":[],"sort":[["timestamp","desc"]],"expressions":[],"aggregates":{"timestamp":"last","x":"last","id":"last","y":"last"},"master":false,"name":"basket","table":"basket","linked":false},"PERSPECTIVE_GENERATED_ID_4":{"plugin":"Datagrid","plugin_config":{"columns":{},"editable":false,"scroll_lock":true},"settings":false,"theme":"Pro Dark","group_by":["id"],"split_by":[],"columns":["timestamp","x","y"],"filter":[],"sort":[["timestamp","desc"]],"expressions":[],"aggregates":{"timestamp":"last","x":"last","id":"last","y":"last"},"master":false,"name":"example_list","table":"example_list","linked":false},"PERSPECTIVE_GENERATED_ID_3":{"plugin":"Datagrid","plugin_config":{"columns":{},"editable":false,"scroll_lock":true},"settings":false,"theme":"Pro Dark","group_by":["id"],"split_by":[],"columns":["timestamp","x","y"],"filter":[],"sort":[["timestamp","desc"]],"expressions":[],"aggregates":{"id":"last","x":"last","timestamp":"last","y":"last"},"master":false,"name":"example","table":"example","linked":false},"PERSPECTIVE_GENERATED_ID_5":{"plugin":"Datagrid","plugin_config":{"columns":{},"editable":false,"scroll_lock":true},"settings":false,"theme":"Pro Dark","group_by":["id"],"split_by":[],"columns":["timestamp","x","y"],"filter":[],"sort":[["timestamp","desc"]],"expressions":[],"aggregates":{"id":"last","timestamp":"last","x":"last","y":"last"},"master":false,"name":"never_ticks","table":"never_ticks","linked":false}}}'  # noqa: E501
+            "Test Layout": '{"sizes":[1],"detail":{"main":{"type":"split-area","orientation":"horizontal","children":[{"type":"split-area","orientation":"vertical","children":[{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_1"],"currentIndex":0},{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_4"],"currentIndex":0}],"sizes":[0.5,0.5]},{"type":"split-area","orientation":"vertical","children":[{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_3"],"currentIndex":0},{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_5"],"currentIndex":0}],"sizes":[0.5,0.5]}],"sizes":[0.5,0.5]}},"mode":"globalFilters","viewers":{"PERSPECTIVE_GENERATED_ID_1":{"plugin":"Datagrid","plugin_config":{"columns":{},"editable":false,"scroll_lock":true},"settings":false,"theme":"Pro Dark","group_by":["id"],"split_by":[],"columns":["timestamp","x","y"],"filter":[],"sort":[["timestamp","desc"]],"expressions":[],"aggregates":{"timestamp":"last","x":"last","id":"last","y":"last"},"master":false,"name":"basket","table":"basket","linked":false},"PERSPECTIVE_GENERATED_ID_4":{"plugin":"Datagrid","plugin_config":{"columns":{},"editable":false,"scroll_lock":true},"settings":false,"theme":"Pro Dark","group_by":["id"],"split_by":[],"columns":["timestamp","x","y"],"filter":[],"sort":[["timestamp","desc"]],"expressions":[],"aggregates":{"timestamp":"last","x":"last","id":"last","y":"last"},"master":false,"name":"example_list","table":"example_list","linked":false},"PERSPECTIVE_GENERATED_ID_3":{"plugin":"Datagrid","plugin_config":{"columns":{},"editable":false,"scroll_lock":true},"settings":false,"theme":"Pro Dark","group_by":["id"],"split_by":[],"columns":["timestamp","x","y"],"filter":[],"sort":[["timestamp","desc"]],"expressions":[],"aggregates":{"id":"last","x":"last","timestamp":"last","y":"last"},"master":false,"name":"example","table":"example","linked":false},"PERSPECTIVE_GENERATED_ID_5":{"plugin":"Datagrid","plugin_config":{"columns":{},"editable":false,"scroll_lock":true},"settings":false,"theme":"Pro Dark","group_by":["id"],"split_by":[],"columns":["timestamp","x","y"],"filter":[],"sort":[["timestamp","desc"]],"expressions":[],"aggregates":{"id":"last","timestamp":"last","x":"last","y":"last"},"master":false,"name":"never_ticks","table":"never_ticks","linked":false}}}'
         },
         update_interval=timedelta(seconds=0.5),
     )

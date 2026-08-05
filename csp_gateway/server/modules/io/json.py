@@ -1,7 +1,7 @@
 from pathlib import Path
 from queue import Queue
 from threading import Thread
-from typing import Any, Dict, Union
+from typing import Any
 
 import csp
 from csp import ts
@@ -55,7 +55,7 @@ class ReplayEngineJSON(EngineReplay):
         if csp.ticked(to_store):
             s_queue.put(to_store.encoding)
 
-    def subscribe(self) -> Union[ts[str], ts[Dict[str, Any]]]:
+    def subscribe(self) -> ts[str] | ts[dict[str, Any]]:
         return JSONPullAdapter(self.filename)
 
     def publish(self, encoded_channels: ts[EncodedEngineCycle]) -> None:

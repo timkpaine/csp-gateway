@@ -21,4 +21,4 @@ class ServerUnknownException(ServerException): ...
 
 class _Controls(GatewayException):
     def __init__(self, control: str):
-        super().__init__("Control: {}".format(control))
+        super().__init__(f"Control: {control}")

@@ -78,7 +78,7 @@ class MountRestRoutes(GatewayModule):
             seen_channels = channels_set
 
         else:
-            for channel, _ in app.gateway.channels._send_channels.keys():
+            for channel, _ in app.gateway.channels._send_channels:
                 if channel in seen_channels or channel not in channels_set:
                     continue
                 seen_channels.add(channel)
@@ -117,7 +117,7 @@ class MountRestRoutes(GatewayModule):
             seen_channels = channels_set
 
         else:
-            for state_channel, _ in app.gateway.channels._state_requests.keys():
+            for state_channel, _ in app.gateway.channels._state_requests:
                 if state_channel in seen_channels or state_channel not in channels_set:
                     continue
                 seen_channels.add(state_channel)

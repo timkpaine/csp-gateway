@@ -1,4 +1,4 @@
-from typing import Any, List, Optional, Set, Union, get_origin
+from typing import Any, get_origin
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -10,15 +10,15 @@ from ..utils import get_default_responses
 from .shared import get_fully_qualified_type_name, prepare_response
 
 __all__ = (
-    "add_last_routes",
     "add_last_available_channels",
+    "add_last_routes",
 )
 
 
 def add_last_routes(
     api_router: APIRouter,
     field: str,
-    model: Union[BaseModel, List[BaseModel]] = None,
+    model: BaseModel | list[BaseModel] = None,
     subroute_key: Any = None,
 ) -> None:
     if model and get_origin(model) is list:
@@ -26,7 +26,7 @@ def add_last_routes(
         list_model = model
     else:
         is_list_model = False
-        list_model = List[model]
+        list_model = list[model]
 
     # Get the fully qualified type name for the description
     fq_type_name = get_fully_qualified_type_name(model)
@@ -40,7 +40,7 @@ def add_last_routes(
             """
             # Throw 404 if not a supported channel
             if not hasattr(request.app.gateway.channels, field):
-                raise HTTPException(status_code=404, detail="Channel not found: {}".format(field))
+                raise HTTPException(status_code=404, detail=f"Channel not found: {field}")
 
             if subroute_key is str:
                 actual_key = key
@@ -51,7 +51,7 @@ def add_last_routes(
             if actual_key not in request.app.gateway.channels.keys_for_channel(field):  # type: ignore[union-attr]
                 raise HTTPException(
                     status_code=404,
-                    detail="Channel not found: {}/{}".format(field, key),
+                    detail=f"Channel not found: {field}/{key}",
                 )
 
             # Grab the request off the edge
@@ -60,16 +60,16 @@ def add_last_routes(
             except NoProviderException:
                 raise HTTPException(
                     status_code=404,
-                    detail="Channel not found: {}/{}".format(field, key),
+                    detail=f"Channel not found: {field}/{key}",
                 )
 
             return prepare_response(res, is_list_model=is_list_model)
 
         api_router.get(
-            "/{}/{{key:path}}".format(field),
+            f"/{field}/{{key:path}}",
             responses=get_default_responses(),
             response_model=list_model,
-            name="Get Last {} by key".format(field),
+            name=f"Get Last {field} by key",
             openapi_extra={"type_": fq_type_name} if fq_type_name else None,
         )(get_last)
 
@@ -84,7 +84,7 @@ def add_last_routes(
             """Get last ticked value on a dictionary basket channel. This endpoint will return the entire basket"""
             # Throw 404 if not a supported channel
             if not hasattr(request.app.gateway.channels, field):
-                raise HTTPException(status_code=404, detail="Channel not found: {}".format(field))
+                raise HTTPException(status_code=404, detail=f"Channel not found: {field}")
 
             # Grab the request off the edge
             try:
@@ -92,7 +92,7 @@ def add_last_routes(
             except NoProviderException:
                 raise HTTPException(
                     status_code=404,
-                    detail="Channel not found: {}".format(field),
+                    detail=f"Channel not found: {field}",
                 )
             return prepare_response(
                 res,
@@ -101,10 +101,10 @@ def add_last_routes(
             )
 
         api_router.get(
-            "/{}".format(field),
+            f"/{field}",
             responses=get_default_responses(),
             response_model=list_model,  # type: ignore[valid-type]
-            name="Get Last {}".format(field),
+            name=f"Get Last {field}",
             description=f"Response type: {fq_type_name}" if fq_type_name else None,
         )(get_last_basket)
 
@@ -128,7 +128,7 @@ def add_last_routes(
             """
             # Throw 404 if not a supported channel
             if not hasattr(request.app.gateway.channels, field):
-                raise HTTPException(status_code=404, detail="Channel not found: {}".format(field))
+                raise HTTPException(status_code=404, detail=f"Channel not found: {field}")
 
             # Grab the request off the edge
             try:
@@ -136,16 +136,16 @@ def add_last_routes(
             except NoProviderException:
                 raise HTTPException(
                     status_code=404,
-                    detail="Channel not found: {}".format(field),
+                    detail=f"Channel not found: {field}",
                 )
 
             return prepare_response(res, is_list_model=is_list_model)
 
         api_router.get(
-            "/{}".format(field),
+            f"/{field}",
             responses=get_default_responses(),
             response_model=list_model,
-            name="Get Last {}".format(field),
+            name=f"Get Last {field}",
             openapi_extra={"type_": fq_type_name} if fq_type_name else None,
         )(get_last)
 
@@ -157,13 +157,13 @@ def add_last_routes(
         )(get_last)
 
 
-def add_last_available_channels(api_router: APIRouter, fields: Optional[Set[str]] = None) -> None:
+def add_last_available_channels(api_router: APIRouter, fields: set[str] | None = None) -> None:
     @api_router.get(
         "/",
         responses=get_default_responses(),
-        response_model=List[str],
+        response_model=list[str],
     )
-    async def get_last(request: Request) -> List[str]:
+    async def get_last(request: Request) -> list[str]:
         """
         This endpoint will return a list of string values of all available channels under the `/last` route.
         """

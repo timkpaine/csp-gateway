@@ -2,7 +2,6 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict
 from unittest.mock import MagicMock, patch
 
 import csp
@@ -35,7 +34,7 @@ class SampleStruct(GatewayStruct):
 class SampleGatewayChannels(GatewayChannels):
     test_channel: ts[SampleStruct] = None
     test_int: ts[int] = None
-    test_basket: Dict[str, ts[float]] = None
+    test_basket: dict[str, ts[float]] = None
 
 
 class SampleDataModule(GatewayModule):

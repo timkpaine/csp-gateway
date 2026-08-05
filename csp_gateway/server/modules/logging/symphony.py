@@ -1,5 +1,5 @@
 import json
-from typing import List, Tuple, TypeVar
+from typing import TypeVar
 
 import csp
 from csp import ts
@@ -70,12 +70,12 @@ class PublishSymphony(GatewayModule):
     room_name: str
     user: str
 
-    selections: List[str] = []
+    selections: list[str] = []
 
-    def get_cert_and_key(self) -> Tuple[str, str]:
-        with open(self.cert_path, "r") as f:
+    def get_cert_and_key(self) -> tuple[str, str]:
+        with open(self.cert_path) as f:
             cert = f.read()
-        with open(self.key_path, "r") as f:
+        with open(self.key_path) as f:
             key = f.read()
         return cert, key
 
@@ -90,7 +90,7 @@ class PublishSymphony(GatewayModule):
         symphony_manager = SymphonyAdapter(cert, key)
 
         @csp.node
-        def subscribe_channel(self, channel: ts["T"]) -> csp.Outputs(messages=ts[List[SymphonyMessage]]):
+        def subscribe_channel(self, channel: ts["T"]) -> csp.Outputs(messages=ts[list[SymphonyMessage]]):
             if csp.ticked(channel):
                 msgs = []
                 # TODO: Not sure how to manage a dict basket here

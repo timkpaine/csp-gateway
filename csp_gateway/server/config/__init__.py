@@ -1,7 +1,7 @@
 import logging
 from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from ccflow import RootModelRegistry, load_config as load_config_base
 
@@ -19,7 +19,7 @@ __all__ = (
 def load_config(
     config_dir: str = "",
     config_name: str = "",
-    overrides: Optional[List[str]] = None,
+    overrides: list[str] | None = None,
     *,
     overwrite: bool = True,
     basepath: str = "",

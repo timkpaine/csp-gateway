@@ -3,7 +3,7 @@ import logging
 import threading
 import time
 from queue import Empty, Queue
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
+from typing import TYPE_CHECKING, Any
 
 import csp
 from csp import ts
@@ -14,7 +14,7 @@ from csp.impl.wiring import py_push_adapter_def
 if TYPE_CHECKING:
     from .client import GatewayClientConfig
 
-__all__ = ("GatewayStreamAdapterManager", "ConnectionError")
+__all__ = ("ConnectionError", "GatewayStreamAdapterManager")
 
 log = logging.getLogger(__name__)
 
@@ -51,9 +51,9 @@ class GatewayStreamAdapterManager:
         """
         self._config = config
         self._connection_timeout = connection_timeout
-        self._impl: Optional["_GatewayStreamAdapterManagerImpl"] = None
+        self._impl: _GatewayStreamAdapterManagerImpl | None = None
 
-    def subscribe(self, push_mode: csp.PushMode = csp.PushMode.NON_COLLAPSING) -> ts[Dict[str, Any]]:
+    def subscribe(self, push_mode: csp.PushMode = csp.PushMode.NON_COLLAPSING) -> ts[dict[str, Any]]:
         """Subscribe to stream data from the gateway.
 
         Args:
@@ -80,7 +80,7 @@ class GatewayStreamAdapterManager:
         if self._impl is not None:
             self._impl.remove_channel(channel)
 
-    def send_data(self, data: Dict[str, Any]):
+    def send_data(self, data: dict[str, Any]):
         """Send data through the websocket.
 
         This can be called to send data back to the server through the websocket connection.
@@ -103,8 +103,6 @@ class GatewayStreamAdapterManager:
 class ConnectionError(Exception):
     """Raised when the websocket connection fails or is lost."""
 
-    pass
-
 
 class _GatewayStreamAdapterManagerImpl(AdapterManagerImpl):
     """Runtime implementation of the Gateway streaming adapter manager."""
@@ -120,16 +118,16 @@ class _GatewayStreamAdapterManagerImpl(AdapterManagerImpl):
         self._config = config
         self._graph_manager = graph_manager
         self._connection_timeout = connection_timeout
-        self._adapters: List[PushInputAdapter] = []
-        self._subscribed_channels: Set[str] = set()
+        self._adapters: list[PushInputAdapter] = []
+        self._subscribed_channels: set[str] = set()
         self._pending_subscribes: Queue = Queue()
         self._pending_unsubscribes: Queue = Queue()
         self._pending_data: Queue = Queue()
         self._running = False
         self._connected = threading.Event()
-        self._connection_error: Optional[Exception] = None
+        self._connection_error: Exception | None = None
         self._disconnected = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._loop = None
         self._ws = None
 
@@ -178,7 +176,7 @@ class _GatewayStreamAdapterManagerImpl(AdapterManagerImpl):
             self._subscribed_channels.remove(channel)
             self._pending_unsubscribes.put(channel)
 
-    def send_data(self, data: Dict[str, Any]):
+    def send_data(self, data: dict[str, Any]):
         """Queue data to be sent through the websocket.
 
         This is thread-safe and can be called from the CSP engine thread.
@@ -202,7 +200,7 @@ class _GatewayStreamAdapterManagerImpl(AdapterManagerImpl):
 
     def process_next_sim_timeslice(self, now):
         """Not used for realtime adapters."""
-        return None
+        return
 
     def _run(self):
         """Main streaming thread."""
@@ -213,7 +211,7 @@ class _GatewayStreamAdapterManagerImpl(AdapterManagerImpl):
             self._loop.run_until_complete(self._connect_and_stream())
         except Exception as e:
             self._connection_error = e
-            log.exception(f"Error in websocket streaming: {e}")
+            log.exception("Error in websocket streaming")
         finally:
             self._disconnected = True
             self._loop.close()
@@ -229,32 +227,31 @@ class _GatewayStreamAdapterManagerImpl(AdapterManagerImpl):
         start_time = time.time()
         retry_delay = 0.5  # Start with 500ms delay
         max_retry_delay = 5.0  # Cap at 5 seconds
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
 
         while self._running:
             try:
-                async with ClientSession() as session:
-                    async with session.ws_connect(route) as ws:
-                        self._ws = ws
-                        self._connected.set()
-                        log.info(f"Connected to websocket at {route}")
+                async with ClientSession() as session, session.ws_connect(route) as ws:
+                    self._ws = ws
+                    self._connected.set()
+                    log.info(f"Connected to websocket at {route}")
 
-                        # Create tasks for receiving and sending
-                        receive_task = asyncio.create_task(self._receive_messages(ws))
-                        send_task = asyncio.create_task(self._send_subscriptions(ws))
+                    # Create tasks for receiving and sending
+                    receive_task = asyncio.create_task(self._receive_messages(ws))
+                    send_task = asyncio.create_task(self._send_subscriptions(ws))
 
-                        try:
-                            await asyncio.gather(receive_task, send_task)
-                        except Exception:
-                            receive_task.cancel()
-                            send_task.cancel()
-                        finally:
-                            # If we get here while still running, connection was lost
-                            if self._running:
-                                self._connected.clear()
-                                self._disconnected = True
-                                raise ConnectionError(f"WebSocket connection to {route} was lost unexpectedly")
-                        return  # Normal exit
+                    try:
+                        await asyncio.gather(receive_task, send_task)
+                    except Exception:  # noqa: BLE001 -- async websocket task cleanup must not raise on shutdown
+                        receive_task.cancel()
+                        send_task.cancel()
+                    finally:
+                        # If we get here while still running, connection was lost
+                        if self._running:
+                            self._connected.clear()
+                            self._disconnected = True
+                            raise ConnectionError(f"WebSocket connection to {route} was lost unexpectedly")
+                    return  # Normal exit
 
             except ClientConnectorError as e:
                 last_error = e
@@ -302,7 +299,7 @@ class _GatewayStreamAdapterManagerImpl(AdapterManagerImpl):
                         # Push data to all registered adapters
                         for adapter in self._adapters:
                             adapter.push_tick(data)
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001 -- message-loop resilience against malformed frames
                         log.debug(f"Error parsing websocket message: {e}")
                 elif msg.type == 8:  # aiohttp.WSMsgType.ERROR
                     log.error(f"WebSocket error received: {ws.exception()}")
@@ -343,7 +340,7 @@ class _GatewayStreamAdapterManagerImpl(AdapterManagerImpl):
                     pass
 
                 await asyncio.sleep(0.01)
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 -- send-loop resilience; keep streaming on transient errors
                 log.debug(f"Error sending data: {e}")
 
 
@@ -359,7 +356,7 @@ class _GatewayStreamAdapterImpl(PushInputAdapter):
 _GatewayStreamAdapter = py_push_adapter_def(
     "_GatewayStreamAdapter",
     _GatewayStreamAdapterImpl,
-    ts[Dict[str, Any]],
+    ts[dict[str, Any]],
     GatewayStreamAdapterManager,
 )
 
@@ -369,7 +366,7 @@ def _manage_subscriptions_node(
     manager: GatewayStreamAdapterManager,
     subscribe_channel: ts[str],
     unsubscribe_channel: ts[str],
-    incoming_data: ts[Dict[str, Any]],
+    incoming_data: ts[dict[str, Any]],
     outgoing_data: ts[object],
 ) -> csp.DynamicBasket[str, object]:
     """Internal node to manage dynamic channel subscriptions and route data to the appropriate basket key.
@@ -385,7 +382,7 @@ def _manage_subscriptions_node(
         A DynamicBasket where each key is a channel name and values are the data for that channel.
     """
     with csp.state():
-        s_active_channels: Set[str] = set()
+        s_active_channels: set[str] = set()
 
     if csp.ticked(subscribe_channel):
         channel = subscribe_channel
@@ -440,7 +437,7 @@ def _create_stream_csp_graph(config: "GatewayClientConfig", connection_timeout: 
     def stream_csp(
         subscribe: ts[str],
         unsubscribe: ts[str] = None,
-        data: ts[Dict[str, Any]] = None,
+        data: ts[dict[str, Any]] = None,
         push_mode: csp.PushMode = csp.PushMode.NON_COLLAPSING,
     ) -> csp.DynamicBasket[str, object]:
         """Stream data bidirectionally with a GatewayServer via websockets using CSP.

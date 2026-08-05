@@ -1,5 +1,3 @@
-from typing import Type
-
 import csp
 from csp import ts
 from fastapi.testclient import TestClient
@@ -26,7 +24,7 @@ class StageChannels(GatewayChannels):
 
 
 class StageGateway(Gateway):
-    channels_model: Type[Channels] = StageChannels  # type: ignore[assignment]
+    channels_model: type[Channels] = StageChannels  # type: ignore[assignment]
 
 
 class StageModule(GatewayModule):
@@ -62,7 +60,7 @@ def test_stage_routes_basic_flow(free_port):
         assert response.status_code == 200
         add_result = response.json()
         assert len(add_result) == 1
-        staging_id = list(add_result.keys())[0]
+        staging_id = next(iter(add_result.keys()))
         assert add_result[staging_id][0]["symbol"] == "AAPL"
 
         # stage_list: ensure staging is present
@@ -111,7 +109,7 @@ def test_stage_routes_full_lifecycle(free_port):
         assert response.status_code == 200
         result = response.json()
         assert len(result) == 1
-        staging_id = list(result.keys())[0]
+        staging_id = next(iter(result.keys()))
         assert result[staging_id] == []
 
         # stage_add: POST with body adds to latest staging

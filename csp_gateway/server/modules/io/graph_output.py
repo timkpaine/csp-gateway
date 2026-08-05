@@ -1,5 +1,3 @@
-from typing import Optional
-
 import csp
 from csp.impl.types.tstype import isTsType
 from pydantic import Field
@@ -12,7 +10,7 @@ __all__ = ("AddChannelsToGraphOutput",)
 
 class AddChannelsToGraphOutput(GatewayModule):
     selection: ChannelSelection = Field(default_factory=ChannelSelection)
-    requires: Optional[ChannelSelection] = []
+    requires: ChannelSelection | None = []
 
     def connect(self, channels: ChannelsType):
         for field in self.selection.select_from(channels):

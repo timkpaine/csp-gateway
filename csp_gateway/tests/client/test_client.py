@@ -14,6 +14,8 @@ from csp_gateway.client.client import _host
 from csp_gateway.server.demo import ExampleData
 from csp_gateway.utils import get_thread
 
+logger = logging.getLogger(__name__)
+
 #  Struct for response wrapper
 #  class MyTypeStruct(BaseModel):
 #      d_str: str
@@ -136,9 +138,9 @@ def test_get_event_loop_off_thread(caplog):
     def instantiate_in_thread():
         try:
             GatewayClient()
-        except Exception:
+        except Exception:  # noqa: BLE001 -- test intentionally catches to assert this path is not hit
             # This should not be hit
-            logging.error(bad_log)
+            logger.error(bad_log)
 
     thread = get_thread(target=instantiate_in_thread)
     thread.start()
@@ -330,10 +332,9 @@ async def test_async_client_stream_timeout_raises_on_slow_iteration():
         yield {"data": "test"}
 
     # Patch _streamAsync to return our slow generator
-    with patch.object(client, "_streamAsync", return_value=slow_generator()):
-        with pytest.raises(asyncio.TimeoutError):
-            async for _ in client.stream(channels=["test"], timeout=0.1):
-                pass
+    with patch.object(client, "_streamAsync", return_value=slow_generator()), pytest.raises(asyncio.TimeoutError):
+        async for _ in client.stream(channels=["test"], timeout=0.1):
+            pass
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from typing import List
 from unittest import mock
 from unittest.mock import Mock
 
@@ -23,8 +22,8 @@ class EventTestEnum(Enum):
 
 
 class EventTestChannels(GatewayChannels):
-    event: ts[List[MonitoringEvent]] = None
-    metric: ts[List[MonitoringMetric]] = None
+    event: ts[list[MonitoringEvent]] = None
+    metric: ts[list[MonitoringMetric]] = None
 
 
 class EventTestModule(GatewayModule):
@@ -34,7 +33,7 @@ class EventTestModule(GatewayModule):
     def subscribe_events(
         self,
         trigger: ts[bool],
-    ) -> ts[List[MonitoringEvent]]:
+    ) -> ts[list[MonitoringEvent]]:
         with csp.state():
             last_x = 0
         if csp.ticked(trigger):
@@ -71,7 +70,7 @@ class EventTestModule(GatewayModule):
     def subscribe_metrics(
         self,
         trigger: ts[bool],
-    ) -> ts[List[MonitoringMetric]]:
+    ) -> ts[list[MonitoringMetric]]:
         with csp.state():
             last_x = 1.0
         if csp.ticked(trigger):

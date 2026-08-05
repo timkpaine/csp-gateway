@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, Generic, List, Optional, Set, Type, Union
+from typing import TYPE_CHECKING, Any, Generic
 
 from ccflow import BaseModel
 from pydantic import Field, TypeAdapter, model_validator
@@ -14,12 +14,12 @@ if TYPE_CHECKING:
     from csp_gateway.server import GatewaySettings, GatewayWebApp
 
 
-class Module(BaseModel, Generic[ChannelsType], ABC):
+class Module(BaseModel, ABC, Generic[ChannelsType]):
     model_config = {"arbitrary_types_allowed": True}
 
-    requires: Optional[ChannelSelection] = None
+    requires: ChannelSelection | None = None
     disable: bool = False
-    block_set_channels_until: Optional[datetime] = Field(
+    block_set_channels_until: datetime | None = Field(
         default=None,
         description="""
         This determines the csp time at which this module can start sending data to channels.
@@ -32,23 +32,22 @@ class Module(BaseModel, Generic[ChannelsType], ABC):
 
     def rest(self, app: "GatewayWebApp") -> None: ...
 
-    def info(self, settings: "GatewaySettings") -> Optional[str]: ...
+    def info(self, settings: "GatewaySettings") -> str | None: ...
 
     @abstractmethod
     def shutdown(self) -> None: ...
 
-    def dynamic_keys(self) -> Optional[Dict[str, List[Any]]]: ...
+    def dynamic_keys(self) -> dict[str, list[Any]] | None: ...
 
-    def dynamic_channels(self) -> Optional[Dict[str, Union[Type[GatewayStruct], Type[List[GatewayStruct]]]]]:
+    def dynamic_channels(self) -> dict[str, type[GatewayStruct] | type[list[GatewayStruct]]] | None:
         """
         Channels that this module dynamically adds to the gateway channels when this module is included into the gateway.
 
         Returns:
             Dictionary keyed by channel name and type of the timeseries of the channel as values.
         """
-        ...
 
-    def dynamic_state_channels(self) -> Optional[Set[str]]:
+    def dynamic_state_channels(self) -> set[str] | None:
         """The subset of :meth:`dynamic_channels` for which this module will also call
         :meth:`GatewayChannels.set_state` from within :meth:`connect`.
 
@@ -57,7 +56,6 @@ class Module(BaseModel, Generic[ChannelsType], ABC):
         are connected; the returned state edge is bound to the real state node once the
         owning module's ``connect`` calls ``set_state``.
         """
-        ...
 
     # @abc.abstractmethod
     # def subscribe(self):

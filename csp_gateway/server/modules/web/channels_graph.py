@@ -1,5 +1,4 @@
 from json import dumps
-from typing import Dict, List
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
@@ -24,10 +23,10 @@ class MountChannelsGraph(GatewayModule):
         # TODO subselect
         @api_router.get(
             self.route,
-            response_model=Dict[str, Dict[str, List[str]]],
+            response_model=dict[str, dict[str, list[str]]],
             tags=["Utility"],
         )
-        def channels_graph_data(request: Request) -> Dict[str, Dict[str, List[str]]]:
+        def channels_graph_data(request: Request) -> dict[str, dict[str, list[str]]]:
             """
             This endpoint returns the structure of the GatewayChannels graph as a JSON object.
             It is used by the `Browse Channels Graph` endpoint to generate a nice, interactive view of the graph.

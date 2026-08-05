@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Annotated, Dict, List, Optional, get_type_hints
+from typing import Annotated, get_type_hints
 
 import csp
 import numpy as np
@@ -34,7 +34,7 @@ class SimpleOrderChild(SimpleOrder):
 
 class MyCompositeStruct(_Base):
     order: SimpleOrder
-    order_list: List[SimpleOrder]
+    order_list: list[SimpleOrder]
 
 
 class MyEnum(Enum):
@@ -56,13 +56,13 @@ class MyStruct(_Base):
 
 class MyGatewayChannels(GatewayChannels):
     my_static: float = 0.0
-    my_static_dict: Dict[str, float] = {}
-    my_static_list: List[str] = []
+    my_static_dict: dict[str, float] = {}
+    my_static_list: list[str] = []
     my_channel: Annotated[ts[MyStruct], State(keyby="id")] = None
-    my_list_channel: Annotated[ts[List[MyStruct]], State(keyby="id")] = None
-    my_enum_basket: Dict[MyEnum, ts[MyStruct]] = None
-    my_str_basket: Dict[str, ts[MyStruct]] = None
-    my_enum_basket_list: Dict[MyEnum, ts[List[MyStruct]]] = None
+    my_list_channel: Annotated[ts[list[MyStruct]], State(keyby="id")] = None
+    my_enum_basket: dict[MyEnum, ts[MyStruct]] = None
+    my_str_basket: dict[str, ts[MyStruct]] = None
+    my_enum_basket_list: dict[MyEnum, ts[list[MyStruct]]] = None
     my_array_channel: ts[Numpy1DArray[float]] = None
 
 
@@ -108,12 +108,12 @@ def test_snapshot_model_type_hints():
     snapshot_model = MyGatewayChannels._snapshot_model
     type_hints = get_type_hints(snapshot_model)
     assert len(type_hints) == 6
-    assert type_hints["my_channel"] == Optional[MyStruct]
-    assert type_hints["my_list_channel"] == Optional[List[MyStruct]]
-    assert type_hints["my_enum_basket"] == Optional[Dict[MyEnum, MyStruct]]
-    assert type_hints["my_str_basket"] == Optional[Dict[str, MyStruct]]
-    assert type_hints["my_enum_basket_list"] == Optional[Dict[MyEnum, List[MyStruct]]]
-    assert type_hints[_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD] == Optional[datetime]
+    assert type_hints["my_channel"] == MyStruct | None
+    assert type_hints["my_list_channel"] == list[MyStruct] | None
+    assert type_hints["my_enum_basket"] == dict[MyEnum, MyStruct] | None
+    assert type_hints["my_str_basket"] == dict[str, MyStruct] | None
+    assert type_hints["my_enum_basket_list"] == dict[MyEnum, list[MyStruct]] | None
+    assert type_hints[_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD] == datetime | None
 
 
 def test_snapshot_model_instantiation():

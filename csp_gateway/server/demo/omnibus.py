@@ -5,12 +5,12 @@ NOTE: The webserver tests use this code internally to validate rest endpoints,
 and those tests in turn ensure that this demo works.
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from logging import INFO, basicConfig
 from pathlib import Path
 from random import choice
 from string import ascii_lowercase
-from typing import Annotated, Dict, List
+from typing import Annotated
 
 import csp
 import numpy as np
@@ -57,7 +57,6 @@ __all__ = (
     "ExampleModule",
     "ExampleModuleCustomTable",
     "ExampleModuleFeedback",
-    "ExampleModuleCustomTable",
 )
 
 
@@ -77,9 +76,9 @@ class ExampleDataBase(csp.Struct):
     z: str = ""
     internal_csp_struct: ExampleCspStruct = ExampleCspStruct()
     data: Numpy1DArray[float] = np.array([])
-    mapping: Dict[str, int] = {}
-    dt: datetime = datetime.today()
-    d: date = datetime.today().date()
+    mapping: dict[str, int] = {}
+    dt: datetime = datetime.now(timezone.utc)
+    d: date = datetime.now(timezone.utc).date()
 
     @classmethod
     def __get_validator_dict__(cls):
@@ -110,10 +109,10 @@ class ExampleEnum(Enum):
 
 
 class ExampleGatewayChannels(GatewayChannels):
-    metadata: Dict[str, str] = {"name": "Demo"}
+    metadata: dict[str, str] = {"name": "Demo"}
 
     example: ts[ExampleData] = None
-    example_list: ts[List[ExampleData]] = None
+    example_list: ts[list[ExampleData]] = None
     never_ticks: ts[ExampleData] = None
 
     # State fields can be added via annotation or the `set_state` API in the module's `connect` method
@@ -125,8 +124,8 @@ class ExampleGatewayChannels(GatewayChannels):
     ] = None
     # example: Set in connect with a different schema, to show flexibility of state definition
 
-    basket: Dict[ExampleEnum, ts[ExampleData]] = None
-    str_basket: Dict[str, ts[ExampleData]] = None
+    basket: dict[ExampleEnum, ts[ExampleData]] = None
+    str_basket: dict[str, ts[ExampleData]] = None
 
     # Staging can be added via annotation or the `set_stage` API in the module's `connect` method
     example_with_stage: Annotated[ts[ExampleData], Stage()] = None
@@ -175,7 +174,7 @@ class ExampleModule(GatewayModule):
     def subscribe_list(
         self,
         data: ts[ExampleData],
-    ) -> ts[List[ExampleData]]:
+    ) -> ts[list[ExampleData]]:
         if csp.ticked(data):
             return [data]
 
@@ -243,7 +242,7 @@ class ExampleModuleFeedback(GatewayModule):
         self,
         data: ts[ExampleData],
     ) -> ts[ExampleData]:
-        if csp.ticked(data):
+        if csp.ticked(data):  # noqa: SIM102
             if data.x % 2 == 0:
                 return ExampleData(
                     x=data.x + 1,
@@ -267,7 +266,7 @@ class ExampleModuleCustomTable(GatewayModule):
 
     def connect(self, channels: ExampleGatewayChannels):
         perspective_client = channels.perspective.new_local_client()
-        my_table = perspective_client.table(dict(timestamp=datetime, x=int, y=str), limit=None, index="y", name=self.table_name)
+        my_table = perspective_client.table({"timestamp": datetime, "x": int, "y": str}, limit=None, index="y", name=self.table_name)
 
         example = channels.get_channel(ExampleGatewayChannels.example)
         example_list = csp.unroll(channels.get_channel(ExampleGatewayChannels.example_list))
@@ -326,7 +325,7 @@ if __name__ == "__main__":
             MountPerspectiveTables(
                 perspective_field="perspective",
                 layouts={
-                    "Server Defined Layout": '{"sizes":[1],"detail":{"main":{"type":"split-area","orientation":"vertical","children":[{"type":"split-area","orientation":"horizontal","children":[{"type":"tab-area","widgets":["EXAMPLE_LIST_GENERATED_4"],"currentIndex":0},{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_1"],"currentIndex":0}],"sizes":[0.3,0.7]},{"type":"split-area","orientation":"horizontal","children":[{"type":"tab-area","widgets":["EXAMPLE_GENERATED_3"],"currentIndex":0},{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_0"],"currentIndex":0}],"sizes":[0.3,0.7]}],"sizes":[0.5,0.5]}},"viewers":{"EXAMPLE_LIST_GENERATED_4":{"version":"3.3.4","plugin":"Datagrid","plugin_config":{"columns":{},"edit_mode":"READ_ONLY","scroll_lock":false},"columns_config":{},"title":"example_list","group_by":[],"split_by":[],"columns":["timestamp","x","y","data","mapping","dt","d","internal_csp_struct.z"],"filter":[],"sort":[["timestamp","desc"]],"expressions":{},"aggregates":{},"table":"example_list","settings":false},"PERSPECTIVE_GENERATED_ID_1":{"version":"3.3.4","plugin":"X Bar","plugin_config":{},"columns_config":{},"title":"example_list (*)","group_by":["x"],"split_by":[],"columns":["y"],"filter":[],"sort":[["x","asc"]],"expressions":{},"aggregates":{"y":"median"},"table":"example_list","settings":false},"EXAMPLE_GENERATED_3":{"version":"3.3.4","plugin":"Datagrid","plugin_config":{"columns":{},"edit_mode":"READ_ONLY","scroll_lock":false},"columns_config":{},"title":"example","group_by":[],"split_by":[],"columns":["timestamp","x","y","data","mapping","dt","d","internal_csp_struct.z"],"filter":[],"sort":[["timestamp","desc"]],"expressions":{},"aggregates":{},"table":"example","settings":false},"PERSPECTIVE_GENERATED_ID_0":{"version":"3.3.4","plugin":"Treemap","plugin_config":{},"columns_config":{},"title":"example (*)","group_by":["x"],"split_by":[],"columns":["y","x",null],"filter":[],"sort":[["timestamp","desc"]],"expressions":{},"aggregates":{},"table":"example","settings":false}}}'  # noqa: E501
+                    "Server Defined Layout": '{"sizes":[1],"detail":{"main":{"type":"split-area","orientation":"vertical","children":[{"type":"split-area","orientation":"horizontal","children":[{"type":"tab-area","widgets":["EXAMPLE_LIST_GENERATED_4"],"currentIndex":0},{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_1"],"currentIndex":0}],"sizes":[0.3,0.7]},{"type":"split-area","orientation":"horizontal","children":[{"type":"tab-area","widgets":["EXAMPLE_GENERATED_3"],"currentIndex":0},{"type":"tab-area","widgets":["PERSPECTIVE_GENERATED_ID_0"],"currentIndex":0}],"sizes":[0.3,0.7]}],"sizes":[0.5,0.5]}},"viewers":{"EXAMPLE_LIST_GENERATED_4":{"version":"3.3.4","plugin":"Datagrid","plugin_config":{"columns":{},"edit_mode":"READ_ONLY","scroll_lock":false},"columns_config":{},"title":"example_list","group_by":[],"split_by":[],"columns":["timestamp","x","y","data","mapping","dt","d","internal_csp_struct.z"],"filter":[],"sort":[["timestamp","desc"]],"expressions":{},"aggregates":{},"table":"example_list","settings":false},"PERSPECTIVE_GENERATED_ID_1":{"version":"3.3.4","plugin":"X Bar","plugin_config":{},"columns_config":{},"title":"example_list (*)","group_by":["x"],"split_by":[],"columns":["y"],"filter":[],"sort":[["x","asc"]],"expressions":{},"aggregates":{"y":"median"},"table":"example_list","settings":false},"EXAMPLE_GENERATED_3":{"version":"3.3.4","plugin":"Datagrid","plugin_config":{"columns":{},"edit_mode":"READ_ONLY","scroll_lock":false},"columns_config":{},"title":"example","group_by":[],"split_by":[],"columns":["timestamp","x","y","data","mapping","dt","d","internal_csp_struct.z"],"filter":[],"sort":[["timestamp","desc"]],"expressions":{},"aggregates":{},"table":"example","settings":false},"PERSPECTIVE_GENERATED_ID_0":{"version":"3.3.4","plugin":"Treemap","plugin_config":{},"columns_config":{},"title":"example (*)","group_by":["x"],"split_by":[],"columns":["y","x",null],"filter":[],"sort":[["timestamp","desc"]],"expressions":{},"aggregates":{},"table":"example","settings":false}}}'
                 },
                 limits={"str_basket": 20},
                 architectures={"basket": "server"},

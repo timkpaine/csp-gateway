@@ -1,5 +1,4 @@
 import logging
-from typing import List
 
 from pydantic import BaseModel
 
@@ -9,7 +8,7 @@ log = logging.getLogger(__name__)
 
 
 class Query(BaseModel):
-    filters: List[Filter] = []
+    filters: list[Filter] = []
 
     def calculate(self, objs):
         """calculate and filter down objs by filters"""

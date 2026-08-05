@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Annotated, Dict, List, Optional, Type
+from typing import Annotated
 
 import csp
 import numpy as np
@@ -17,17 +17,17 @@ from csp_gateway import (
 )
 
 __all__ = (
-    "MyEnum",
-    "MyStruct",
-    "MyGatewayChannels",
-    "MySmallGatewayChannels",
-    "MySmallGateway",
-    "MyGateway",
-    "MySetModule",
-    "MyGetModule",
-    "MyExampleModule",
     "MyDictBasketModule",
+    "MyEnum",
+    "MyExampleModule",
+    "MyGateway",
+    "MyGatewayChannels",
+    "MyGetModule",
     "MyNoTickDictBasket",
+    "MySetModule",
+    "MySmallGateway",
+    "MySmallGatewayChannels",
+    "MyStruct",
 )
 
 
@@ -45,33 +45,33 @@ class MyStruct(GatewayStruct):
 
 class MyGatewayChannels(GatewayChannels):
     my_static: float = 0.0
-    my_static_dict: Dict[str, float] = {}
-    my_static_list: List[str] = []
+    my_static_dict: dict[str, float] = {}
+    my_static_list: list[str] = []
     my_channel: Annotated[ts[MyStruct], State(keyby="id")] = None
-    my_list_channel: Annotated[ts[List[MyStruct]], State(keyby="id")] = None
-    my_enum_basket: Dict[MyEnum, ts[MyStruct]] = None
-    my_str_basket: Dict[str, ts[MyStruct]] = None
-    my_enum_basket_list: Dict[MyEnum, ts[List[MyStruct]]] = None
+    my_list_channel: Annotated[ts[list[MyStruct]], State(keyby="id")] = None
+    my_enum_basket: dict[MyEnum, ts[MyStruct]] = None
+    my_str_basket: dict[str, ts[MyStruct]] = None
+    my_enum_basket_list: dict[MyEnum, ts[list[MyStruct]]] = None
     my_array_channel: ts[Numpy1DArray[float]] = None
 
 
 class MySmallGatewayChannels(GatewayChannels):
     example: Annotated[ts[int], State(keyby="id")] = None
-    my_str_basket: Dict[str, ts[float]] = None
+    my_str_basket: dict[str, ts[float]] = None
 
 
 class MySmallGateway(Gateway):
-    channels_model: Type[Channels] = MySmallGatewayChannels
+    channels_model: type[Channels] = MySmallGatewayChannels
 
 
 class MyGateway(Gateway):
-    channels_model: Type[Channels] = MyGatewayChannels  # type: ignore[assignment]
+    channels_model: type[Channels] = MyGatewayChannels  # type: ignore[assignment]
 
 
 class MySetModule(GatewayModule):
     my_data: ts[MyStruct]
     my_data2: ts[MyStruct]
-    my_list_data: ts[List[MyStruct]]
+    my_list_data: ts[list[MyStruct]]
     by_key: bool = True
 
     def dynamic_keys(self):
@@ -121,7 +121,7 @@ class MySetModule(GatewayModule):
 
 
 class MyGetModule(GatewayModule):
-    requires: Optional[ChannelSelection] = []
+    requires: ChannelSelection | None = []
 
     def connect(self, channels: MyGatewayChannels) -> None:
         # Build a set of inputs based on the test cases
@@ -199,8 +199,8 @@ class MyNoTickDictBasket(GatewayModule):
     def subscribe(
         self,
         trigger: ts[bool],
-        keys: List[str],
-    ) -> csp.OutputBasket(Dict[str, ts[float]], shape="keys"):
+        keys: list[str],
+    ) -> csp.OutputBasket(dict[str, ts[float]], shape="keys"):
         if csp.ticked(trigger):
             csp.output({"my_key": self.my_data})
 

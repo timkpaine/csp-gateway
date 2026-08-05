@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from typing import List
 from unittest import mock
 
 import csp
@@ -21,8 +20,8 @@ class DatadogTestEnum(Enum):
 
 
 class DatadogTestChannels(GatewayChannels):
-    event: ts[List[MonitoringEvent]] = None
-    metric: ts[List[MonitoringMetric]] = None
+    event: ts[list[MonitoringEvent]] = None
+    metric: ts[list[MonitoringMetric]] = None
 
 
 class DatadogTestModule(GatewayModule):
@@ -32,7 +31,7 @@ class DatadogTestModule(GatewayModule):
     def subscribe_events(
         self,
         trigger: ts[bool],
-    ) -> ts[List[MonitoringEvent]]:
+    ) -> ts[list[MonitoringEvent]]:
         with csp.state():
             last_x = 0
         if csp.ticked(trigger):
@@ -69,7 +68,7 @@ class DatadogTestModule(GatewayModule):
     def subscribe_metrics(
         self,
         trigger: ts[bool],
-    ) -> ts[List[MonitoringMetric]]:
+    ) -> ts[list[MonitoringMetric]]:
         with csp.state():
             last_x = 1.0
         if csp.ticked(trigger):
@@ -271,7 +270,7 @@ def test_datadog(mock_send_metric, mock_event_create, mock_initialize):
 
         # count tag values
         for v in res_dict.values():
-            if isinstance(v, List):
+            if isinstance(v, list):
                 sum += int(v[0][1])
                 continue
             else:

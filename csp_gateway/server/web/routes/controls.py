@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from typing import List, Optional, Set
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 
@@ -18,8 +17,8 @@ _WAIT_THRESHOLD = 0.1
 _CONTROLS_FQ_TYPE_NAME = get_fully_qualified_type_name(Controls)
 
 __all__ = (
-    "add_controls_routes",
     "add_controls_available_channels",
+    "add_controls_routes",
 )
 
 
@@ -112,13 +111,13 @@ def add_controls_routes(api_router: APIRouter, field: str) -> None:
         raise ValueError(f"Unsupported controls field: {field}. Supported fields are 'heartbeat', 'stats', and 'shutdown'.")
 
 
-def add_controls_available_channels(api_router: APIRouter, fields: Optional[Set[str]] = None) -> None:
+def add_controls_available_channels(api_router: APIRouter, fields: set[str] | None = None) -> None:
     @api_router.get(
         "/",
         responses=get_default_responses(),
-        response_model=List[str],
+        response_model=list[str],
     )
-    async def get_controls(request: Request) -> List[str]:
+    async def get_controls(request: Request) -> list[str]:
         """
         This endpoint will return a list of string values of all available channels under the `/controls` route.
         """

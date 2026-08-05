@@ -8,7 +8,6 @@ See STAGE.md for the full API specification.
 """
 
 import threading
-from typing import Dict, List, Optional
 
 from csp.impl.genericpushadapter import GenericPushAdapter
 
@@ -81,19 +80,19 @@ class _StageManager:
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._areas: Dict[str, Staging] = {}
-        self._released: Dict[str, Staging] = {}
+        self._areas: dict[str, Staging] = {}
+        self._released: dict[str, Staging] = {}
 
     @property
-    def staging_ids(self) -> List[str]:
+    def staging_ids(self) -> list[str]:
         with self._lock:
             return list(self._areas.keys())
 
     def stage_add(
         self,
-        struct: Optional[GatewayStruct] = None,
-        staging_ids: Optional[List[str]] = None,
-    ) -> List[str]:
+        struct: GatewayStruct | None = None,
+        staging_ids: list[str] | None = None,
+    ) -> list[str]:
         """Add a struct to staging area(s).
 
         Returns the list of staging IDs affected.
@@ -155,9 +154,9 @@ class _StageManager:
 
     def stage_remove(
         self,
-        struct: Optional[GatewayStruct] = None,
-        staging_ids: Optional[List[str]] = None,
-    ) -> List[str]:
+        struct: GatewayStruct | None = None,
+        staging_ids: list[str] | None = None,
+    ) -> list[str]:
         """Remove struct(s) from staging area(s).
 
         Returns the list of staging IDs affected.
@@ -205,15 +204,14 @@ class _StageManager:
             # struct, [staging_id]: remove from specific staging
             affected = []
             for sid in staging_ids:
-                if sid in self._areas:
-                    if self._areas[sid].remove(struct):
-                        affected.append(sid)
+                if sid in self._areas and self._areas[sid].remove(struct):
+                    affected.append(sid)
             return affected
 
     def stage_release(
         self,
-        staging_ids: Optional[List[str]] = None,
-    ) -> Dict[str, List[GatewayStruct]]:
+        staging_ids: list[str] | None = None,
+    ) -> dict[str, list[GatewayStruct]]:
         """Release staged structs.
 
         Returns a dict mapping staging_id -> list of released structs.
@@ -239,8 +237,8 @@ class _StageManager:
 
     def stage_list(
         self,
-        staging_id: Optional[str] = None,
-    ) -> List[str]:
+        staging_id: str | None = None,
+    ) -> list[str]:
         """List staging IDs, or verify a specific one exists."""
         with self._lock:
             if staging_id is None:
@@ -251,8 +249,8 @@ class _StageManager:
 
     def stage_lookup(
         self,
-        staging_id: Optional[str] = None,
-    ) -> Dict[str, List[GatewayStruct]]:
+        staging_id: str | None = None,
+    ) -> dict[str, list[GatewayStruct]]:
         """Look up contents of staging area(s), including released stages.
 
         Returns dict mapping staging_id -> list of structs.

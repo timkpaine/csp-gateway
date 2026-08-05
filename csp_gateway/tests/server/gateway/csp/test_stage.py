@@ -1,7 +1,7 @@
 """Tests for the staging functionality."""
 
 from datetime import datetime, timedelta
-from typing import Annotated, Type
+from typing import Annotated
 
 import csp
 import pytest
@@ -339,7 +339,7 @@ class TestStagingAnnotation:
                 channels.set_channel(AnnotatedChannels.orders, csp.null_ts(OrderStruct))
 
         class AnnotatedGateway(Gateway):
-            channels_model: Type[Channels] = AnnotatedChannels  # type: ignore[assignment]
+            channels_model: type[Channels] = AnnotatedChannels  # type: ignore[assignment]
 
         import socket
 
@@ -378,7 +378,7 @@ class TestStagingAnnotation:
                 channels.set_stage(DualChannels.orders)
 
         class DualGateway(Gateway):
-            channels_model: Type[Channels] = DualChannels  # type: ignore[assignment]
+            channels_model: type[Channels] = DualChannels  # type: ignore[assignment]
 
         import socket
 
@@ -421,7 +421,7 @@ class TestStagingHarness:
                 pass
 
         class HarnessGateway(Gateway):
-            channels_model: Type[Channels] = HarnessChannels  # type: ignore[assignment]
+            channels_model: type[Channels] = HarnessChannels  # type: ignore[assignment]
 
         harness = GatewayTestHarness(
             test_channels=["orders"],
@@ -454,7 +454,7 @@ class TestStagingHarness:
                 pass
 
         class ReleaseGateway(Gateway):
-            channels_model: Type[Channels] = ReleaseChannels  # type: ignore[assignment]
+            channels_model: type[Channels] = ReleaseChannels  # type: ignore[assignment]
 
         import socket
 

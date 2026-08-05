@@ -8,7 +8,6 @@ See STAGE.md for the full API specification.
 
 import json
 import logging
-from typing import Dict, List, Optional, Set, Union
 
 from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.responses import Response
@@ -21,12 +20,12 @@ from ..utils import get_default_responses
 log = logging.getLogger(__name__)
 
 __all__ = (
-    "add_stage_routes",
     "add_stage_available_channels",
+    "add_stage_routes",
 )
 
 
-def _serialize_staging_result(result: Dict[str, List]) -> Response:
+def _serialize_staging_result(result: dict[str, list]) -> Response:
     """Serialize a staging result dict (staging_id -> list of structs) to JSON Response."""
     serialized = {}
     for sid, items in result.items():
@@ -40,15 +39,15 @@ def _serialize_staging_result(result: Dict[str, List]) -> Response:
 def add_stage_routes(
     api_router: APIRouter,
     field: str,
-    model: Union[BaseModel, List[BaseModel]] = None,
+    model: BaseModel | list[BaseModel] = None,
 ) -> None:
     """Mount REST routes for staging on a single channel ``field``."""
 
     # POST /stage/<channel> — stage_add
     async def stage_add(
         request: Request,
-        id: Optional[str] = Query(None, description="Comma-separated staging IDs to add to"),
-        data: Optional[model] = Body(None),
+        id: str | None = Query(None, description="Comma-separated staging IDs to add to"),
+        data: model | None = Body(None),
     ):
         """Add a struct to staging area(s).
 
@@ -85,8 +84,8 @@ def add_stage_routes(
     # DELETE /stage/<channel> — stage_remove
     async def stage_remove(
         request: Request,
-        id: Optional[str] = Query(None, description="Comma-separated staging IDs to remove from"),
-        data: Optional[model] = Body(None),
+        id: str | None = Query(None, description="Comma-separated staging IDs to remove from"),
+        data: model | None = Body(None),
     ):
         """Remove struct(s) from staging area(s).
 
@@ -126,7 +125,7 @@ def add_stage_routes(
     # PATCH /stage/<channel> — stage_release
     async def stage_release(
         request: Request,
-        id: Optional[str] = Query(None, description="Comma-separated staging IDs to release"),
+        id: str | None = Query(None, description="Comma-separated staging IDs to release"),
     ):
         """Release staged structs into the channel.
 
@@ -159,8 +158,8 @@ def add_stage_routes(
     # GET /stage/<channel> — stage_list
     async def stage_list(
         request: Request,
-        id: Optional[str] = Query(None, description="Specific staging ID to check"),
-    ) -> List[str]:
+        id: str | None = Query(None, description="Specific staging ID to check"),
+    ) -> list[str]:
         """List staging IDs for a channel.
 
         - No id: list all staging IDs
@@ -174,7 +173,7 @@ def add_stage_routes(
     api_router.get(
         f"/{field}",
         responses=get_default_responses(),
-        response_model=List[str],
+        response_model=list[str],
         name=f"Stage List {field}",
         description=f"List staging IDs for channel `{field}`.",
     )(stage_list)
@@ -183,14 +182,14 @@ def add_stage_routes(
         api_router.get(
             f"/{field.replace('_', '-')}",
             responses=get_default_responses(),
-            response_model=List[str],
+            response_model=list[str],
             include_in_schema=False,
         )(stage_list)
 
     # PUT /stage/<channel> — stage_lookup
     async def stage_lookup(
         request: Request,
-        id: Optional[str] = Query(None, description="Specific staging ID to look up"),
+        id: str | None = Query(None, description="Specific staging ID to look up"),
     ):
         """Look up contents of staging area(s).
 
@@ -220,16 +219,16 @@ def add_stage_routes(
 
 def add_stage_available_channels(
     api_router: APIRouter,
-    fields: Optional[Set[str]] = None,
+    fields: set[str] | None = None,
 ) -> None:
     """Mount the top-level GET /stage/ route listing all staged channels."""
 
     @api_router.get(
         "/",
         responses=get_default_responses(),
-        response_model=List[str],
+        response_model=list[str],
     )
-    async def get_staged_channels(request: Request) -> List[str]:
+    async def get_staged_channels(request: Request) -> list[str]:
         """Return the list of all channels with staging enabled."""
         all_staged = request.app.gateway.channels.staged_channels()
         if fields is not None:
@@ -237,7 +236,7 @@ def add_stage_available_channels(
         return sorted(all_staged)
 
 
-def _parse_staging_ids(id_param: Optional[str]) -> Optional[List[str]]:
+def _parse_staging_ids(id_param: str | None) -> list[str] | None:
     """Parse the comma-separated id query parameter.
 
     Returns:
