@@ -116,11 +116,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.9", "3.10", "3.11"]
-        exclude:
-          # No CSP builds for python 3.9 / macos arm64
-          - python-version: "3.9"
-            os: macos-latest
+        python-version: ["3.10", "3.11"]
 
     steps:
       - name: Checkout
