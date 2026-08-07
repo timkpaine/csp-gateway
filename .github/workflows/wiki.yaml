@@ -31,12 +31,12 @@ jobs:
       - name: Setup Python
         uses: actions-ext/python/setup@6e1b91a408ea89f49bc8aff8724f83826f7b5446
         with:
-          version: ${{ matrix.python-version }}
+          version: 3.11
 
       - name: Install nbconvert and convert notebooks
         run: |
-          pip install nb  convert
-          jupyter nbconvert examples/Client.ipynb --to markdown --output  ../docs/wiki/Client.md
+          pip install nbconvert
+          jupyter nbconvert examples/Client.ipynb --to markdown --output ../docs/wiki/Client.md
 
       - name: Publish wiki
         uses: Andrew-Chen-Wang/github-wiki-action@1bbb4280446f9630e8e21a18012cbacf3b0f992e  # v5.0.6
