@@ -169,6 +169,49 @@ def dynamic_channels(self) -> Optional[Dict[str, Union[Type[GatewayStruct], Type
     """
 ```
 
+### Custom Struct Validators and Transformers
+
+`GatewayStruct` can have **validators** and **transformers** attached to a struct type. They run automatically during pydantic validation — whenever a struct is deserialized from the REST `/send` endpoint, from `model_validate`/`TypeAdapter`, or from JSON snapshot replay — and for nested structs when a containing struct is validated. They do **not** run on native (non-pydantic) Python construction (`MyStruct(...)`).
+
+Registrations accept arbitrary callables (functions, lambdas, bound methods), may be added dynamically at graph-build time, and are aggregated across the class hierarchy (base-class and subclass registrations both run).
+
+**Validators** reject invalid data. A validator receives a constructed struct and returns an error message to reject it (raised as a `ValueError`, surfaced by the REST API as a `422`), or `None` to accept it:
+
+```python
+class MyOrder(GatewayStruct):
+    quantity: float = 0.0
+
+MyOrder.add_validator(lambda s: "quantity must be positive" if s.quantity <= 0 else None)
+
+# also usable as a decorator
+@MyOrder.add_validator
+def _require_qty(order):
+    return "quantity must be positive" if order.quantity <= 0 else None
+```
+
+**Transformers** normalize or enrich data. A transformer receives a value and returns the (possibly new) value; it must not return `None`. `mode="before"` runs on the raw input (typically a dict) prior to construction — useful for accepting legacy or aliased input shapes — while `mode="after"` runs on the constructed struct:
+
+```python
+# "before": reshape raw input (e.g. accept a legacy field name)
+MyOrder.add_transformer(
+    lambda d: {**d, "quantity": d.pop("qty")} if isinstance(d, dict) and "qty" in d else d,
+    mode="before",
+)
+
+# "after": mutate/enrich the constructed struct (bound methods work too, e.g. to close over a secmaster)
+MyOrder.add_transformer(lambda o: _normalize(o), mode="after")
+```
+
+Per validation the order is **transform-then-validate**: `before` transformers → construct → `after` transformers → registered validators.
+
+Use `clear_validators()` / `clear_transformers(mode=None)` to remove registrations — handy for teardown or idempotent re-registration when they are attached at gateway-build time:
+
+```python
+MyOrder.clear_transformers()             # clears both "before" and "after"
+MyOrder.clear_transformers(mode="before")
+MyOrder.clear_validators()
+```
+
 ### Module Requirements
 
 `GatewayModule` instances can get/set arbitrary channels from a `GatewayChannels` instance.
