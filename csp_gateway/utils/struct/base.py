@@ -95,6 +95,97 @@ class GatewayLookupMixin:
 
 
 class GatewayPydanticMixin:
+    # Class-level validator registry. Each subclass gets its OWN list via add_validator
+    # (see below); validators are aggregated across the MRO when validation runs, so base-class
+    # validators and subclass validators both execute. Not a csp.Struct field (no annotation).
+    _validators = []
+
+    @classmethod
+    def add_validator(cls, fn):
+        """Register a validator ``fn(struct) -> Optional[str]`` on this struct class.
+
+        The callable receives a constructed instance and returns an error message string if the
+        instance is invalid, or ``None`` if it is valid. Lambdas and bound methods are both fine.
+        Validators registered on base classes also run (aggregated across the MRO). Returns ``fn`` so
+        it can be used as a decorator.
+        """
+        # Ensure THIS class has its own list rather than mutating an inherited (shared) one.
+        if not callable(fn):
+            raise TypeError(f"validator must be callable; got {fn!r}")
+        if "_validators" not in cls.__dict__:
+            cls._validators = []
+        cls._validators.append(fn)
+        return fn
+
+    @classmethod
+    def _collect_validators(cls):
+        """Aggregate validators across the MRO (base-class first)."""
+        collected = []
+        for klass in reversed(cls.__mro__):
+            collected.extend(klass.__dict__.get("_validators", ()))
+        return collected
+
+    @classmethod
+    def _run_validators(cls, val):
+        """Run all registered validators; raise ``ValueError`` on the first failure."""
+        for fn in cls._collect_validators():
+            error = fn(val)
+            if error:
+                raise ValueError(error)
+        return val
+
+    # Class-level transformer registries. Like validators, these are aggregated across the MRO and hold
+    # ARBITRARY callables (lambdas, bound methods) registered dynamically -- pydantic never sees them
+    # directly; the wrap validator (_validate_gateway_struct) invokes them. "before" transformers run on
+    # the raw input (typically a dict) prior to struct construction; "after" transformers run on the
+    # constructed struct. Both may mutate/replace and MUST return the (possibly new) value.
+    _pre_transformers = []
+    _post_transformers = []
+
+    @classmethod
+    def add_transformer(cls, fn, *, mode="after"):
+        """Register a transformer ``fn(value) -> value`` invoked during pydantic validation.
+
+        ``mode="before"``: runs on the raw input (usually a dict) before construction.
+        ``mode="after"`` (default): runs on the constructed struct.
+        ``fn`` may be any callable -- a lambda, a bound method of some other object (e.g. an adapter
+        holding a secmaster), etc. It must return the transformed value. Returns ``fn`` for decorator use.
+        """
+        if mode not in ("before", "after"):
+            raise ValueError(f"mode must be 'before' or 'after'; got {mode!r}")
+        if not callable(fn):
+            raise TypeError(f"transformer must be callable; got {fn!r}")
+        attr = "_pre_transformers" if mode == "before" else "_post_transformers"
+        if attr not in cls.__dict__:
+            setattr(cls, attr, [])
+        getattr(cls, attr).append(fn)
+        return fn
+
+    @classmethod
+    def _collect_transformers(cls, attr):
+        """Aggregate transformers of one kind across the MRO (base-class first)."""
+        collected = []
+        for klass in reversed(cls.__mro__):
+            collected.extend(klass.__dict__.get(attr, ()))
+        return collected
+
+    @classmethod
+    def clear_transformers(cls, *, mode=None):
+        """Remove transformers registered directly on THIS class (not inherited ones).
+
+        ``mode=None`` clears both "before" and "after"; ``"before"``/``"after"`` clears one kind. Useful
+        for teardown/idempotency when transformers are registered dynamically at gateway-build time.
+        """
+        if mode in (None, "before"):
+            cls._pre_transformers = []
+        if mode in (None, "after"):
+            cls._post_transformers = []
+
+    @classmethod
+    def clear_validators(cls):
+        """Remove validators registered directly on THIS class (not inherited ones)."""
+        cls._validators = []
+
     @classmethod
     def _validate_gateway_struct_after(cls, val):
         """Validate GatewayStruct after pydantic type validation.
@@ -139,8 +230,27 @@ class GatewayPydanticMixin:
             if info.context.get("force_new_timestamp", False):
                 # If we are forcing a new timestamp, we need to remove the old one
                 val.pop("timestamp", None)
+        # "before" transformers reshape the raw input (e.g. legacy-field coercion) prior to construction.
+        for fn in cls._collect_transformers("_pre_transformers"):
+            val = fn(val)
+            if val is None:
+                raise ValueError(
+                    f"{cls.__name__}: 'before' transformer {getattr(fn, '__name__', fn)!r} returned None; transformers must return the (possibly reshaped) input"
+                )
         csp_struct = handler(val)
+        # "after" transformers mutate/enrich the constructed struct before it is validated.
+        for fn in cls._collect_transformers("_post_transformers"):
+            csp_struct = fn(csp_struct)
+            if csp_struct is None:
+                raise ValueError(
+                    f"{cls.__name__}: 'after' transformer {getattr(fn, '__name__', fn)!r} returned None; transformers must return the (possibly new) struct"
+                )
         final = cls._validate_gateway_struct_after(csp_struct)
+        # Run the validator registry here (the wrap validator is the robust funnel): subclasses commonly
+        # OVERRIDE _validate_gateway_struct_after without calling super(), which would bypass the registry.
+        # _validate_gateway_struct, by contrast, is either inherited or overridden-with-super(), so this
+        # runs for every struct (registered validators aggregate across the MRO in _run_validators).
+        cls._run_validators(final)
         return final
 
     @staticmethod
