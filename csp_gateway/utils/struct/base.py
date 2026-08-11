@@ -95,96 +95,102 @@ class GatewayLookupMixin:
 
 
 class GatewayPydanticMixin:
-    # Class-level validator registry. Each subclass gets its OWN list via add_validator
-    # (see below); validators are aggregated across the MRO when validation runs, so base-class
-    # validators and subclass validators both execute. Not a csp.Struct field (no annotation).
-    _validators = []
+    # Class-level validator registries. Validators run automatically during pydantic validation (the wrap
+    # validator ``_validate_gateway_struct`` invokes them) and are aggregated across the MRO, so base-class
+    # and subclass validators both execute. They hold ARBITRARY callables (lambdas, bound methods) that
+    # pydantic never sees directly. A validator ``fn(value) -> value`` receives the value and returns the
+    # (possibly transformed) value; it RAISES to reject the input (surfaced by the REST API as a 422).
+    # "before" (alias "pre") validators run on the raw input (typically a dict) prior to struct
+    # construction -- useful for accepting legacy/aliased shapes; "after" (alias "post") validators run on
+    # the constructed struct. Plain class attributes, not csp.Struct fields (no annotation).
+    _pre_validators = []
+    _post_validators = []
+
+    # Accepted ``mode`` values -> internal registry attribute (both "before"/"pre" and "after"/"post").
+    _VALIDATOR_MODE_ATTRS = {
+        "before": "_pre_validators",
+        "pre": "_pre_validators",
+        "after": "_post_validators",
+        "post": "_post_validators",
+    }
 
     @classmethod
-    def add_validator(cls, fn):
-        """Register a validator ``fn(struct) -> Optional[str]`` on this struct class.
+    def _validator_mode_attr(cls, mode):
+        """Resolve a public ``mode`` ("before"/"pre"/"after"/"post") to its registry attribute name."""
+        try:
+            return cls._VALIDATOR_MODE_ATTRS[mode]
+        except (KeyError, TypeError):
+            raise ValueError(f"mode must be 'before'/'pre' or 'after'/'post'; got {mode!r}")
 
-        The callable receives a constructed instance and returns an error message string if the
-        instance is invalid, or ``None`` if it is valid. Lambdas and bound methods are both fine.
-        Validators registered on base classes also run (aggregated across the MRO). Returns ``fn`` so
-        it can be used as a decorator.
+    @classmethod
+    def add_validator(cls, fn=None, *, mode="after"):
+        """Register a validator invoked during pydantic validation.
+
+        A validator ``fn(value) -> value`` receives the value and returns the (possibly transformed)
+        value; it **raises** (e.g. ``ValueError``) to reject the input -- surfaced by the REST API as a
+        422. Returning ``None`` is treated as an error (a validator must return the value).
+
+        ``mode="before"`` (alias ``"pre"``) runs on the raw input (usually a dict) before construction --
+        useful for accepting legacy/aliased input shapes; ``mode="after"`` (alias ``"post"``, the default)
+        runs on the constructed struct. ``fn`` may be any callable -- a lambda, or a bound method of some
+        other object (e.g. an adapter holding a secmaster). Validators registered on base classes also run
+        (aggregated across the MRO). Usable directly, as a bare decorator (``@Struct.add_validator``), or
+        as a decorator factory (``@Struct.add_validator(mode="before")``). Returns ``fn``.
         """
-        # Ensure THIS class has its own list rather than mutating an inherited (shared) one.
-        if not callable(fn):
-            raise TypeError(f"validator must be callable; got {fn!r}")
-        if "_validators" not in cls.__dict__:
-            cls._validators = []
-        cls._validators.append(fn)
-        return fn
+        attr = cls._validator_mode_attr(mode)
+
+        def _register(func):
+            if not callable(func):
+                raise TypeError(f"validator must be callable; got {func!r}")
+            # Ensure THIS class has its OWN list rather than mutating an inherited (shared) one.
+            if attr not in cls.__dict__:
+                setattr(cls, attr, [])
+            getattr(cls, attr).append(func)
+            return func
+
+        # Support ``add_validator(fn, ...)``/bare-decorator and the ``add_validator(mode=...)`` factory.
+        if fn is None:
+            return _register
+        return _register(fn)
 
     @classmethod
-    def _collect_validators(cls):
-        """Aggregate validators across the MRO (base-class first)."""
-        collected = []
-        for klass in reversed(cls.__mro__):
-            collected.extend(klass.__dict__.get("_validators", ()))
-        return collected
-
-    @classmethod
-    def _run_validators(cls, val):
-        """Run all registered validators; raise ``ValueError`` on the first failure."""
-        for fn in cls._collect_validators():
-            error = fn(val)
-            if error:
-                raise ValueError(error)
-        return val
-
-    # Class-level transformer registries. Like validators, these are aggregated across the MRO and hold
-    # ARBITRARY callables (lambdas, bound methods) registered dynamically -- pydantic never sees them
-    # directly; the wrap validator (_validate_gateway_struct) invokes them. "before" transformers run on
-    # the raw input (typically a dict) prior to struct construction; "after" transformers run on the
-    # constructed struct. Both may mutate/replace and MUST return the (possibly new) value.
-    _pre_transformers = []
-    _post_transformers = []
-
-    @classmethod
-    def add_transformer(cls, fn, *, mode="after"):
-        """Register a transformer ``fn(value) -> value`` invoked during pydantic validation.
-
-        ``mode="before"``: runs on the raw input (usually a dict) before construction.
-        ``mode="after"`` (default): runs on the constructed struct.
-        ``fn`` may be any callable -- a lambda, a bound method of some other object (e.g. an adapter
-        holding a secmaster), etc. It must return the transformed value. Returns ``fn`` for decorator use.
-        """
-        if mode not in ("before", "after"):
-            raise ValueError(f"mode must be 'before' or 'after'; got {mode!r}")
-        if not callable(fn):
-            raise TypeError(f"transformer must be callable; got {fn!r}")
-        attr = "_pre_transformers" if mode == "before" else "_post_transformers"
-        if attr not in cls.__dict__:
-            setattr(cls, attr, [])
-        getattr(cls, attr).append(fn)
-        return fn
-
-    @classmethod
-    def _collect_transformers(cls, attr):
-        """Aggregate transformers of one kind across the MRO (base-class first)."""
+    def _collect_validators(cls, attr):
+        """Aggregate validators of one kind (``_pre_validators``/``_post_validators``) across the MRO."""
         collected = []
         for klass in reversed(cls.__mro__):
             collected.extend(klass.__dict__.get(attr, ()))
         return collected
 
     @classmethod
-    def clear_transformers(cls, *, mode=None):
-        """Remove transformers registered directly on THIS class (not inherited ones).
+    def _run_validators(cls, val, *, mode="after"):
+        """Run the registered validators of one kind on ``val``; return the (possibly transformed) value.
 
-        ``mode=None`` clears both "before" and "after"; ``"before"``/``"after"`` clears one kind. Useful
-        for teardown/idempotency when transformers are registered dynamically at gateway-build time.
+        Each validator must return the value (raising to reject); a ``None`` return is an error. Useful
+        for manually validating a natively/CSP-constructed struct, which does not auto-run validators.
         """
-        if mode in (None, "before"):
-            cls._pre_transformers = []
-        if mode in (None, "after"):
-            cls._post_transformers = []
+        attr = cls._validator_mode_attr(mode)
+        label = "before" if attr == "_pre_validators" else "after"
+        for fn in cls._collect_validators(attr):
+            val = fn(val)
+            if val is None:
+                raise ValueError(
+                    f"{cls.__name__}: {label!r} validator {getattr(fn, '__name__', fn)!r} returned None; validators must return the (possibly transformed) value"
+                )
+        return val
 
     @classmethod
-    def clear_validators(cls):
-        """Remove validators registered directly on THIS class (not inherited ones)."""
-        cls._validators = []
+    def clear_validators(cls, *, mode=None):
+        """Remove validators registered directly on THIS class (not inherited ones).
+
+        ``mode=None`` clears both "before" and "after"; ``"before"``/``"pre"`` or ``"after"``/``"post"``
+        clears just that kind. Useful for teardown/idempotency when validators are attached dynamically at
+        gateway-build time.
+        """
+        if mode is None:
+            cls._pre_validators = []
+            cls._post_validators = []
+        else:
+            setattr(cls, cls._validator_mode_attr(mode), [])
 
     @classmethod
     def _validate_gateway_struct_after(cls, val):
@@ -230,27 +236,17 @@ class GatewayPydanticMixin:
             if info.context.get("force_new_timestamp", False):
                 # If we are forcing a new timestamp, we need to remove the old one
                 val.pop("timestamp", None)
-        # "before" transformers reshape the raw input (e.g. legacy-field coercion) prior to construction.
-        for fn in cls._collect_transformers("_pre_transformers"):
-            val = fn(val)
-            if val is None:
-                raise ValueError(
-                    f"{cls.__name__}: 'before' transformer {getattr(fn, '__name__', fn)!r} returned None; transformers must return the (possibly reshaped) input"
-                )
+        # "before" validators reshape the raw input (e.g. legacy-field coercion) prior to construction.
+        val = cls._run_validators(val, mode="before")
         csp_struct = handler(val)
-        # "after" transformers mutate/enrich the constructed struct before it is validated.
-        for fn in cls._collect_transformers("_post_transformers"):
-            csp_struct = fn(csp_struct)
-            if csp_struct is None:
-                raise ValueError(
-                    f"{cls.__name__}: 'after' transformer {getattr(fn, '__name__', fn)!r} returned None; transformers must return the (possibly new) struct"
-                )
+        # "after" validators validate/normalize the constructed struct. They run in the wrap validator
+        # (the robust funnel) rather than the after-hook: subclasses commonly OVERRIDE
+        # _validate_gateway_struct_after WITHOUT super(), which would bypass the registry, whereas the wrap
+        # validator is always inherited or overridden-with-super(). Registered validators (aggregated
+        # across the MRO) therefore run for every struct, and BEFORE the after-hook so they may fix data
+        # the hook then checks.
+        csp_struct = cls._run_validators(csp_struct, mode="after")
         final = cls._validate_gateway_struct_after(csp_struct)
-        # Run the validator registry here (the wrap validator is the robust funnel): subclasses commonly
-        # OVERRIDE _validate_gateway_struct_after without calling super(), which would bypass the registry.
-        # _validate_gateway_struct, by contrast, is either inherited or overridden-with-super(), so this
-        # runs for every struct (registered validators aggregate across the MRO in _run_validators).
-        cls._run_validators(final)
         return final
 
     @staticmethod
