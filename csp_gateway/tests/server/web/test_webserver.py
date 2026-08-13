@@ -27,6 +27,7 @@ from csp_gateway import (
 )
 from csp_gateway.client import GatewayClient, GatewayClientConfig, ReturnType
 from csp_gateway.server.demo import (
+    ExampleData,
     ExampleEnum,
     ExampleGatewayChannels,
     ExampleModule,
@@ -398,6 +399,24 @@ class TestGatewayWebserver:
 
         # should never be hit
         pytest.fail(f"Expected error {target_error!r} not found in response detail: {response_detail}")
+
+    def test_csp_send_registered_validator_rejects_with_422(self, rest_client: TestClient):
+        # A registered validator raising ValueError must reach the client as a 422, not a 500.
+        def _reject_big_x(data):
+            if data.x > 1000:
+                raise ValueError("x must be <= 1000")
+            return data
+
+        ExampleData.add_validator(_reject_big_x)
+        try:
+            response = rest_client.post("/api/v1/send/example?token=test", json={"x": 5000, "y": "1"})
+            assert response.status_code == 422
+            assert any("x must be <= 1000" in val["msg"] for val in response.json()["detail"])
+
+            response = rest_client.post("/api/v1/send/example?token=test", json={"x": 7, "y": "1"})
+            assert response.status_code == 200
+        finally:
+            ExampleData.clear_validators()
 
     @pytest.mark.parametrize("send_as_list", (True, False))
     def test_csp_send(self, rest_client: TestClient, send_as_list, caplog):

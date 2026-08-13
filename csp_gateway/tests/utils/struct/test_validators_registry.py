@@ -1,10 +1,11 @@
 """Tests for the unified GatewayStruct validator registry (``add_validator`` / ``clear_validators``).
 
-Validators run automatically during pydantic validation (REST ``/send``, ``model_validate``/
-``TypeAdapter``, JSON snapshot replay) and for nested structs when a containing struct is validated. A
-validator ``fn(value) -> value`` returns the (possibly transformed) value and **raises** to reject it;
-``mode="before"`` (alias ``"pre"``) runs on the raw input prior to construction, ``mode="after"`` (alias
-``"post"``, default) on the constructed struct. They do NOT run on native ``MyStruct(...)`` construction.
+Validators run automatically during pydantic validation (REST ``/send``,
+``type_adapter().validate_python``, JSON snapshot replay, Kafka and filedrop ingestion) and for nested
+structs when a containing struct is validated. A validator ``fn(value) -> value`` returns the (possibly
+transformed) value and raises ``ValueError`` to reject it; ``mode="before"`` (alias ``"pre"``) runs on the
+raw input prior to construction, ``mode="after"`` (alias ``"post"``, default) on the constructed struct.
+They do NOT run on native ``MyStruct(...)`` construction.
 """
 
 import pytest
@@ -159,7 +160,7 @@ def test_isolation_between_sibling_classes():
 
 
 def test_runs_even_when_after_hook_overridden_without_super():
-    # REGRESSION: WT structs override _validate_gateway_struct_after WITHOUT super(). The registry must
+    # A subclass may override _validate_gateway_struct_after without calling super(). The registry must
     # STILL run because it executes in the wrap validator (_validate_gateway_struct), not the after hook.
     class S(GatewayStruct):
         a: int = 0
@@ -286,7 +287,7 @@ def test_bare_decorator_registers_after_validator():
     def _v(s):
         return _bump(s, 1)
 
-    assert _v is not None
+    assert _v(S(a=1)).a == 2  # the decorator returns the function itself, still directly callable
     assert TypeAdapter(S).validate_python({"a": 1}).a == 2
 
 
@@ -298,7 +299,7 @@ def test_decorator_factory_with_mode():
     def _pre(d):
         return {**d, "a": d.get("a", 0) + 5}
 
-    assert _pre is not None
+    assert _pre({"a": 1}) == {"a": 6}  # the factory also returns the function itself
     assert TypeAdapter(S).validate_python({"a": 1}).a == 6
 
 
@@ -329,9 +330,9 @@ def test_manual_call_on_csp_path():
         return s
 
     S.add_validator(_reject_neg)
-    assert S._run_validators(S(a=1)).a == 1
+    assert S.run_validators(S(a=1)).a == 1
     with pytest.raises(ValueError, match="neg"):
-        S._run_validators(S(a=-1))
+        S.run_validators(S(a=-1))
 
 
 class _VChild(GatewayStruct):
@@ -389,8 +390,12 @@ def test_after_validator_returning_none_raises_clear_error():
         a: int = 0
 
     S.add_validator(lambda s: None, mode="after")
-    with pytest.raises(ValueError, match="returned None"):
+    with pytest.raises(ValidationError, match="returned None"):
         TypeAdapter(S).validate_python({"a": 1})
+    # Called directly the guard surfaces as a plain ValueError, not a pydantic ValidationError.
+    with pytest.raises(ValueError, match="returned None") as excinfo:
+        S.run_validators(S(a=1))
+    assert not isinstance(excinfo.value, ValidationError)
 
 
 def test_before_validator_returning_none_raises_clear_error():
@@ -398,7 +403,7 @@ def test_before_validator_returning_none_raises_clear_error():
         a: int = 0
 
     S.add_validator(lambda d: None, mode="before")
-    with pytest.raises(ValueError, match="returned None"):
+    with pytest.raises(ValidationError, match="returned None"):
         TypeAdapter(S).validate_python({"a": 1})
 
 
@@ -487,6 +492,232 @@ def test_clear_validators_removes_own_but_not_inherited_or_sibling():
         TypeAdapter(Sibling).validate_python({"a": -1})
 
 
+def test_before_validator_skipped_for_already_constructed_input():
+    class S(GatewayStruct):
+        a: int = 0
+
+    seen = []
+    # A dict-shaped "before" validator, as documented -- it must never be handed a constructed struct.
+    S.add_validator(lambda d: (seen.append(type(d)), {**d, "a": d.get("a", 0) + 1})[1], mode="before")
+
+    out = TypeAdapter(S).validate_python(S(a=3))
+    assert seen == []
+    assert out.a == 3  # not bumped: no raw input to reshape
+    assert TypeAdapter(S).validate_python({"a": 3}).a == 4  # dict input still reshaped
+    assert seen == [dict]
+
+
+def test_after_validator_still_runs_for_already_constructed_input():
+    class S(GatewayStruct):
+        a: int = 0
+
+    def _reject_neg(s):
+        if s.a < 0:
+            raise ValueError("neg")
+        return s
+
+    S.add_validator(_reject_neg)
+    assert TypeAdapter(S).validate_python(S(a=1)).a == 1
+    with pytest.raises(ValidationError, match="neg"):
+        TypeAdapter(S).validate_python(S(a=-1))
+
+
+def test_nested_instance_field_does_not_break_dict_shaped_before_validator():
+    class Child(GatewayStruct):
+        v: int = 0
+
+    class Parent(GatewayStruct):
+        child: Child
+
+    Child.add_validator(lambda d: {**d, "v": d["v"] * 2}, mode="before")
+    # A struct instance in a nested field must not be fed to a dict-shaped validator (would TypeError).
+    assert TypeAdapter(Parent).validate_python({"child": Child(v=5)}).child.v == 5
+    assert TypeAdapter(Parent).validate_python({"child": {"v": 5}}).child.v == 10
+
+
+def test_subclass_validators_run_for_base_annotated_field():
+    class Base(GatewayStruct):
+        a: int = 0
+
+    class Derived(Base):
+        b: int = 0
+
+    class Holder(GatewayStruct):
+        item: Base
+
+    calls = []
+    Base.add_validator(lambda s: (calls.append("base"), s)[1])
+    Derived.add_validator(lambda s: (calls.append("derived"), s)[1])
+
+    # The field is annotated `Base`, so pydantic validates against Base's schema -- but the value is a
+    # `Derived`, whose own validators must still run (base first, then subclass).
+    out = TypeAdapter(Holder).validate_python({"item": Derived(a=1, b=2)})
+    assert type(out.item) is Derived
+    assert calls == ["base", "derived"]
+
+    # A dict really does construct a `Base`, so only Base's validators apply.
+    calls.clear()
+    TypeAdapter(Holder).validate_python({"item": {"a": 1}})
+    assert calls == ["base"]
+
+
+def test_subclass_validator_rejects_through_base_annotated_field():
+    class Base(GatewayStruct):
+        a: int = 0
+
+    class Derived(Base):
+        b: int = 0
+
+    class Holder(GatewayStruct):
+        item: Base
+
+    def _reject(s):
+        raise ValueError("derived-reject")
+
+    Derived.add_validator(_reject)
+    with pytest.raises(ValidationError, match="derived-reject"):
+        TypeAdapter(Holder).validate_python({"item": Derived(a=1, b=2)})
+    TypeAdapter(Holder).validate_python({"item": Base(a=1)})  # base value unaffected
+
+
+def test_registration_after_first_validation_takes_effect():
+    # The MRO-resolved validator list is cached per class; registering must invalidate it.
+    class S(GatewayStruct):
+        a: int = 0
+
+    assert TypeAdapter(S).validate_python({"a": 1}).a == 1  # populates the cache with no validators
+    S.add_validator(lambda s: _bump(s))
+    assert TypeAdapter(S).validate_python({"a": 1}).a == 11
+    S.add_validator(lambda s: _bump(s))
+    assert TypeAdapter(S).validate_python({"a": 1}).a == 21
+    S.clear_validators()
+    assert TypeAdapter(S).validate_python({"a": 1}).a == 1
+
+
+def test_base_registration_invalidates_subclass_cache():
+    class Base(GatewayStruct):
+        a: int = 0
+
+    class Child(Base):
+        b: int = 0
+
+    assert TypeAdapter(Child).validate_python({"a": 1}).a == 1  # caches Child's empty resolution
+    Base.add_validator(lambda s: _bump(s))  # registered on the PARENT after Child was cached
+    assert TypeAdapter(Child).validate_python({"a": 1}).a == 11
+    Base.clear_validators()
+    assert TypeAdapter(Child).validate_python({"a": 1}).a == 1
+
+
+def test_after_hook_also_dispatches_on_concrete_type():
+    # The hook must follow the same concrete-type dispatch as registered validators, or a subclass's
+    # rules are still bypassed by routing it through a base-annotated field.
+    class Base(GatewayStruct):
+        a: int = 0
+
+    class Derived(Base):
+        @classmethod
+        def _validate_gateway_struct_after(cls, val):
+            raise ValueError("derived-hook")
+
+    class Holder(GatewayStruct):
+        item: Base
+
+    with pytest.raises(ValidationError, match="derived-hook"):
+        TypeAdapter(Holder).validate_python({"item": Derived(a=1)})
+    # A dict really does construct a Base, whose hook is a no-op.
+    assert TypeAdapter(Holder).validate_python({"item": {"a": 1}}).item.a == 1
+
+
+def test_resolved_cache_is_immutable():
+    class S(GatewayStruct):
+        a: int = 0
+
+    S.add_validator(lambda s: s)
+    resolved = S._collect_validators("_post_validators")
+    assert isinstance(resolved, tuple)
+    with pytest.raises(AttributeError):
+        resolved.append(lambda s: s)  # cannot inject a validator behind clear_validators' back
+
+
+def test_after_validator_must_return_the_validated_type():
+    class Expected(GatewayStruct):
+        value: int = 0
+
+    class Unrelated(GatewayStruct):
+        secret: str = "wrong"
+
+    Expected.add_validator(lambda v: Unrelated())
+    with pytest.raises(TypeError, match="must return a Expected"):
+        TypeAdapter(Expected).validate_python({"value": 1})
+
+
+def test_after_validator_may_return_a_subclass():
+    class Expected(GatewayStruct):
+        value: int = 0
+
+    class SubExpected(Expected):
+        extra: int = 0
+
+    Expected.add_validator(lambda v: SubExpected(value=v.value, extra=1))
+    out = TypeAdapter(Expected).validate_python({"value": 5})
+    assert type(out) is SubExpected and out.extra == 1
+
+
+def test_none_input_is_not_blamed_on_the_validator():
+    # A correct identity before-validator must not turn a client's `null` into a "returned None" error.
+    class Child(GatewayStruct):
+        a: int = 0
+
+    class Parent(GatewayStruct):
+        item: Child
+
+    Child.add_validator(lambda d: d, mode="before")
+    try:
+        with pytest.raises(ValidationError) as excinfo:
+            TypeAdapter(Parent).validate_python({"item": None})
+        assert "returned None" not in str(excinfo.value)
+        assert "valid dictionary" in str(excinfo.value)
+    finally:
+        Child.clear_validators()
+
+
+def test_before_validator_cannot_reinstate_a_scrubbed_id():
+    class S(GatewayStruct):
+        a: int = 0
+
+    S.add_validator(lambda d: {**d, "id": "FORGED"}, mode="before")
+    out = TypeAdapter(S).validate_python({"id": "CLIENT", "a": 1}, context={"force_new_id": True})
+    assert out.id not in ("FORGED", "CLIENT")
+
+
+def test_force_new_id_honored_for_instance_input():
+    class S(GatewayStruct):
+        a: int = 0
+
+    inst = S(a=1)
+    out = TypeAdapter(S).validate_python(inst, context={"force_new_id": True})
+    assert out.id != inst.id
+    assert out.a == 1
+    assert out is not inst  # rebuilt rather than mutated, so the caller's object is untouched
+
+
+def test_instance_input_passes_through_without_a_force_context():
+    class S(GatewayStruct):
+        a: int = 0
+
+    inst = S(a=1)
+    assert TypeAdapter(S).validate_python(inst) is inst
+
+
+def test_invalid_mode_error_suppresses_the_chained_keyerror():
+    class S(GatewayStruct):
+        a: int = 0
+
+    with pytest.raises(ValueError) as excinfo:
+        S.add_validator(lambda s: s, mode="sideways")
+    assert excinfo.value.__suppress_context__
+
+
 def test_add_validator_rejects_invalid_mode():
     class S(GatewayStruct):
         a: int = 0
@@ -503,3 +734,19 @@ def test_add_validator_rejects_noncallable():
         S.add_validator("not-callable")
     with pytest.raises(TypeError, match="must be callable"):
         S.add_validator("not-callable", mode="before")
+
+
+def test_clear_validators_rejects_invalid_mode():
+    class S(GatewayStruct):
+        a: int = 0
+
+    with pytest.raises(ValueError, match="mode must be"):
+        S.clear_validators(mode="sideways")
+
+
+def test_run_validators_rejects_invalid_mode():
+    class S(GatewayStruct):
+        a: int = 0
+
+    with pytest.raises(ValueError, match="mode must be"):
+        S.run_validators(S(a=1), mode="sideways")

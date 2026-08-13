@@ -171,11 +171,15 @@ def dynamic_channels(self) -> Optional[Dict[str, Union[Type[GatewayStruct], Type
 
 ### Custom Struct Validators
 
-`GatewayStruct` can have **validators** attached to a struct type. They run automatically during pydantic validation — whenever a struct is deserialized from the REST `/send` endpoint, from `model_validate`/`TypeAdapter`, or from JSON snapshot replay — and for nested structs when a containing struct is validated. They do **not** run on native (non-pydantic) Python construction (`MyStruct(...)`).
+`GatewayStruct` can have **validators** attached to a struct type. They run automatically during pydantic validation — whenever a struct is deserialized from the REST `/send` endpoint, from `type_adapter().validate_python(...)`, from JSON snapshot replay, or from Kafka and filedrop ingestion — and for nested structs when a containing struct is validated. They do **not** run on native (non-pydantic) Python construction (`MyStruct(...)`).
 
-Registrations accept arbitrary callables (functions, lambdas, bound methods), may be added dynamically at graph-build time, and are aggregated across the class hierarchy (base-class and subclass registrations both run).
+Registrations accept arbitrary callables (functions, lambdas, bound methods), may be added dynamically at graph-build time, and are aggregated across the class hierarchy (base-class and subclass registrations both run). Registering on `GatewayStruct` or `GatewayPydanticMixin` therefore instruments **every** struct in the process, and only `clear_validators()` on that same class removes it.
 
-A validator receives a value and returns the (possibly transformed) value; it **raises** to reject the input (a `ValueError` is surfaced by the REST API as a `422`). Returning `None` is an error — a validator must return the value. `mode="before"` (alias `"pre"`) runs on the raw input (typically a dict) prior to construction — useful for validating or reshaping legacy/aliased input shapes — while `mode="after"` (alias `"post"`, the default) runs on the constructed struct.
+A validator receives a value and returns the (possibly transformed) value. It rejects the input by raising `ValueError` (or `AssertionError`), which the REST API reports as a `422`. **Any other exception type propagates uncaught and reaches the client as a `500`** — so a validator handling untrusted input must raise `ValueError` explicitly rather than letting a `KeyError` escape from a dictionary lookup. Returning `None` is an error unless the incoming value was itself `None`, and an `after` validator must return an instance of the class being validated (returning some other type raises `TypeError`).
+
+`mode="before"` (alias `"pre"`) runs on the raw input (typically a dict) prior to construction — useful for validating or reshaping legacy/aliased input shapes — while `mode="after"` (alias `"post"`, the default) runs on the constructed struct.
+
+When the value being validated is *already* a constructed struct — a nested field holding an instance, or re-validating an object — there is no raw input to reshape, so `before` validators are skipped for that value. `after` validators always run. This means a `before` validator only ever sees unconstructed input and does not need to guard against being handed a struct.
 
 ```python
 class MyOrder(GatewayStruct):
@@ -191,7 +195,7 @@ MyOrder.add_validator(_require_qty)
 
 # "before": validate/reshape the raw input (e.g. accept a legacy field name)
 MyOrder.add_validator(
-    lambda d: ({k: v for k, v in d.items() if k != "qty"} | {"quantity": d["qty"]}) if isinstance(d, dict) and "qty" in d else d,
+    lambda d: ({k: v for k, v in d.items() if k != "qty"} | {"quantity": d["qty"]}) if "qty" in d else d,
     mode="before",
 )
 
@@ -205,13 +209,23 @@ def _accept_legacy(d):
     return d
 ```
 
-Per validation the order is: `before` validators → construct → `after` validators → the struct's `_validate_gateway_struct_after` hook. Because `after` validators run before the hook, they may normalize data that the hook then checks.
+Per validation the order is: `before` validators → construct → `after` validators → the struct's built-in after-validation hook (`_validate_gateway_struct_after`, which a subclass may override). Because `after` validators run before that hook, they may normalize data the hook then checks.
+
+Both `after` validators and the hook are dispatched on the *concrete* type of the constructed struct. A field annotated with a base class that holds a subclass instance still runs the subclass's rules, so a subclass cannot have them bypassed by being passed through a base-typed field.
+
+When a caller asks for a fresh `id` or `timestamp` (the `force_new_id` / `force_new_timestamp` validation context, used by Kafka and filedrop ingestion), those values are stripped both before and after the `before` validators run — a validator that rebuilds the input dict cannot reinstate a caller-supplied `id`.
 
 Use `clear_validators(mode=None)` to remove registrations — handy for teardown or idempotent re-registration when they are attached at gateway-build time:
 
 ```python
 MyOrder.clear_validators()               # clears both "before" and "after"
 MyOrder.clear_validators(mode="before")  # or "pre" / "after" / "post"
+```
+
+Because native construction bypasses pydantic, a struct built inside a csp graph never has its validators run. Call `run_validators` to apply them explicitly:
+
+```python
+order = MyOrder.run_validators(MyOrder(quantity=10))  # raises if a validator rejects
 ```
 
 ### Module Requirements

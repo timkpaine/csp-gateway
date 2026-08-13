@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 import csp
 from csp import Struct
@@ -11,12 +12,20 @@ from .psp import PerspectiveUtilityMixin
 
 IdType = str
 
+#: A validator receives a value and returns the (possibly transformed) value, or raises to reject it.
+ValidatorFn = Callable[[Any], Any]
+
+#: Accepted ``mode`` arguments; "pre"/"post" are aliases for "before"/"after".
+ValidatorMode = Literal["before", "pre", "after", "post"]
+
 __all__ = (
     "GatewayLookupMixin",
     "GatewayPydanticMixin",
     "GatewayStruct",
     "GatewayStructMixins",
     "IdType",
+    "ValidatorFn",
+    "ValidatorMode",
     "global_lookup",
     "is_gateway_struct_like",
 )
@@ -28,6 +37,10 @@ _global_registry: dict[str, Any] = {}
 
 # Class-specific registry: maps (class, ID) -> instance
 _class_registry: dict[tuple, Any] = {}
+
+# Bumped on every validator registration/clear so per-class resolved caches invalidate without having
+# to know which classes in which MRO were affected.
+_validator_registry_version = 0
 
 
 def global_lookup(id: IdType, cls: type[T] | None = None) -> T | None:
@@ -95,14 +108,8 @@ class GatewayLookupMixin:
 
 
 class GatewayPydanticMixin:
-    # Class-level validator registries. Validators run automatically during pydantic validation (the wrap
-    # validator ``_validate_gateway_struct`` invokes them) and are aggregated across the MRO, so base-class
-    # and subclass validators both execute. They hold ARBITRARY callables (lambdas, bound methods) that
-    # pydantic never sees directly. A validator ``fn(value) -> value`` receives the value and returns the
-    # (possibly transformed) value; it RAISES to reject the input (surfaced by the REST API as a 422).
-    # "before" (alias "pre") validators run on the raw input (typically a dict) prior to struct
-    # construction -- useful for accepting legacy/aliased shapes; "after" (alias "post") validators run on
-    # the constructed struct. Plain class attributes, not csp.Struct fields (no annotation).
+    # Validators registered through add_validator, invoked by the _validate_gateway_struct wrap
+    # validator. Deliberately unannotated so csp does not treat them as Struct fields.
     _pre_validators = []
     _post_validators = []
 
@@ -114,73 +121,111 @@ class GatewayPydanticMixin:
         "post": "_post_validators",
     }
 
+    # Registry attribute -> attribute holding this class's MRO-resolved (version, validators) cache.
+    _VALIDATOR_CACHE_ATTRS = {
+        "_pre_validators": "_pre_validators_resolved",
+        "_post_validators": "_post_validators_resolved",
+    }
+
     @classmethod
-    def _validator_mode_attr(cls, mode):
+    def _validator_mode_attr(cls, mode: ValidatorMode) -> str:
         """Resolve a public ``mode`` ("before"/"pre"/"after"/"post") to its registry attribute name."""
         try:
             return cls._VALIDATOR_MODE_ATTRS[mode]
         except (KeyError, TypeError):
-            raise ValueError(f"mode must be 'before'/'pre' or 'after'/'post'; got {mode!r}")
+            raise ValueError(f"mode must be 'before'/'pre' or 'after'/'post'; got {mode!r}") from None
 
     @classmethod
-    def add_validator(cls, fn=None, *, mode="after"):
+    def add_validator(cls, fn: ValidatorFn | None = None, *, mode: ValidatorMode = "after") -> ValidatorFn | Callable[[ValidatorFn], ValidatorFn]:
         """Register a validator invoked during pydantic validation.
 
         A validator ``fn(value) -> value`` receives the value and returns the (possibly transformed)
-        value; it **raises** (e.g. ``ValueError``) to reject the input -- surfaced by the REST API as a
-        422. Returning ``None`` is treated as an error (a validator must return the value).
+        value; it rejects the input by raising ``ValueError`` (or ``AssertionError``), which pydantic
+        converts into a ``ValidationError`` and the REST API reports as a 422. Any OTHER exception type
+        propagates uncaught and reaches the client as a 500, so a validator that rejects untrusted input
+        must raise ``ValueError`` -- guard lookups rather than letting a ``KeyError`` escape.
+
+        An "after" validator must return an instance of the class being validated; returning another type
+        raises ``TypeError``. Returning ``None`` is likewise an error unless the incoming value was itself
+        ``None``.
 
         ``mode="before"`` (alias ``"pre"``) runs on the raw input (usually a dict) before construction --
-        useful for accepting legacy/aliased input shapes; ``mode="after"`` (alias ``"post"``, the default)
-        runs on the constructed struct. ``fn`` may be any callable -- a lambda, or a bound method of some
-        other object (e.g. an adapter holding a secmaster). Validators registered on base classes also run
-        (aggregated across the MRO). Usable directly, as a bare decorator (``@Struct.add_validator``), or
-        as a decorator factory (``@Struct.add_validator(mode="before")``). Returns ``fn``.
+        useful for accepting legacy/aliased input shapes. It is skipped when the input is already a
+        constructed struct, so a "before" validator only ever sees unconstructed input. It must not set
+        ``id`` or ``timestamp`` when the caller asked for fresh ones; those are re-scrubbed afterwards.
+        ``mode="after"`` (alias ``"post"``, the default) runs on the constructed struct, dispatched on
+        that struct's concrete type. ``fn`` may be any callable -- a lambda, or a bound method of some
+        other object (e.g. an adapter holding a secmaster). Validators registered on base classes also
+        run (aggregated across the MRO); registering on ``GatewayStruct`` or ``GatewayPydanticMixin``
+        therefore instruments every struct in the process. Usable directly, as a bare decorator
+        (``@Struct.add_validator``), or as a decorator factory (``@Struct.add_validator(mode="before")``).
+        Returns ``fn``.
         """
         attr = cls._validator_mode_attr(mode)
 
-        def _register(func):
+        def _register(func: ValidatorFn) -> ValidatorFn:
             if not callable(func):
                 raise TypeError(f"validator must be callable; got {func!r}")
-            # Ensure THIS class has its OWN list rather than mutating an inherited (shared) one.
+            # Give this class its own list rather than mutating an inherited one.
             if attr not in cls.__dict__:
                 setattr(cls, attr, [])
             getattr(cls, attr).append(func)
+            global _validator_registry_version
+            _validator_registry_version += 1
             return func
 
-        # Support ``add_validator(fn, ...)``/bare-decorator and the ``add_validator(mode=...)`` factory.
         if fn is None:
             return _register
         return _register(fn)
 
     @classmethod
-    def _collect_validators(cls, attr):
-        """Aggregate validators of one kind (``_pre_validators``/``_post_validators``) across the MRO."""
+    def _collect_validators(cls, attr: str) -> tuple[ValidatorFn, ...]:
+        """Aggregate validators of one kind (``_pre_validators``/``_post_validators``) across the MRO.
+
+        The result is cached on the class, keyed by the global registry version, so any registration or
+        clear anywhere invalidates it. The version is sampled BEFORE the walk: a registration racing the
+        walk then leaves the cache stamped older than the global and the next read recomputes.
+        """
+        cache_attr = cls._VALIDATOR_CACHE_ATTRS[attr]
+        version = _validator_registry_version
+        cached = cls.__dict__.get(cache_attr)
+        if cached is not None and cached[0] == version:
+            return cached[1]
         collected = []
         for klass in reversed(cls.__mro__):
             collected.extend(klass.__dict__.get(attr, ()))
-        return collected
+        resolved = tuple(collected)
+        setattr(cls, cache_attr, (version, resolved))
+        return resolved
 
     @classmethod
-    def _run_validators(cls, val, *, mode="after"):
+    def run_validators(cls, val: Any, *, mode: ValidatorMode = "after") -> Any:
         """Run the registered validators of one kind on ``val``; return the (possibly transformed) value.
 
-        Each validator must return the value (raising to reject); a ``None`` return is an error. Useful
-        for manually validating a natively/CSP-constructed struct, which does not auto-run validators.
+        Each validator must return the value, raising ``ValueError`` to reject it. Returning ``None`` is
+        rejected as a forgotten ``return`` -- unless the incoming value was itself ``None``, in which case
+        the value passes through and the type error surfaces normally. An "after" validator must return an
+        instance of ``cls``. Useful for manually validating a natively/CSP-constructed struct, which does
+        not auto-run validators.
         """
         attr = cls._validator_mode_attr(mode)
-        label = "before" if attr == "_pre_validators" else "after"
+        enforce_type = attr == "_post_validators"
+        label = "after" if enforce_type else "before"
         for fn in cls._collect_validators(attr):
-            val = fn(val)
-            if val is None:
+            result = fn(val)
+            name = getattr(fn, "__name__", fn)
+            if result is None and val is not None:
                 raise ValueError(
-                    f"{cls.__name__}: {label!r} validator {getattr(fn, '__name__', fn)!r} returned None; validators must return the (possibly transformed) value"
+                    f"{cls.__name__}: {label!r} validator {name!r} returned None; validators must return the (possibly transformed) value"
                 )
+            if enforce_type and not isinstance(result, cls):
+                raise TypeError(f"{cls.__name__}: 'after' validator {name!r} returned {type(result).__name__}; it must return a {cls.__name__}")
+            val = result
         return val
 
     @classmethod
-    def clear_validators(cls, *, mode=None):
-        """Remove validators registered directly on THIS class (not inherited ones).
+    def clear_validators(cls, *, mode: ValidatorMode | None = None) -> None:
+        """Remove validators registered directly on this class, leaving inherited ones in place.
 
         ``mode=None`` clears both "before" and "after"; ``"before"``/``"pre"`` or ``"after"``/``"post"``
         clears just that kind. Useful for teardown/idempotency when validators are attached dynamically at
@@ -191,6 +236,8 @@ class GatewayPydanticMixin:
             cls._post_validators = []
         else:
             setattr(cls, cls._validator_mode_attr(mode), [])
+        global _validator_registry_version
+        _validator_registry_version += 1
 
     @classmethod
     def _validate_gateway_struct_after(cls, val):
@@ -228,25 +275,44 @@ class GatewayPydanticMixin:
         return type_adapter
 
     @classmethod
-    def _validate_gateway_struct(cls, val, handler, info: ValidationInfo):
-        if isinstance(info.context, dict) and isinstance(val, dict):
-            if info.context.get("force_new_id", False):
-                # If we are forcing a new id, we need to remove the old one
+    def _scrub_identity(cls, val, info: ValidationInfo):
+        """Drop a caller-supplied id/timestamp when the validation context asks for fresh ones."""
+        if not isinstance(info.context, dict):
+            return val
+        new_id = info.context.get("force_new_id", False)
+        new_timestamp = info.context.get("force_new_timestamp", False)
+        if not (new_id or new_timestamp):
+            return val
+        if isinstance(val, dict):
+            if new_id:
                 val.pop("id", None)
-            if info.context.get("force_new_timestamp", False):
-                # If we are forcing a new timestamp, we need to remove the old one
+            if new_timestamp:
                 val.pop("timestamp", None)
-        # "before" validators reshape the raw input (e.g. legacy-field coercion) prior to construction.
-        val = cls._run_validators(val, mode="before")
+        elif isinstance(val, Struct):
+            # Scrubbing in place would mutate the caller's object and strand it in the lookup registry
+            # under its old id, so rebuild instead and let __init__ mint and register the new values.
+            fields = {name: getattr(val, name) for name in type(val).metadata() if hasattr(val, name)}
+            if new_id:
+                fields.pop("id", None)
+            if new_timestamp:
+                fields.pop("timestamp", None)
+            return type(val)(**fields)
+        return val
+
+    @classmethod
+    def _validate_gateway_struct(cls, val, handler, info: ValidationInfo):
+        val = cls._scrub_identity(val, info)
+        # An already-constructed struct has no raw input to reshape, so "before" validators are skipped.
+        if not isinstance(val, cls):
+            val = cls.run_validators(val, mode="before")
+            # Re-scrub: a before validator that rebuilds the input can otherwise reinstate the old id.
+            val = cls._scrub_identity(val, info)
         csp_struct = handler(val)
-        # "after" validators validate/normalize the constructed struct. They run in the wrap validator
-        # (the robust funnel) rather than the after-hook: subclasses commonly OVERRIDE
-        # _validate_gateway_struct_after WITHOUT super(), which would bypass the registry, whereas the wrap
-        # validator is always inherited or overridden-with-super(). Registered validators (aggregated
-        # across the MRO) therefore run for every struct, and BEFORE the after-hook so they may fix data
-        # the hook then checks.
-        csp_struct = cls._run_validators(csp_struct, mode="after")
-        final = cls._validate_gateway_struct_after(csp_struct)
+        # Dispatch on the concrete type: a subclass instance in a base-annotated field is validated
+        # against the base's schema, but must still run its own validators and hook.
+        concrete = type(csp_struct)
+        csp_struct = concrete.run_validators(csp_struct, mode="after")
+        final = concrete._validate_gateway_struct_after(csp_struct)
         return final
 
     @staticmethod
