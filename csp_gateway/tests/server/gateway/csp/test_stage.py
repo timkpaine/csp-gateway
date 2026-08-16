@@ -15,7 +15,7 @@ from csp_gateway import (
     GatewayStruct,
     State,
 )
-from csp_gateway.server.gateway.csp.stage import Stage, Staging, _StageManager
+from csp_gateway.server.gateway.csp.stage import Stage, Staging, StagingAction, StagingEvent, StagingRequest, _StageManager
 from csp_gateway.testing import GatewayTestHarness
 from csp_gateway.utils import NoProviderException
 
@@ -495,3 +495,288 @@ class TestStagingHarness:
             assert gateway.channels.stage_list("orders") == []
         finally:
             gateway.stop()
+
+
+# --- Staging event stream ---
+
+
+def _events():
+    """A _StageManager plus the (action, staging_id, item_ids) deltas it reports."""
+    captured = []
+
+    def on_event(events):
+        captured.extend((action, sid, [i.id for i in items]) for action, sid, items in events)
+
+    return _StageManager(on_event=on_event), captured
+
+
+class TestStagingEvents:
+    def test_empty_staging_reports_created(self):
+        stage, captured = _events()
+        (sid,) = stage.stage_add()
+        assert captured == [(StagingAction.CREATED, sid, [])]
+
+    def test_first_add_reports_created_then_added(self):
+        stage, captured = _events()
+        s = OrderStruct(symbol="AAPL")
+        (sid,) = stage.stage_add(s)
+        assert captured == [(StagingAction.CREATED, sid, []), (StagingAction.ADDED, sid, [s.id])]
+
+    def test_subsequent_add_reports_only_added(self):
+        stage, captured = _events()
+        (sid,) = stage.stage_add(OrderStruct(symbol="AAPL"))
+        captured.clear()
+        s2 = OrderStruct(symbol="GOOG")
+        stage.stage_add(s2, staging_ids=[sid])
+        assert captured == [(StagingAction.ADDED, sid, [s2.id])]
+
+    def test_removing_a_record_reports_removed(self):
+        stage, captured = _events()
+        s = OrderStruct(symbol="AAPL")
+        (sid,) = stage.stage_add(s)
+        captured.clear()
+        stage.stage_remove(s, staging_ids=[sid])
+        assert captured == [(StagingAction.REMOVED, sid, [s.id])]
+
+    def test_clearing_contents_reports_one_removal_per_record(self):
+        stage, captured = _events()
+        s1, s2 = OrderStruct(symbol="AAPL"), OrderStruct(symbol="GOOG")
+        (sid,) = stage.stage_add(s1)
+        stage.stage_add(s2, staging_ids=[sid])
+        captured.clear()
+        stage.stage_remove(staging_ids=[sid])
+        assert captured == [(StagingAction.REMOVED, sid, [s1.id]), (StagingAction.REMOVED, sid, [s2.id])]
+
+    def test_dropping_a_staging_reports_its_records_then_itself(self):
+        stage, captured = _events()
+        s = OrderStruct(symbol="AAPL")
+        (sid,) = stage.stage_add(s)
+        captured.clear()
+        stage.stage_remove()  # drops the latest staging entirely
+        assert captured == [(StagingAction.REMOVED, sid, [s.id]), (StagingAction.REMOVED, sid, [])]
+
+    def test_release_reports_released_with_its_contents(self):
+        stage, captured = _events()
+        s1, s2 = OrderStruct(symbol="AAPL"), OrderStruct(symbol="GOOG")
+        (sid,) = stage.stage_add(s1)
+        stage.stage_add(s2, staging_ids=[sid])
+        captured.clear()
+        stage.stage_release([sid])
+        assert captured == [(StagingAction.RELEASED, sid, [s1.id, s2.id])]
+
+    def test_no_op_removal_reports_nothing(self):
+        stage, captured = _events()
+        stage.stage_add(OrderStruct(symbol="AAPL"))
+        captured.clear()
+        stage.stage_remove(OrderStruct(symbol="MSFT"), staging_ids=[])
+        assert captured == []
+
+    def test_events_are_optional(self):
+        # The manager is usable without an observer (the REST-only path).
+        stage = _StageManager()
+        (sid,) = stage.stage_add(OrderStruct(symbol="AAPL"))
+        assert stage.stage_list() == [sid]
+
+    def test_released_stagings_are_not_retained(self):
+        # A release is delivered on the channel and as an event; the area itself is dropped rather than
+        # archived, so lookups do not grow without bound.
+        stage, _captured = _events()
+        (sid,) = stage.stage_add(OrderStruct(symbol="AAPL"))
+        stage.stage_release([sid])
+        assert stage.stage_list() == []
+        assert stage.stage_lookup() == {}
+        assert stage.stage_lookup(sid) == {}
+
+
+@csp.node
+def _collect_stage_events(events: ts[StagingEvent], out: list) -> None:
+    if csp.ticked(events):
+        out.append((events.action, events.staging_id, [i.symbol for i in events.items]))
+
+
+@csp.node
+def _mirror_staging(events: ts[StagingEvent], channels: object, field: str) -> None:
+    """Build a derived staging from an upstream one, and follow its release."""
+    if csp.ticked(events):
+        if events.action == StagingAction.ADDED:
+            for item in events.items:
+                channels.stage_add(field, OrderStruct(symbol=f"HEDGE:{item.symbol}", quantity=-item.quantity))
+        elif events.action == StagingAction.RELEASED:
+            channels.stage_release(field)
+
+
+def _free_port() -> int:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("", 0))
+        sock.listen(1)
+        return sock.getsockname()[1]
+
+
+def _wait_for(predicate, timeout: float = 5.0) -> None:
+    import time
+
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if predicate():
+            return
+        time.sleep(0.02)
+    raise AssertionError("timed out waiting for staging events")
+
+
+class TestStagingEventChannel:
+    """`get_stage_events` exposes the delta stream to modules as a normal timeseries."""
+
+    def test_events_reach_a_module_through_the_graph(self):
+        from csp_gateway import GatewaySettings
+
+        collected = []
+
+        class EventChannels(GatewayChannels):
+            orders: ts[OrderStruct] = None
+
+        class Producer(GatewayModule):
+            def connect(self, channels: EventChannels) -> None:
+                channels.set_channel("orders", csp.null_ts(OrderStruct))
+                channels.set_stage("orders")
+
+        class Observer(GatewayModule):
+            def connect(self, channels: EventChannels) -> None:
+                _collect_stage_events(channels.get_stage_events("orders"), collected)
+
+        class EventGateway(Gateway):
+            channels_model: type[Channels] = EventChannels  # type: ignore[assignment]
+
+        gateway = EventGateway(
+            modules=[Producer(), Observer()],
+            channels=EventChannels(),
+            settings=GatewaySettings(PORT=_free_port()),
+        )
+        gateway.start(rest=True, _in_test=True)
+        try:
+            order = OrderStruct(symbol="AAPL", quantity=10)
+            (sid,) = gateway.channels.stage_add("orders", order)
+            _wait_for(lambda: len(collected) >= 2)
+            assert collected[0] == (StagingAction.CREATED, sid, [])
+            assert collected[1] == (StagingAction.ADDED, sid, ["AAPL"])
+
+            gateway.channels.stage_release("orders", staging_ids=[sid])
+            _wait_for(lambda: any(e[0] == StagingAction.RELEASED for e in collected))
+            assert (StagingAction.RELEASED, sid, ["AAPL"]) in collected
+        finally:
+            gateway.stop()
+
+    def test_a_module_can_derive_and_cascade_a_staging(self):
+        # The motivating case: react to an upstream staging, build your own, and release it when the
+        # upstream one releases.
+        from csp_gateway import GatewaySettings
+
+        class CascadeChannels(GatewayChannels):
+            orders: ts[OrderStruct] = None
+            hedges: ts[OrderStruct] = None
+
+        class Producer(GatewayModule):
+            def connect(self, channels: CascadeChannels) -> None:
+                channels.set_channel("orders", csp.null_ts(OrderStruct))
+                channels.set_stage("orders")
+
+        class Hedger(GatewayModule):
+            def connect(self, channels: CascadeChannels) -> None:
+                channels.set_channel("hedges", csp.null_ts(OrderStruct))
+                channels.set_stage("hedges")
+                _mirror_staging(channels.get_stage_events("orders"), channels, "hedges")
+
+        class CascadeGateway(Gateway):
+            channels_model: type[Channels] = CascadeChannels  # type: ignore[assignment]
+
+        gateway = CascadeGateway(
+            modules=[Producer(), Hedger()],
+            channels=CascadeChannels(),
+            settings=GatewaySettings(PORT=_free_port()),
+        )
+        gateway.start(rest=True, _in_test=True)
+        try:
+            (sid,) = gateway.channels.stage_add("orders", OrderStruct(symbol="AAPL", quantity=10))
+
+            # The hedger staged its own derived order in response.
+            _wait_for(lambda: gateway.channels.stage_list("hedges"))
+            (hedge_sid,) = gateway.channels.stage_list("hedges")
+            hedged = gateway.channels.stage_lookup("hedges", hedge_sid)[hedge_sid]
+            assert [(h.symbol, h.quantity) for h in hedged] == [("HEDGE:AAPL", -10)]
+
+            # Releasing upstream releases the derived staging too.
+            gateway.channels.stage_release("orders", staging_ids=[sid])
+            _wait_for(lambda: not gateway.channels.stage_list("hedges"))
+            assert gateway.channels.stage_list("hedges") == []
+        finally:
+            gateway.stop()
+
+
+class TestStagingRequests:
+    """`set_stage_requests` drives staging from a timeseries instead of imperative calls."""
+
+    def test_requests_stage_and_release_from_the_graph(self):
+        from csp_gateway import GatewaySettings
+
+        class RequestChannels(GatewayChannels):
+            orders: ts[OrderStruct] = None
+
+        class Requester(GatewayModule):
+            def connect(self, channels: RequestChannels) -> None:
+                channels.set_channel("orders", csp.null_ts(OrderStruct))
+                channels.set_stage("orders")
+                requests = csp.curve(
+                    StagingRequest,
+                    [
+                        (timedelta(seconds=0.1), StagingRequest(action=StagingAction.ADDED, items=[OrderStruct(symbol="AAPL", quantity=5)])),
+                        (timedelta(seconds=0.2), StagingRequest(action=StagingAction.ADDED, items=[OrderStruct(symbol="GOOG", quantity=7)])),
+                    ],
+                )
+                channels.set_stage_requests("orders", requests)
+
+        class RequestGateway(Gateway):
+            channels_model: type[Channels] = RequestChannels  # type: ignore[assignment]
+
+        gateway = RequestGateway(
+            modules=[Requester()],
+            channels=RequestChannels(),
+            settings=GatewaySettings(PORT=_free_port()),
+        )
+        gateway.start(rest=True, _in_test=True)
+        try:
+            _wait_for(lambda: gateway.channels.stage_list("orders"))
+            (sid,) = gateway.channels.stage_list("orders")
+            _wait_for(lambda: len(gateway.channels.stage_lookup("orders", sid).get(sid, [])) == 2)
+            staged = gateway.channels.stage_lookup("orders", sid)[sid]
+            assert [s.symbol for s in staged] == ["AAPL", "GOOG"]
+        finally:
+            gateway.stop()
+
+    def test_requests_require_staging_to_be_enabled(self):
+        from csp_gateway import GatewaySettings
+
+        class PlainChannels(GatewayChannels):
+            orders: ts[OrderStruct] = None
+
+        class BadModule(GatewayModule):
+            def connect(self, channels: PlainChannels) -> None:
+                channels.set_channel("orders", csp.null_ts(OrderStruct))
+                with pytest.raises(NoProviderException, match="No staging enabled"):
+                    channels.set_stage_requests("orders", csp.null_ts(StagingRequest))
+
+        class PlainGateway(Gateway):
+            channels_model: type[Channels] = PlainChannels  # type: ignore[assignment]
+
+        gateway = PlainGateway(
+            modules=[BadModule()],
+            channels=PlainChannels(),
+            settings=GatewaySettings(PORT=_free_port()),
+        )
+        gateway.start(rest=True, _in_test=True)
+        gateway.stop()
+
+    def test_get_stage_events_requires_staging_to_be_enabled(self):
+        channels = GatewayChannels()
+        with pytest.raises(NoProviderException, match="No staging enabled"):
+            channels.get_stage_events("nope")

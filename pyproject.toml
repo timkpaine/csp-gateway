@@ -113,7 +113,11 @@ client = [
 ]
 spaday = [
     # Optional spaday-based frontend provider (Settings.UI_PROVIDER = "spaday")
-    "spaday>=0.2.2",
+    # 0.5 splits the component libraries into their own distributions and adds the `Each` repeater the
+    # staging panel renders with.
+    "spaday>=0.5.0",
+    "spaday-perspective>=0.1.0",
+    "spaday-webawesome>=0.1.0",
 ]
 
 [project.scripts]

@@ -41,7 +41,7 @@ from .futures import (
     named_wait_for_next_node,
     named_wait_for_next_node_dict_basket,
 )
-from .stage import Stage, _StageManager, build_staging_node
+from .stage import Stage, _StageManager, apply_stage_requests, build_staging_node
 from .state import State, _StateManager, build_track_state_node
 
 if TYPE_CHECKING:
@@ -271,6 +271,8 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     _stages: dict[str, _StageManager] = PrivateAttr(default_factory=dict)
     # Staging: channel_name -> GenericPushAdapter (release trigger)
     _stage_triggers: dict[str, Any] = PrivateAttr(default_factory=dict)
+    # Staging: channel_name -> GenericPushAdapter (StagingEvent delta stream)
+    _stage_events: dict[str, Any] = PrivateAttr(default_factory=dict)
 
     # inside context, the module being attached
     _module_being_attached: Any = PrivateAttr(None)
@@ -561,9 +563,10 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
             if _get_origin(element_type) is list:
                 element_type = _get_args(element_type)[0]
 
-            stage, push_adapter = build_staging_node(element_type)
+            stage, push_adapter, event_adapter = build_staging_node(element_type, field_name)
             self._stages[field_name] = stage
             self._stage_triggers[field_name] = push_adapter
+            self._stage_events[field_name] = event_adapter
 
             # Wire the push adapter's output as an additional provider for this channel
             self._delayed_edge_providers[field_name].append((None, push_adapter.out()))
@@ -1199,13 +1202,46 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
         if _get_origin(element_type) is list:
             element_type = _get_args(element_type)[0]
 
-        stage, push_adapter = build_staging_node(element_type)
+        stage, push_adapter, event_adapter = build_staging_node(element_type, field)
         self._stages[field] = stage
         self._stage_triggers[field] = push_adapter
+        self._stage_events[field] = event_adapter
 
         # Wire the push adapter's output as an additional provider for this channel
         module = self._module_being_attached
         self._delayed_edge_providers[field].append((module, push_adapter.out()))
+
+    def get_stage_events(self, field: str) -> Any:
+        """The ``ts[StagingEvent]`` delta stream for a staged channel.
+
+        Ticks once per affected record as stagings are created, added to, removed from and released, so a
+        module can react to what is being staged -- for example to build a derived staging on another
+        channel, and to release or remove it when the upstream staging is.
+        """
+        if field not in self._stage_events:
+            raise NoProviderException(f"No staging enabled for channel: {field}")
+        return self._stage_events[field].out()
+
+    def add_stage_listener(self, field: str, listener: Any) -> None:
+        """Call ``listener(events)`` whenever ``field``'s staging areas change.
+
+        The callback counterpart of :meth:`get_stage_events`, for observers that are not part of the
+        graph. Stages declared by annotation are wired during finalization, after every module's
+        ``connect``, so a listener -- unlike a graph edge -- can be attached from a later hook.
+        """
+        if field not in self._stages:
+            raise NoProviderException(f"No staging enabled for channel: {field}")
+        self._stages[field].add_listener(listener)
+
+    def set_stage_requests(self, field: str, requests: Any) -> None:
+        """Drive a staged channel from a ``ts[StagingRequest]``.
+
+        The graph-native counterpart to calling ``stage_add``/``stage_remove``/``stage_release``
+        directly: each tick is applied to ``field``'s staging areas.
+        """
+        if field not in self._stages:
+            raise NoProviderException(f"No staging enabled for channel: {field}")
+        apply_stage_requests(requests, self, field)
 
     def staged_channels(self) -> list[str]:
         """Return list of channel names that have staging enabled."""
@@ -1219,7 +1255,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     ) -> list[str]:
         """Add a struct to staging area(s) for a channel.
 
-        See STAGE.md for full semantics.
+        See docs/wiki/Staging.md for full semantics.
         """
         if field not in self._stages:
             raise NoProviderException(f"No staging enabled for channel: {field}")
@@ -1233,7 +1269,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     ) -> list[str]:
         """Remove struct(s) from staging area(s).
 
-        See STAGE.md for full semantics.
+        See docs/wiki/Staging.md for full semantics.
         """
         if field not in self._stages:
             raise NoProviderException(f"No staging enabled for channel: {field}")
@@ -1270,7 +1306,7 @@ class Channels(BaseModel, metaclass=ChannelsMetaclass):
     ) -> list[str]:
         """List staging IDs for a channel.
 
-        See STAGE.md for full semantics.
+        See docs/wiki/Staging.md for full semantics.
         """
         if field not in self._stages:
             raise NoProviderException(f"No staging enabled for channel: {field}")
