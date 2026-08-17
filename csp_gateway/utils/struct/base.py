@@ -1,14 +1,13 @@
 from collections.abc import Callable
+from contextvars import ContextVar
 from datetime import datetime, timezone
-from typing import Any, Literal, TypeVar
+from typing import Annotated, Any, ClassVar, Literal, Optional, TypeVar
 
-import csp
-from csp import Struct
-from pydantic import ValidationInfo
-from pydantic_core import CoreConfig, core_schema
+from pydantic import BaseModel, ConfigDict, ValidationInfo, field_serializer, model_serializer, model_validator
+from pydantic_core import core_schema
 
 from ..id_generator import get_counter
-from .psp import PerspectiveUtilityMixin
+from .psp import PerspectiveUtilityMixin, model_metadata
 
 IdType = str
 
@@ -42,6 +41,21 @@ _class_registry: dict[tuple, Any] = {}
 # to know which classes in which MRO were affected.
 _validator_registry_version = 0
 
+# Set for exactly one nested validation while ``__init__`` delegates to pydantic, letting the wrap
+# validator tell direct construction from ingress validation. See ``GatewayLookupMixin.__init__``.
+_constructing: ContextVar[bool] = ContextVar("csp_gateway_struct_constructing", default=False)
+
+# Core-schema metadata key marking a schema this class has already wrapped.
+_WRAPPED_MARKER = "csp_gateway_validated"
+
+# Serialization-context key asking the timestamp serializer to keep the stored offset.
+_PRESERVE_TZ = "csp_gateway_preserve_tz"
+
+# The in-flight (force_new_id, force_new_timestamp) request. ``BaseModel.__init__`` re-enters the
+# validator without forwarding pydantic's ``context``, so a struct's fields would otherwise never see
+# the flags the caller passed to ``model_validate`` and nested ids would survive a scrub.
+_force_identity: ContextVar[tuple[bool, bool] | None] = ContextVar("csp_gateway_force_identity", default=None)
+
 
 def global_lookup(id: IdType, cls: type[T] | None = None) -> T | None:
     """Look up a GatewayStruct instance by ID.
@@ -72,15 +86,49 @@ class GatewayLookupMixin:
         cls._include_in_lookup = True
 
     def __init__(self, **kwargs: Any) -> None:
-        if "id" not in kwargs:
-            kwargs["id"] = str(self.__class__.id_generator.next())
-        if "timestamp" not in kwargs:
-            kwargs["timestamp"] = datetime.now(timezone.utc)
-        if getattr(self.__class__, "_include_in_lookup", True):
-            # Insert into both global and class-specific registries
-            _global_registry[kwargs["id"]] = self
-            _class_registry[(self.__class__, kwargs["id"])] = self
-        super().__init__(**kwargs)
+        # Registered validators are an ingress concern -- they run on data entering the gateway (REST,
+        # Kafka, replay), not when the graph builds a struct itself. csp.Struct got that for free by
+        # not validating at all on construction; a pydantic model validates here, so flag the nested
+        # validation as construction and let the wrap validator skip the registry for it. Without this
+        # an "after" validator that returns a newly built struct would recurse forever.
+        token = _constructing.set(True)
+        try:
+            super().__init__(**kwargs)
+        finally:
+            _constructing.reset(token)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _mint_identity(cls, data: Any) -> Any:
+        """Fill in a fresh id/timestamp for any the caller left out.
+
+        Done here rather than in ``__init__`` because overriding ``__init__`` on a pydantic model makes
+        ``super().__init__()`` re-enter the model validator, running every registered validator twice.
+        Minting into the input also lands both fields in ``model_fields_set``, so ``to_dict`` still
+        reports them under ``exclude_unset``.
+        """
+        if not isinstance(data, dict):
+            return data
+        fields = cls.model_fields
+        missing = {}
+        # Absent, not falsy: an explicit ``None`` is the caller saying "no value", and overwriting it
+        # with a freshly minted one would lose that.
+        if "id" in fields and "id" not in data:
+            missing["id"] = str(cls.id_generator.next())
+        if "timestamp" in fields and "timestamp" not in data:
+            # Naive UTC, the only shape a csp timestamp ever had; mixing aware and naive values
+            # in one field makes ordinary comparisons raise.
+            missing["timestamp"] = datetime.now(timezone.utc).replace(tzinfo=None)
+        # Copy rather than mutate: the caller owns the dict handed to model_validate.
+        return {**data, **missing} if missing else data
+
+    def model_post_init(self, context: Any, /) -> None:
+        super().model_post_init(context)
+        if getattr(type(self), "_include_in_lookup", True):
+            id = getattr(self, "id", None)
+            if id is not None:
+                _global_registry[id] = self
+                _class_registry[(type(self), id)] = self
 
     @classmethod
     def omit_from_lookup(cls, omit=True):
@@ -277,10 +325,14 @@ class GatewayPydanticMixin:
     @classmethod
     def _scrub_identity(cls, val, info: ValidationInfo):
         """Drop a caller-supplied id/timestamp when the validation context asks for fresh ones."""
-        if not isinstance(info.context, dict):
-            return val
-        new_id = info.context.get("force_new_id", False)
-        new_timestamp = info.context.get("force_new_timestamp", False)
+        if isinstance(info.context, dict):
+            new_id = bool(info.context.get("force_new_id", False))
+            new_timestamp = bool(info.context.get("force_new_timestamp", False))
+        else:
+            inherited = _force_identity.get()
+            if inherited is None:
+                return val
+            new_id, new_timestamp = inherited
         if not (new_id or new_timestamp):
             return val
         if isinstance(val, dict):
@@ -288,10 +340,11 @@ class GatewayPydanticMixin:
                 val.pop("id", None)
             if new_timestamp:
                 val.pop("timestamp", None)
-        elif isinstance(val, Struct):
+        elif isinstance(val, BaseModel):
             # Scrubbing in place would mutate the caller's object and strand it in the lookup registry
-            # under its old id, so rebuild instead and let __init__ mint and register the new values.
-            fields = {name: getattr(val, name) for name in type(val).metadata() if hasattr(val, name)}
+            # under its old id, so rebuild instead and let validation mint and register the new values.
+            # Only explicitly-set fields are carried over, so unset fields stay unset in the copy.
+            fields = {name: getattr(val, name) for name in val.model_fields_set}
             if new_id:
                 fields.pop("id", None)
             if new_timestamp:
@@ -301,53 +354,196 @@ class GatewayPydanticMixin:
 
     @classmethod
     def _validate_gateway_struct(cls, val, handler, info: ValidationInfo):
+        if _constructing.get():
+            # Re-entered from __init__, so this is construction rather than ingress. Clear the flag for
+            # the nested validation: fields of the struct being built are themselves ingress input.
+            token = _constructing.set(False)
+            try:
+                return handler(val)
+            finally:
+                _constructing.reset(token)
         val = cls._scrub_identity(val, info)
-        # An already-constructed struct has no raw input to reshape, so "before" validators are skipped.
+        # An already-constructed model has no raw input to reshape, so "before" validators are skipped.
         if not isinstance(val, cls):
             val = cls.run_validators(val, mode="before")
             # Re-scrub: a before validator that rebuilds the input can otherwise reinstate the old id.
             val = cls._scrub_identity(val, info)
-        csp_struct = handler(val)
+        token = None
+        if isinstance(info.context, dict):
+            forced = (bool(info.context.get("force_new_id", False)), bool(info.context.get("force_new_timestamp", False)))
+            token = _force_identity.set(forced if any(forced) else None)
+        try:
+            model = handler(val)
+        finally:
+            if token is not None:
+                _force_identity.reset(token)
         # Dispatch on the concrete type: a subclass instance in a base-annotated field is validated
         # against the base's schema, but must still run its own validators and hook.
-        concrete = type(csp_struct)
-        csp_struct = concrete.run_validators(csp_struct, mode="after")
-        final = concrete._validate_gateway_struct_after(csp_struct)
-        return final
+        concrete = type(model)
+        model = concrete.run_validators(model, mode="after")
+        return concrete._validate_gateway_struct_after(model)
 
-    @staticmethod
-    def _get_pydantic_core_schema(struct_cls, source_type, handler):
-        # Get parent schema - note the struct_cls parameter
-        parent_schema = csp.Struct._get_pydantic_core_schema(struct_cls, source_type, handler)
-        core_config = CoreConfig(coerce_numbers_to_str=True)
-        # soooo hacky...
-        parent_schema["schema"]["config"] = core_config
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        schema = handler(source_type)
+        # Generating the schema for a field annotated with a struct hands back that struct's own
+        # already-wrapped schema, so wrapping unconditionally would run every validator once per
+        # nesting level. The marker makes the wrap idempotent.
+        if schema.get("metadata", {}).get(_WRAPPED_MARKER):
+            return schema
         return core_schema.with_info_wrap_validator_function(
-            function=struct_cls._validate_gateway_struct, schema=parent_schema, serialization=parent_schema.get("serialization")
+            function=cls._validate_gateway_struct,
+            schema=schema,
+            serialization=schema.get("serialization"),
+            metadata={_WRAPPED_MARKER: True},
         )
 
 
 GatewayStructMixins = (GatewayLookupMixin, GatewayPydanticMixin, PerspectiveUtilityMixin)
 
 
+def _to_naive_utc(value: datetime) -> datetime:
+    """Normalize to a naive UTC datetime, the only shape a csp timestamp ever serialized as.
+
+    A naive input is assumed to already be UTC.
+    """
+    if value.tzinfo is not None:
+        return value.astimezone(timezone.utc).replace(tzinfo=None)
+    return value
+
+
 class GatewayStruct(
     *GatewayStructMixins,
-    Struct,
+    BaseModel,
 ):
-    """Convenience class composing gateway mixins with csp.Struct.
+    """Convenience class composing the gateway mixins with a pydantic `BaseModel`.
 
     Provides id/timestamp fields, lookup/registry utilities, and pydantic
     integration, plus Perspective utilities.
+
+    Deliberately a plain pydantic model rather than ccflow's `BaseModel`: a struct is data on the
+    wire, so it wants neither the registry integration nor the ``type_`` discriminator that ccflow
+    adds to every payload.
     """
 
-    id: IdType
-    timestamp: datetime
+    model_config = ConfigDict(
+        # Retained from the csp.Struct era: ids arrive off the wire as bare numbers.
+        coerce_numbers_to_str=True,
+        extra="forbid",
+        ser_json_timedelta="float",
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+    )
+
+    #: Fields made optional by ``_relax_required_fields`` rather than by a declared default.
+    __gateway_implicit_fields__: ClassVar[frozenset[str]] = frozenset()
+
+    id: IdType | None = None
+    timestamp: datetime | None = None
+
+    @field_serializer("timestamp", when_used="json")
+    def _serialize_timestamp(self, value: datetime | None, info) -> str | None:
+        # csp emitted naive UTC, and clients parse that shape. ``to_json`` is the exception: it stands
+        # in for csp's own serializer, which preserved whatever offset the caller stored.
+        if value is None:
+            return None
+        if isinstance(info.context, dict) and info.context.get(_PRESERVE_TZ):
+            return value.isoformat()
+        return _to_naive_utc(value).isoformat()
+
+    @model_serializer(mode="wrap")
+    def _drop_implicitly_unset(self, handler: Callable[[Any], dict[str, Any]]) -> dict[str, Any]:
+        """Omit fields that were never set and have no declared default.
+
+        A model serializer rather than an ``exclude=`` argument so the rule also applies to structs
+        nested inside another struct, which is where csp's unset fields mattered most: a payload round
+        trips back through validation, and a ``None`` standing in for "absent" fails the field's own
+        constraints.
+        """
+        data = handler(self)
+        if self is None:
+            # A null value for a struct-typed field still routes through that struct's serializer.
+            return data
+        for name in self._implicitly_unset():
+            data.pop(name, None)
+        return data
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        cls._relax_required_fields()
+
+    @classmethod
+    def _relax_required_fields(cls) -> None:
+        """Default every field to ``None`` so declaring one without a default leaves it optional.
+
+        csp.Struct had no notion of a required field -- an unset field simply had no value -- and the
+        REST API inherited that: a payload may carry any subset of a struct's fields. Pydantic instead
+        treats a field without a default as required, which would reject those payloads. Defaults are
+        not themselves validated, so a ``None`` default coexists with constraints like ``Field(gt=0)``,
+        which still apply to any value actually supplied. Use ``model_fields_set`` to tell a field the
+        caller set from one that defaulted.
+        """
+        relaxed = set()
+        for name, field in cls.model_fields.items():
+            if field.is_required():
+                # Nullable, not merely defaulted: csp accepted an explicit ``None`` for a field it had
+                # no value for, and callers pass one to mean "absent". Constraints stay attached to the
+                # inner type so they still apply to a real value.
+                try:
+                    inner = Annotated[(field.annotation, *field.metadata)] if field.metadata else field.annotation
+                    if not (isinstance(field.annotation, type) and issubclass(field.annotation, BaseModel)):
+                        # A nested struct keeps rejecting an explicit None: csp had no value to stand
+                        # in for a missing struct, and silently accepting one hides a real type error.
+                        # Optional[] rather than `inner | None`: inner is a runtime value.
+                        field.annotation = Optional[inner]  # noqa: UP045
+                        field.metadata = []
+                except TypeError:
+                    # Not something typing can wrap (csp-normalized container shapes); a default alone
+                    # still makes the field optional, it just will not accept an explicit None.
+                    pass
+                field.default = None
+                relaxed.add(name)
+        # A field relaxed on a base class is still implicit here.
+        inherited = frozenset().union(*(getattr(base, "__gateway_implicit_fields__", frozenset()) for base in cls.__mro__[1:]))
+        cls.__gateway_implicit_fields__ = frozenset(relaxed) | (inherited & cls.model_fields.keys())
+        if relaxed:
+            cls.model_rebuild(force=True, raise_errors=False)
+
+    def _implicitly_unset(self) -> set[str]:
+        """Fields that only exist because ``_relax_required_fields`` gave them a default.
+
+        These are csp's "never set" fields, so they stay out of serialization. A field with a default
+        the author actually declared is a different thing and is always reported.
+        """
+        return type(self).__gateway_implicit_fields__ - self.model_fields_set
+
+    @classmethod
+    def metadata(cls, typed: bool = False) -> dict[str, Any]:
+        """The field types, in the shape csp's ``Struct.metadata`` returned."""
+        return model_metadata(cls, typed=typed)
+
+    def to_dict(self) -> dict[str, Any]:
+        """The model as plain data, for callers written against csp's ``Struct.to_dict``."""
+        return self.model_dump(mode="python")
+
+    def to_json(self, default_fn: Callable[[Any], Any] | None = None) -> str:
+        """The model as a JSON string, for callers written against csp's ``Struct.to_json``.
+
+        ``default_fn`` maps values pydantic cannot serialize itself (numpy arrays, sets, locks), the
+        role csp's ``default`` argument played.
+        """
+        return self.model_dump_json(fallback=default_fn, context={_PRESERVE_TZ: True})
+
+    def copy(self, **kwargs: Any) -> "GatewayStruct":
+        """A shallow copy, matching csp's ``Struct.copy`` rather than pydantic's deprecated one."""
+        return self.model_copy(**kwargs)
 
 
 def is_gateway_struct_like(cls) -> bool:
-    """Strict check: requires all gateway mixins and `csp.Struct`.
+    """Strict check: requires all gateway mixins and a pydantic `BaseModel`.
 
-    Returns True only if `cls` is a `csp.Struct` subclass AND also
+    Returns True only if `cls` is a `BaseModel` subclass AND also
     subclasses `GatewayLookupMixin`, `GatewayPydanticMixin`, and
     `PerspectiveUtilityMixin`.
     """
@@ -358,7 +554,7 @@ def is_gateway_struct_like(cls) -> bool:
         return True
     try:
         return (
-            issubclass(cls, Struct)
+            issubclass(cls, BaseModel)
             and issubclass(cls, GatewayLookupMixin)
             and issubclass(cls, GatewayPydanticMixin)
             and issubclass(cls, PerspectiveUtilityMixin)

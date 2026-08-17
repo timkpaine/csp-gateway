@@ -2,6 +2,7 @@ import warnings
 from collections import defaultdict, deque
 from contextlib import contextmanager
 from datetime import datetime
+from enum import Enum
 from logging import getLogger
 from typing import (
     TYPE_CHECKING,
@@ -13,7 +14,7 @@ from typing import (
 )
 
 import csp
-from csp import Enum, ts
+from csp import ts
 from csp.impl.genericpushadapter import GenericPushAdapter
 from csp.impl.types.container_type_normalizer import ContainerTypeNormalizer
 from csp.impl.types.tstype import TsType, isTsType
@@ -26,6 +27,7 @@ from pydantic._internal._model_construction import ModelMetaclass
 from csp_gateway.utils import (
     GatewayException,
     NoProviderException,
+    enum_by_name,
     get_dict_basket_key_type,
     get_dict_basket_value_tstype,
     get_dict_basket_value_type,
@@ -95,7 +97,8 @@ def _get_ts_pydantic_field_type(outer_type):
     # TODO: we only store Gateway Structs and Lists with Gateway Structs
     if is_dict_basket(outer_type):
         # dict baskets, ensure key is enum and then process value
-        key_type = get_args(outer_type)[0]
+        # Snapshots record enum basket keys by name, so the model has to read them back by name.
+        key_type = enum_by_name(get_args(outer_type)[0])
         ts_type = get_args(outer_type)[1].typ
         normalized_type = ContainerTypeNormalizer.normalize_type(ts_type)
         is_list = get_origin(normalized_type) is list

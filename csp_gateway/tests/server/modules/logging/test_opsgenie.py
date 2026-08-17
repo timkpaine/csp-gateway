@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta, timezone
+from enum import Enum, auto
 from unittest import mock
 from unittest.mock import Mock
 
 import csp
 import opsgenie_sdk
-from csp import Enum, ts
+from csp import ts
 
 from csp_gateway.server.gateway import Gateway, GatewayChannels, GatewayModule
 from csp_gateway.server.modules.logging.opsgenie import PublishOpsGenie
@@ -17,8 +18,8 @@ from csp_gateway.testing import GatewayTestHarness
 
 
 class EventTestEnum(Enum):
-    GOOD = Enum.auto()
-    BAD = Enum.auto()
+    GOOD = auto()
+    BAD = auto()
 
 
 class EventTestChannels(GatewayChannels):

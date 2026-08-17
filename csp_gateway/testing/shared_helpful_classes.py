@@ -1,9 +1,10 @@
 from datetime import timedelta
+from enum import Enum
 from typing import Annotated
 
 import csp
 import numpy as np
-from csp import Enum, ts
+from csp import ts
 from csp.typing import Numpy1DArray
 
 from csp_gateway import (

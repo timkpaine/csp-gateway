@@ -21,6 +21,7 @@ from uvicorn.server import Server
 
 from csp_gateway.server.settings import Settings
 from csp_gateway.utils import (
+    enum_by_name,
     get_args,
     get_dict_basket_key_type,
     get_dict_basket_value_type,
@@ -474,7 +475,7 @@ class GatewayWebApp:
         field_type = self._get_field_type(field)
         if is_dict_basket(field_type):
             return (
-                get_dict_basket_key_type(field_type),
+                enum_by_name(get_dict_basket_key_type(field_type)),
                 get_dict_basket_value_type(field_type),
             )
         return None

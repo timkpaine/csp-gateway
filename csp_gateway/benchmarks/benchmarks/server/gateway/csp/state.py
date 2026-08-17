@@ -1,8 +1,17 @@
 from datetime import datetime, timezone
+from enum import Enum
 
-from csp import Enum, Struct
-
-from csp_gateway import Filter, FilterCondition, Query, State, StateType, disable_duckdb_state, enable_duckdb_state, modify_buffer_threshold
+from csp_gateway import (
+    Filter,
+    FilterCondition,
+    GatewayStruct,
+    Query,
+    State,
+    StateType,
+    disable_duckdb_state,
+    enable_duckdb_state,
+    modify_buffer_threshold,
+)
 
 _STATES = [StateType.DUCKDB, StateType.DEFAULT]
 _BUFFER_THRESHOLD = 10000
@@ -17,7 +26,7 @@ class MyEnum(Enum):
     C = 3
 
 
-class CspSubStruct(Struct):
+class CspSubStruct(GatewayStruct):
     suba: int = 1
     subb: str = "b"
     subc: datetime = datetime.now(timezone.utc)
@@ -40,7 +49,7 @@ class NonCspStruct:
             setattr(self, k, v)
 
 
-class CspStruct(Struct):
+class CspStruct(GatewayStruct):
     a: int = 0
     b: str
     c: datetime = datetime.now(timezone.utc)

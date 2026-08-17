@@ -1,10 +1,10 @@
 import decimal
 from datetime import date, datetime, timezone
+from enum import Enum, auto
 from typing import Annotated, Any
 
 import numpy as np
 import pytest
-from csp import Enum, Struct
 from csp.typing import Numpy1DArray
 from pydantic import BaseModel, BeforeValidator, Field, TypeAdapter, ValidationError, ValidatorFunctionWrapHandler, WrapValidator, field_validator
 
@@ -24,7 +24,7 @@ def nonnegative_check(cls, v):
 
 
 class Symbology(Enum):
-    ID = Enum.auto()
+    ID = auto()
 
 
 class SimpleOrder(GatewayStruct):
@@ -53,24 +53,23 @@ class SimpleOrderChild(SimpleOrder):
         return {"_validate_example": field_validator("new_field", mode="after")(nonnegative_check)}
 
 
-class MyCspStruct(Struct):
+class MyNestedStruct(GatewayStruct):
     a: int
-    csp_np_array: Numpy1DArray[float] = np.array([13.0]).view(Numpy1DArray)
-    id: str
+    np_array: Numpy1DArray[float] = np.array([13.0]).view(Numpy1DArray)
 
 
 class MyCompositeStruct(GatewayStruct):
     order: SimpleOrder
     order_list: list[SimpleOrder]
     order_dict: dict[str, SimpleOrder]
-    csp_struct: MyCspStruct
+    nested: MyNestedStruct
 
 
 class MyStruct(GatewayStruct):
     foo: float
     fav_num: int = 68
     my_np_array: Numpy1DArray[float] = np.array([6.0]).view(Numpy1DArray)
-    my_csp_struct: MyCspStruct = MyCspStruct(a=9)
+    my_nested_struct: MyNestedStruct = None
 
 
 # For annotated testing
@@ -334,7 +333,8 @@ def test_number_to_string_coercion_extended():
     # Test with decimal
     struct = adapter.validate_python({"float_field": (0.1 + 0.2), "scientific_field": decimal.Decimal("1.23e-4")})
 
-    assert not hasattr(struct, "int_field")
+    assert "int_field" not in struct.model_fields_set
+    assert struct.int_field is None
     assert struct.float_field == "0.30000000000000004"  # floating point arithmetic lol
     assert struct.scientific_field == "0.000123"
 
@@ -457,21 +457,21 @@ def test_validate_gateway_struct_after_inheritance():
     adapter_no_new_validator.validate_python({"value": 42, "name": ""})
 
 
-def test_mixins_on_existing_csp_struct():
-    assert issubclass(GatewayStruct, Struct)
+def test_mixins_on_existing_pydantic_model():
+    assert issubclass(GatewayStruct, BaseModel)
 
-    class PlainStruct(Struct):
-        a: int
+    class PlainModel(BaseModel):
+        a: int = None
         b: str = "default"
 
     class EnhancedStruct(
         GatewayLookupMixin,
         GatewayPydanticMixin,
         PerspectiveUtilityMixin,
-        PlainStruct,
+        PlainModel,
     ):
-        id: IdType
-        timestamp: datetime
+        id: IdType = None
+        timestamp: datetime = None
 
     # Construct without id/timestamp to verify auto-population
     e = EnhancedStruct(a=1)
@@ -492,7 +492,7 @@ def test_mixins_on_existing_csp_struct():
     assert e2.b == "x"
 
     # Force new id/timestamp through context
-    e3 = EnhancedStruct.type_adapter().validate_python(e2.to_dict(), context={"force_new_id": True, "force_new_timestamp": True})
+    e3 = EnhancedStruct.type_adapter().validate_python(e2.model_dump(exclude_unset=True), context={"force_new_id": True, "force_new_timestamp": True})
     assert e3.id != e2.id
     assert e3.timestamp != e2.timestamp
 
@@ -504,10 +504,10 @@ def test_mixins_on_existing_csp_struct():
 
 
 def test_add_pydantic_mixin_in_subclass():
-    class Base(Struct):
-        a: int
-        id: str
-        timestamp: datetime
+    class Base(BaseModel):
+        a: int = None
+        id: str = None
+        timestamp: datetime = None
 
     class LookupBase(GatewayLookupMixin, Base):
         pass
@@ -521,11 +521,11 @@ def test_add_pydantic_mixin_in_subclass():
     assert isinstance(e.timestamp, datetime)
 
     # Test pydantic validation with context
-    e2 = PydEnhanced.type_adapter().validate_python(e.to_dict(), context={"force_new_id": True, "force_new_timestamp": True})
+    e2 = PydEnhanced.type_adapter().validate_python(e.model_dump(exclude_unset=True), context={"force_new_id": True, "force_new_timestamp": True})
     assert e2.id != e.id
     assert e2.timestamp != e.timestamp
 
     # Test pydantic validation with context
-    e3 = PydEnhanced.type_adapter().validate_python(e.to_dict())
+    e3 = PydEnhanced.type_adapter().validate_python(e.model_dump(exclude_unset=True))
     assert e3.id == e.id
     assert e3.timestamp == e.timestamp

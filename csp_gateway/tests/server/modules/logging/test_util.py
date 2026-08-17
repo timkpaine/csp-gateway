@@ -77,7 +77,19 @@ def test_opsgenie_level_enum():
 
 
 def test_monitoring_base_init():
-    base = MonitoringBase(id="base_id", timestamp=datetime.now(timezone.utc), tags={"env": "test"})
+    # MonitoringBase declares abstract to_datadog/to_dict/to_opsgenie, so it can only be exercised
+    # through a concrete subclass.
+    class ConcreteMonitoring(MonitoringBase):
+        def to_datadog(self, extra_tags=None):
+            return {}
+
+        def to_dict(self, extra_tags=None):
+            return {}
+
+        def to_opsgenie(self, extra_tags=None):
+            return {}
+
+    base = ConcreteMonitoring(id="base_id", timestamp=datetime.now(timezone.utc), tags={"env": "test"})
     assert base.id == "base_id"
     assert base.tags == {"env": "test"}
 

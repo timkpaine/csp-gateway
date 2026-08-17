@@ -1,16 +1,16 @@
 import logging
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from typing import Any, TypeVar
 
 import csp
 import numpy as np
 from ccflow import BaseModel
 from ccflow.serialization import make_ndarray_orjson_valid
-from csp import Struct, ts
-from csp.impl.enum import Enum, EnumMeta
+from csp import ts
 from csp.impl.types.tstype import isTsType
-from pydantic import Field, PrivateAttr, TypeAdapter
+from pydantic import BaseModel as PydanticBaseModel, Field, PrivateAttr, TypeAdapter
 
 from csp_gateway.server.gateway.csp import ChannelsType
 from csp_gateway.server.gateway.csp.channels import _CSP_ENGINE_CYCLE_TIMESTAMP_FIELD
@@ -44,11 +44,12 @@ class ChannelValueModel(BaseModel):
     timestamp: datetime
 
 
-class EncodedEngineCycle(csp.Struct):
-    """This is a csp struct representing a single engine cycle."""
+class EncodedEngineCycle(BaseModel):
+    """This is a model representing a single engine cycle."""
 
-    encoding: str
-    csp_timestamp: datetime
+    # Optional to match what csp.Struct allowed: a cycle can be built with only the encoding.
+    encoding: str = None
+    csp_timestamp: datetime = None
 
 
 def read_engine_encoding_json_with_duckdb(channels: ChannelsType, filename: str):
@@ -61,20 +62,23 @@ def read_engine_encoding_json_with_duckdb(channels: ChannelsType, filename: str)
 
 
 def _convert_orjson_compatible(obj: Any):
-    if isinstance(obj, Struct):
+    if isinstance(obj, PydanticBaseModel):
+        # Skip only the fields that are optional purely because csp had no required fields; one with a
+        # declared default is a real value and is encoded.
+        skip = obj._implicitly_unset() if hasattr(obj, "_implicitly_unset") else set()
         return {
             _convert_orjson_compatible(k): _convert_orjson_compatible(getattr(obj, k))
-            for k in obj.__full_metadata__
-            if (not k.startswith("_")) and hasattr(obj, k)
+            for k in type(obj).model_fields
+            if not k.startswith("_") and k not in skip
         }
     if isinstance(obj, dict):
         return {_convert_orjson_compatible(k): _convert_orjson_compatible(v) for k, v in obj.items()}
     if isinstance(obj, (list, set, tuple)):
         return [_convert_orjson_compatible(val) for val in obj]
-    if isinstance(obj, (Enum, EnumMeta)):
+    if isinstance(obj, Enum):
         return obj.name
     if isinstance(obj, timedelta):
-        return _TIMEDELTA_TYPE_ADAPTER.dump_python(obj, mode="json")
+        return obj.total_seconds()
     if isinstance(obj, np.ndarray):
         return make_ndarray_orjson_valid(obj)
     return obj

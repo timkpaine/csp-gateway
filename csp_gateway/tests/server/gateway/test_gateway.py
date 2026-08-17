@@ -3,6 +3,7 @@ import multiprocessing
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from enum import Enum
 from io import StringIO
 from typing import Annotated, Any
 
@@ -10,7 +11,7 @@ import csp
 import numpy as np
 import pytest
 from ccflow import ModelRegistry
-from csp import Enum, ts
+from csp import ts
 from csp.typing import Numpy1DArray
 from omegaconf import OmegaConf
 from pydantic import Field, ValidationError

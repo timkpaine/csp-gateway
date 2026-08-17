@@ -1,8 +1,8 @@
 from datetime import datetime
+from enum import Enum
 from typing import Generic, get_args, get_origin
 
 from ccflow import BaseModel
-from csp.impl.enum import Enum
 from csp.impl.genericpushadapter import GenericPushAdapter
 from pydantic import Field
 
