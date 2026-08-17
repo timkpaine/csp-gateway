@@ -14,14 +14,17 @@ the optional `spaday` extra (`pip install 'csp-gateway[spaday]'`).
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from dataclasses import dataclass, field as _dc_field
 from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.routing import Mount
+from starlette.routing import Mount, WebSocketRoute
+from starlette.websockets import WebSocket
 
 try:
     import spaday  # noqa: F401
@@ -48,10 +51,11 @@ from spaday.actions import (
     obj,
 )
 from spaday.backends.starlette import mount as _spaday_mount
-from spaday.components.form import FormField, form
-from spaday.components.perspective import PerspectivePanel
 from spaday.components.shell import AppShell, Column, Region, Row, Show
-from spaday.components.webawesome import (
+from spaday_perspective import PerspectivePanel
+from spaday_webawesome import (
+    FormField,
+    Tabs,
     WaButton,
     WaCallout,
     WaDialog,
@@ -59,6 +63,7 @@ from spaday.components.webawesome import (
     WaIcon,
     WaOption,
     WaSelect,
+    form,
 )
 
 if TYPE_CHECKING:
@@ -69,6 +74,11 @@ __all__ = (
     "Region",
     "SendSpec",
 )
+
+log = logging.getLogger(__name__)
+
+# The tenant every connection shares when no auth middleware can identify it.
+_ANONYMOUS_TENANT = "__anonymous__"
 
 
 # Minimal shell theming so the spaday page looks reasonable in both light and dark modes.
@@ -107,6 +117,36 @@ class _Contribution:
 
     component: Any
     order: int = 0
+    label: str | None = None
+
+
+class ModelHandle:
+    """A module's live UI state: one transports model, mirrored per authenticated tenant.
+
+    Obtained from `GatewayUI.model()` in a module's `ui()` hook, which runs once at startup, and used
+    afterwards to push updates from wherever the state actually changes -- a csp node, a REST handler.
+
+    `publish` is safe to call from any thread. Values are computed per tenant, so a deployment running
+    `AuthFilterMiddleware` keeps its per-identity filtering: pass a callable to derive each tenant's
+    view of the state from its identity, or a plain value when every tenant may see the same thing.
+    """
+
+    def __init__(self, ui: GatewayUI, namespace: str, model: Any) -> None:
+        self._ui = ui
+        self._namespace = namespace
+        self._model = model
+
+    @property
+    def namespace(self) -> str:
+        return self._namespace
+
+    def publish(self, value: Any) -> None:
+        """Push new state to every connected tenant.
+
+        ``value`` is either the state itself, or a callable taking a tenant's identity (``None`` when
+        unauthenticated) and returning that tenant's view of it.
+        """
+        self._ui._publish(self._namespace, value)
 
 
 class GatewayUI:
@@ -122,6 +162,33 @@ class GatewayUI:
         self._settings = settings
         self._regions: dict[Region, list[_Contribution]] = {}
         self._store_seeds: dict[str, Any] = {}
+        # Live UI state: namespace -> (model, latest value factory). The hub and its models only exist
+        # once a module declares one, so a gateway with no live state serves no websocket.
+        self._models: dict[str, Any] = {}
+        self._latest: dict[str, Any] = {}
+        self._tenant_models: dict[Any, dict[str, tuple]] = {}
+        self._tenant_identity: dict[Any, Any] = {}
+        self._hub: Any = None
+        self._loop: Any = None
+        self._autosync: Any = None
+
+    def model(self, namespace: str, model: Any) -> ModelHandle:
+        """Declare live UI state this module publishes, mirrored into the page's signal store.
+
+        `ui()` runs once at startup, so a module declares its state here and pushes to the returned
+        handle later. Fields arrive in the browser under ``<namespace>.``, so several modules can
+        publish without colliding, and a component binds to them like any other state::
+
+            self._staging = app.model("staging", StagingView)
+            app.add(Region.GUTTER_RIGHT, Table().compute("rows", field("staging.rows")))
+
+        Each authenticated identity gets its own copy of the model, so what one user is shown is never
+        broadcast to another.
+        """
+        if namespace in self._models:
+            raise ValueError(f"UI model namespace already declared: {namespace}")
+        self._models[namespace] = model
+        return ModelHandle(self, namespace, model)
 
     @property
     def settings(self) -> Any:
@@ -131,7 +198,7 @@ class GatewayUI:
     def web_app(self) -> GatewayWebApp:
         return self._web_app
 
-    def add(self, region: Region, component: Any, *, order: int = 0) -> None:
+    def add(self, region: Region, component: Any, *, order: int = 0, label: str | None = None) -> None:
         """Inject a spaday `component` into a named shell `region`.
 
         This is the single contribution API. Multiple contributions to the same region render
@@ -140,8 +207,16 @@ class GatewayUI:
         contributions slot in around them predictably. Build the component with one of the
         helpers (`perspective_panel`, `layout_selector`, `send_panel`, `link_button`,
         `post_button`, `confirm_button`) or hand-author any spaday component.
+
+        `component` may also be a zero-argument callable returning one. Module `ui()` hooks run
+        once at startup, so a callable is the way to render server-side state that changes after
+        that (it is re-invoked on each page build, i.e. per page load).
+
+        `label` names the contribution for regions that present their panels as tabs (the bottom
+        drawer). It is ignored elsewhere, and the drawer only tabs when every panel in it is
+        labelled -- otherwise an unlabelled panel would get a blank tab.
         """
-        self._regions.setdefault(Region(region), []).append(_Contribution(component=component, order=order))
+        self._regions.setdefault(Region(region), []).append(_Contribution(component=component, order=order, label=label))
 
     def seed_store(self, **fields: Any) -> None:
         """Seed initial values into the page's reactive signal store (merged across callers)."""
@@ -164,12 +239,21 @@ class GatewayUI:
 
         ``builtin`` is a list of ``(order, component)`` pairs for the provider's own default
         pieces; they are merged with the module contributions and sorted by order. ``None``
-        components (e.g. an omitted optional logo) are dropped.
+        components (e.g. an omitted optional logo) are dropped. A contribution may be a zero-arg
+        callable, resolved here so it re-renders from current server state on every page build.
         """
         items: list[tuple] = [(o, c) for (o, c) in builtin if c is not None]
         items += [(c.order, c.component) for c in self._regions.get(region, []) if c.component is not None]
         items.sort(key=lambda t: t[0])
-        return [c for _, c in items]
+        resolved = [c() if callable(c) else c for _, c in items]
+        return [c for c in resolved if c is not None]
+
+    def _labeled_region(self, region: Region) -> list[tuple[str | None, Any]]:
+        """The composed components for a region, each paired with its contribution's tab label."""
+        items = [(c.order, c.label, c.component) for c in self._regions.get(region, []) if c.component is not None]
+        items.sort(key=lambda t: t[0])
+        labeled = [(label, component() if callable(component) else component) for _, label, component in items]
+        return [(label, component) for label, component in labeled if component is not None]
 
     def perspective_panel(
         self,
@@ -416,7 +500,11 @@ class GatewayUI:
 
         # Compose region contents (built-in chrome merged with module contributions, order-sorted).
         right_drawer_items = self._region(Region.DRAWER_RIGHT, (100, email_button))
-        bottom_drawer_items = self._region(Region.DRAWER_BOTTOM)
+        bottom_drawer_panels = self._labeled_region(Region.DRAWER_BOTTOM)
+        bottom_drawer_items = [component for _, component in bottom_drawer_panels]
+        # Several labelled panels share the drawer, so they become tabs rather than a tall stack.
+        bottom_tabbed = len(bottom_drawer_panels) > 1 and all(label for label, _ in bottom_drawer_panels)
+        bottom_label = "Channel data" if bottom_tabbed else "Send data to a channel"
         gutter_left = self._region(Region.GUTTER_LEFT)
         gutter_right = self._region(Region.GUTTER_RIGHT)
         main_items = self._region(Region.MAIN)
@@ -429,9 +517,7 @@ class GatewayUI:
             else None
         )
         plus_button = (
-            WaButton(appearance="plain", title="Send data to a channel")
-            .on("click", Toggle(by_id(bottom_drawer_id), "open"))
-            .child(WaIcon(name="plus"))
+            WaButton(appearance="plain", title=bottom_label).on("click", Toggle(by_id(bottom_drawer_id), "open")).child(WaIcon(name="plus"))
             if bottom_drawer_items
             else None
         )
@@ -482,17 +568,117 @@ class GatewayUI:
                 .child(Column(*right_drawer_items, gap="0.6rem")),
             )
         if bottom_drawer_items:
+            if bottom_tabbed:
+                tabs = Tabs()
+                for label, component in bottom_drawer_panels:
+                    tabs.tab(label, component)
+                bottom_body: Any = tabs
+            else:
+                bottom_body = Column(*bottom_drawer_items, gap="1rem")
             shell.add(
                 Region.DRAWER_BOTTOM,
-                WaDrawer(label="Send data to a channel", placement="bottom", light_dismiss=True)
-                .prop("id", bottom_drawer_id)
-                .css(size="70vh")
-                .child(Column(*bottom_drawer_items, gap="1rem")),
+                WaDrawer(label=bottom_label, placement="bottom", light_dismiss=True).prop("id", bottom_drawer_id).css(size="70vh").child(bottom_body),
             )
         if overlay_items:
             shell.add(Region.OVERLAY, *overlay_items)
 
         return shell.build().style(height="100vh").bind_root_class("wa-dark", "dark")
+
+    @property
+    def _auth_filter(self) -> Any:
+        """The configured `AuthFilterMiddleware`, if any -- the same one the REST and websocket paths use."""
+        return getattr(self._web_app.app.state, "auth_filter_middleware", None)
+
+    async def _tenant_for(self, websocket: Any) -> tuple[Any, Any]:
+        """The ``(tenant key, identity)`` a connection belongs to.
+
+        Identity resolution is async (an external validator may do I/O), which is why it happens here
+        rather than in the hub's key function -- that one is called synchronously.
+        """
+        auth_filter = self._auth_filter
+        if auth_filter is None:
+            return _ANONYMOUS_TENANT, None
+        try:
+            identity = await auth_filter.get_identity_from_websocket(websocket)
+        except Exception:
+            log.exception("Failed to resolve UI websocket identity; serving the anonymous tenant")
+            return _ANONYMOUS_TENANT, None
+        if not identity:
+            return _ANONYMOUS_TENANT, None
+        return json.dumps(identity, sort_keys=True, default=str), identity
+
+    def _view_for(self, namespace: str, identity: Any) -> Any:
+        """One tenant's view of a namespace's latest published state."""
+        value = self._latest.get(namespace)
+        return value(identity) if callable(value) else value
+
+    def _apply(self, target: Any, value: Any) -> None:
+        """Copy a published value onto a tenant's hosted model instance."""
+        if value is None:
+            return
+        fields = value if isinstance(value, dict) else getattr(value, "__dict__", {})
+        for name, field_value in fields.items():
+            setattr(target, name, field_value)
+
+    def _host_tenant(self, tenant: Any, identity: Any) -> None:
+        """Give a tenant its own instance of every declared model, seeded with current state."""
+        if tenant in self._tenant_models:
+            return
+        session = self._hub.tenant(tenant)
+        hosted: dict[str, tuple] = {}
+        for namespace, model in self._models.items():
+            instance = model()
+            self._apply(instance, self._view_for(namespace, identity))
+            hosted[namespace] = (instance, session.host(instance))
+        self._tenant_models[tenant] = hosted
+        self._tenant_identity[tenant] = identity
+
+    def _publish(self, namespace: str, value: Any) -> None:
+        """Push new state for a namespace to every connected tenant, from any thread."""
+        self._latest[namespace] = value
+        if self._hub is None:
+            return
+
+        # Apply to each tenant's model here, so state is correct even before a loop exists; only the
+        # emit needs to be marshalled onto the server loop.
+        updates = []
+        for tenant, hosted in self._tenant_models.items():
+            entry = hosted.get(namespace)
+            if entry is None:
+                continue
+            instance, mid = entry
+            self._apply(instance, self._view_for(namespace, self._tenant_identity.get(tenant)))
+            updates.append((tenant, mid))
+
+        loop = self._loop
+        if not updates or loop is None or not loop.is_running():
+            return
+
+        def _emit() -> None:
+            for tenant, mid in updates:
+                self._hub.tenant(tenant).update(mid)
+
+        loop.call_soon_threadsafe(_emit)
+
+    def _ws_endpoint(self) -> Any:
+        """The websocket serving the hub, with each connection routed to its authenticated tenant."""
+        import transports
+
+        self._hub = transports.Hub(key=lambda conn: getattr(conn.state, "csp_gateway_tenant", _ANONYMOUS_TENANT))
+        inner = transports.ws_endpoint(self._hub)
+
+        # Annotated, not `Any`: FastAPI resolves the signature and would treat an unrecognised
+        # annotation as a required query parameter, rejecting every connection with a 1008.
+        async def endpoint(websocket: WebSocket) -> None:
+            tenant, identity = await self._tenant_for(websocket)
+            websocket.state.csp_gateway_tenant = tenant
+            self._loop = asyncio.get_running_loop()
+            self._host_tenant(tenant, identity)
+            if self._autosync is None:
+                self._autosync = asyncio.create_task(transports.autosync(self._hub))
+            await inner(websocket)
+
+        return endpoint
 
     def mount(self) -> None:
         """Build the spaday page and register its routes on the gateway app.
@@ -512,10 +698,26 @@ class GatewayUI:
         # like every other gateway route. The dynamic page/tree go on the authenticated app router; the
         # static /js mount stays public, like other UI assets.
         scratch = Starlette()
+        # Only wire a transports model when a module actually declared live state; otherwise the page is a
+        # static tree and no websocket is served.
+        wire: Any = None
+        routes: list = []
+        if self._models:
+            from spaday import Wire
+
+            wire = [Wire("/ws", namespace=namespace) for namespace in self._models]
+            routes = [WebSocketRoute("/ws", self._ws_endpoint())]
         _spaday_mount(
             scratch,
             self.build_page,
-            bundles=["webawesome", "perspective"],
+            # Component libraries ship as their own distributions and are resolved by entry point.
+            packages=["webawesome", "perspective"],
+            # spaday infers "source checkout" from a `js/` dir next to itself, which any distribution
+            # shipping a top-level `js/` package (plotly does) satisfies -- serving assets we consume
+            # from the wheel, never from a spaday checkout.
+            layout="installed",
+            wire=wire,
+            routes=routes,
             store={"dark": False, **self._store_seeds},
             head=THEME_CSS,
             title=title,
@@ -535,5 +737,10 @@ class GatewayUI:
                 path = path[len(root) :] or "/"
             if isinstance(route, Mount):
                 self._web_app.app.routes.append(Mount(path, app=route.app))
+                continue
+            if isinstance(route, WebSocketRoute):
+                # The wire carries gateway state, so it sits behind the same dependencies as the page
+                # and tree rather than being registered as a plain (and, on this router, GET) route.
+                app_router.add_api_websocket_route(path, route.endpoint, name=f"spaday:ws:{path}")
                 continue
             app_router.add_api_route(path, _authed_route(route.endpoint), methods=["GET"], include_in_schema=False, name=f"spaday:{path}")

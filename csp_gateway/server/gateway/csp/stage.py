@@ -4,11 +4,15 @@ A channel with staging enabled accumulates structs into named "staging areas"
 before they are released into the main channel. This allows batch preparation
 and atomic release of groups of structs.
 
-See STAGE.md for the full API specification.
+Staging mutations are also published as a ``ts[StagingEvent]`` delta stream, so modules can react to
+what is being staged (see ``GatewayChannels.get_stage_events``).
 """
 
 import threading
+from collections.abc import Callable
 
+import csp
+from csp import Enum, ts
 from csp.impl.genericpushadapter import GenericPushAdapter
 
 from csp_gateway.utils import GatewayStruct
@@ -16,8 +20,73 @@ from csp_gateway.utils import GatewayStruct
 __all__ = (
     "Stage",
     "Staging",
+    "StagingAction",
+    "StagingEvent",
+    "StagingRequest",
+    "apply_stage_requests",
     "build_staging_node",
 )
+
+
+class StagingAction(Enum):
+    """What happened to a staging area, one action per affected record."""
+
+    CREATED = 0
+    ADDED = 1
+    REMOVED = 2
+    RELEASED = 3
+
+
+class StagingEvent(GatewayStruct):
+    """One staging mutation, as ticked on a channel's staging event stream.
+
+    ``CREATED`` and a whole-staging ``REMOVED`` carry no items; ``ADDED``/``REMOVED`` carry the single
+    record involved, and ``RELEASED`` carries everything the staging released.
+
+    ``items`` uses ``list`` (untyped) for the same reason ``Staging.items`` does.
+    """
+
+    channel: str = ""
+    staging_id: str = ""
+    action: StagingAction = StagingAction.CREATED
+    items: list = []
+
+
+class StagingRequest(GatewayStruct):
+    """A request to mutate a staging area, tickable by a module.
+
+    The same actions the REST API exposes: ``CREATED`` opens an empty staging, ``ADDED``/``REMOVED``
+    stage or unstage each of ``items``, and ``RELEASED`` releases. A ``REMOVED`` with no ``items``
+    clears rather than unstaging a particular record.
+
+    Leaving ``staging_ids`` unset means "no ids" (the API's ``None``: latest, or a new staging); setting
+    it to an empty list means "all" -- the same distinction the REST layer draws.
+    """
+
+    action: StagingAction = StagingAction.ADDED
+    staging_ids: list = []
+    items: list = []
+
+
+@csp.node
+def apply_stage_requests(requests: ts[StagingRequest], channels: object, field: str) -> None:
+    """Apply ticked staging requests to ``field``'s staging areas."""
+    if csp.ticked(requests):
+        # Unset means None (latest / new); an explicit empty list means all.
+        staging_ids = requests.staging_ids if hasattr(requests, "staging_ids") else None
+        if requests.action == StagingAction.RELEASED:
+            channels.stage_release(field, staging_ids=staging_ids)
+        elif requests.action == StagingAction.CREATED:
+            channels.stage_add(field, None, staging_ids=staging_ids)
+        elif requests.action == StagingAction.ADDED:
+            for item in requests.items:
+                channels.stage_add(field, item, staging_ids=staging_ids)
+        elif requests.action == StagingAction.REMOVED:
+            if requests.items:
+                for item in requests.items:
+                    channels.stage_remove(field, item, staging_ids=staging_ids)
+            else:
+                channels.stage_remove(field, None, staging_ids=staging_ids)
 
 
 class Stage:
@@ -75,13 +144,60 @@ class Staging(GatewayStruct):
 class _StageManager:
     """Manages multiple staging areas for a single channel.
 
-    Thread-safe: all mutations are guarded by a lock.
+    Thread-safe: all mutations are guarded by a lock. Mutations are reported to ``on_event`` as a list
+    of ``(action, staging_id, items)`` deltas, derived by diffing the areas around each operation so
+    the branchy add/remove semantics only have to be expressed once.
     """
 
-    def __init__(self):
-        self._lock = threading.Lock()
+    def __init__(self, on_event: Callable[[list], None] | None = None):
+        # Reentrant so the public wrappers can snapshot/diff around the locked implementations.
+        self._lock = threading.RLock()
         self._areas: dict[str, Staging] = {}
-        self._released: dict[str, Staging] = {}
+        self._on_event = on_event
+        self._listeners: list[Callable[[list], None]] = []
+
+    def add_listener(self, listener: Callable[[list], None]) -> None:
+        """Also report deltas to ``listener``.
+
+        Unlike ``on_event`` -- which feeds the graph's event adapter and so must be set while the graph is
+        built -- listeners may be attached at any point, including after the graph is finalized.
+        """
+        self._listeners.append(listener)
+
+    def _snapshot(self) -> dict[str, list]:
+        """The current areas as ``staging_id -> items``. Call under the lock."""
+        return {sid: area.items[:] for sid, area in self._areas.items()}
+
+    def _diff(self, before: dict[str, list]) -> list:
+        """Deltas between ``before`` and the current areas. Call under the lock.
+
+        A staging that vanished is reported as a removal of each of its records followed by a removal of
+        the staging itself. Releases do not go through here -- they are reported explicitly.
+        """
+        events = []
+        after = self._snapshot()
+        for sid, items in after.items():
+            previous = before.get(sid)
+            if previous is None:
+                events.append((StagingAction.CREATED, sid, []))
+                previous = []
+            previous_ids = {item.id for item in previous}
+            current_ids = {item.id for item in items}
+            events.extend((StagingAction.ADDED, sid, [item]) for item in items if item.id not in previous_ids)
+            events.extend((StagingAction.REMOVED, sid, [item]) for item in previous if item.id not in current_ids)
+        for sid, items in before.items():
+            if sid not in after:
+                events.extend((StagingAction.REMOVED, sid, [item]) for item in items)
+                events.append((StagingAction.REMOVED, sid, []))
+        return events
+
+    def _emit(self, events: list) -> None:
+        if not events:
+            return
+        if self._on_event is not None:
+            self._on_event(events)
+        for listener in self._listeners:
+            listener(events)
 
     @property
     def staging_ids(self) -> list[str]:
@@ -93,10 +209,55 @@ class _StageManager:
         struct: GatewayStruct | None = None,
         staging_ids: list[str] | None = None,
     ) -> list[str]:
+        """Add a struct to staging area(s), reporting what changed.
+
+        Returns the list of staging IDs affected.
+        """
+        with self._lock:
+            before = self._snapshot()
+            affected = self._stage_add(struct, staging_ids)
+            events = self._diff(before)
+        self._emit(events)
+        return affected
+
+    def stage_remove(
+        self,
+        struct: GatewayStruct | None = None,
+        staging_ids: list[str] | None = None,
+    ) -> list[str]:
+        """Remove struct(s) from staging area(s), reporting what changed.
+
+        Returns the list of staging IDs affected.
+        """
+        with self._lock:
+            before = self._snapshot()
+            affected = self._stage_remove(struct, staging_ids)
+            events = self._diff(before)
+        self._emit(events)
+        return affected
+
+    def stage_release(
+        self,
+        staging_ids: list[str] | None = None,
+    ) -> dict[str, list[GatewayStruct]]:
+        """Release staged structs, reporting one RELEASED event per staging.
+
+        Returns a dict mapping staging_id -> list of released structs.
+        """
+        with self._lock:
+            released = self._stage_release(staging_ids)
+        self._emit([(StagingAction.RELEASED, sid, items) for sid, items in released.items()])
+        return released
+
+    def _stage_add(
+        self,
+        struct: GatewayStruct | None = None,
+        staging_ids: list[str] | None = None,
+    ) -> list[str]:
         """Add a struct to staging area(s).
 
         Returns the list of staging IDs affected.
-        See STAGE.md for the full semantics.
+        See docs/wiki/Staging.md for the full semantics.
         """
         with self._lock:
             if struct is None and staging_ids is not None and len(staging_ids) > 0:
@@ -152,7 +313,7 @@ class _StageManager:
                 affected.append(sid)
             return affected
 
-    def stage_remove(
+    def _stage_remove(
         self,
         struct: GatewayStruct | None = None,
         staging_ids: list[str] | None = None,
@@ -160,7 +321,7 @@ class _StageManager:
         """Remove struct(s) from staging area(s).
 
         Returns the list of staging IDs affected.
-        See STAGE.md for the full semantics.
+        See docs/wiki/Staging.md for the full semantics.
         """
         with self._lock:
             if struct is None and staging_ids is not None and len(staging_ids) == 0:
@@ -208,14 +369,14 @@ class _StageManager:
                     affected.append(sid)
             return affected
 
-    def stage_release(
+    def _stage_release(
         self,
         staging_ids: list[str] | None = None,
     ) -> dict[str, list[GatewayStruct]]:
         """Release staged structs.
 
-        Returns a dict mapping staging_id -> list of released structs.
-        Released stagings are moved to the released archive.
+        Returns a dict mapping staging_id -> list of released structs. A released staging is dropped;
+        its contents ride the RELEASED event and the channel itself.
         """
         with self._lock:
             if staging_ids is None:
@@ -223,7 +384,6 @@ class _StageManager:
                 released = {}
                 for sid, area in list(self._areas.items()):
                     released[sid] = area.items[:]
-                    self._released[sid] = area
                 self._areas.clear()
                 return released
 
@@ -231,7 +391,6 @@ class _StageManager:
             for sid in staging_ids:
                 if sid in self._areas:
                     released[sid] = self._areas[sid].items[:]
-                    self._released[sid] = self._areas[sid]
                     del self._areas[sid]
             return released
 
@@ -251,29 +410,33 @@ class _StageManager:
         self,
         staging_id: str | None = None,
     ) -> dict[str, list[GatewayStruct]]:
-        """Look up contents of staging area(s), including released stages.
+        """Look up contents of pending staging area(s).
 
-        Returns dict mapping staging_id -> list of structs.
+        Returns dict mapping staging_id -> list of structs. Released stagings are gone; their contents
+        were delivered on the channel and on the RELEASED event.
         """
         with self._lock:
             if staging_id is None:
-                result = {sid: area.lookup() for sid, area in self._areas.items()}
-                result.update({sid: area.lookup() for sid, area in self._released.items()})
-                return result
+                return {sid: area.lookup() for sid, area in self._areas.items()}
             if staging_id in self._areas:
                 return {staging_id: self._areas[staging_id].lookup()}
-            if staging_id in self._released:
-                return {staging_id: self._released[staging_id].lookup()}
             return {}
 
 
-def build_staging_node(element_type: type) -> tuple:
-    """Build a _StageManager instance and its associated push adapter for releases.
+def build_staging_node(element_type: type, channel: str = "") -> tuple:
+    """Build a _StageManager and the push adapters that carry its output into the graph.
 
-    Returns (stage, push_adapter) where:
+    Returns (stage, push_adapter, event_adapter) where:
     - stage: the _StageManager instance for managing staging areas
     - push_adapter: GenericPushAdapter[element_type] to push released items into the graph
+    - event_adapter: GenericPushAdapter[StagingEvent] carrying the staging delta stream
     """
-    stage = _StageManager()
+    event_adapter = GenericPushAdapter(StagingEvent, name=f"StagingEvents<{element_type.__name__}>")
+
+    def _on_event(events: list) -> None:
+        for action, staging_id, items in events:
+            event_adapter.push_tick(StagingEvent(channel=channel, staging_id=staging_id, action=action, items=items))
+
+    stage = _StageManager(on_event=_on_event)
     push_adapter = GenericPushAdapter(element_type, name=f"StagingRelease<{element_type.__name__}>")
-    return stage, push_adapter
+    return stage, push_adapter, event_adapter

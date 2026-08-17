@@ -3,7 +3,7 @@
 Exposes endpoints under ``/api/v1/stage/`` for managing staged structs
 on channels that have staging enabled.
 
-See STAGE.md for the full API specification.
+See docs/wiki/Staging.md for the full API specification.
 """
 
 import json

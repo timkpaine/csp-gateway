@@ -21,6 +21,7 @@ Notes for editors:
 
 - [Configuration](Configuration)
 - [API](API)
+- [Staging](Staging)
 - [UI](UI)
 - [Client](Client)
 - [CSP Notes](CSP-Notes)

@@ -92,7 +92,7 @@ class MountSendForm(GatewayModule):
             )
 
         if forms:
-            app.add(Region.DRAWER_BOTTOM, app.send_panel(forms))
+            app.add(Region.DRAWER_BOTTOM, app.send_panel(forms), label="Send data to channel")
             seeds: dict[str, Any] = {"send_channel": forms[0].channel}
             for spec in forms:
                 if spec.keys:
