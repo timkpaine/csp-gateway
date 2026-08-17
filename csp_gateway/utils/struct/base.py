@@ -297,9 +297,6 @@ class GatewayPydanticMixin:
         model-level after validators that run after pydantic type validation.
         If not defined on a child class, the parent's validator will be used.  If defined on a child class, the parent's validator will be ignored. Please call the parent's validator directly if you want to run both.
 
-        This is meant to be mixed-in with csp.Struct's. We do not inherit from a csp.Struct
-        since csp.Struct's do not support multiple inheritance with other csp.Struct's
-
         Args:
             cls: The class this validator is attached to
             val: The value to validate
