@@ -74,7 +74,7 @@ class ExampleData(GatewayStruct):
     x: Annotated[int, AfterValidator(nonnegative_check)]
     y: str = ""
     z: str = ""
-    internal_csp_struct: ExampleCspStruct = None
+    internal_csp_struct: ExampleCspStruct = ExampleCspStruct()
     data: Numpy1DArray[float] = np.array([])
     mapping: dict[str, int] = {}
     dt: datetime = datetime.now(timezone.utc)

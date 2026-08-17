@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Annotated, Any, get_args, get_origin
 
-from pydantic import BeforeValidator
+from pydantic import BeforeValidator, PlainSerializer
 
 __all__ = ("ReadWriteMode", "coerce_basket_key", "enum_by_name")
 
@@ -15,16 +15,25 @@ class ReadWriteMode(str, Enum):
 
 
 def enum_by_name(key_type: type) -> Any:
-    """``key_type``, additionally accepting a member *name* as input.
+    """``key_type``, represented on the wire by member *name* in both directions.
 
-    Dict-basket keys are published by name over REST and websockets, so they have to be read back by
-    name. Pydantic matches an enum on its *value*, which for ``A = 1`` is the int ``1`` -- fine for a
-    str-valued enum, wrong for every other kind. Non-enum key types are returned unchanged.
+    Dict-basket keys are published by name over REST, websockets and JSON snapshots. Pydantic instead
+    matches an enum on its *value* -- fine for a str-valued enum, wrong for every other kind, and for
+    a dict key it round trips as the stringified value (``A = 1`` writes ``"1"``, which then fails to
+    validate). Non-enum key types are returned unchanged.
     """
     if not (isinstance(key_type, type) and issubclass(key_type, Enum)):
         return key_type
-    by_name = BeforeValidator(lambda v: key_type.__members__.get(v, v) if isinstance(v, str) else v)
-    return Annotated[key_type, by_name]
+
+    def _from_name(value: Any) -> Any:
+        # Fall through on a miss so a raw member value still validates the normal way.
+        return key_type.__members__.get(value, value) if isinstance(value, str) else value
+
+    return Annotated[
+        key_type,
+        BeforeValidator(_from_name),
+        PlainSerializer(lambda v: v.name if isinstance(v, Enum) else v, return_type=str),
+    ]
 
 
 def coerce_basket_key(key_type: type, key: str) -> Any:

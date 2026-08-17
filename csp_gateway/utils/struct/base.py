@@ -51,6 +51,9 @@ _WRAPPED_MARKER = "csp_gateway_validated"
 # Serialization-context key asking the timestamp serializer to keep the stored offset.
 _PRESERVE_TZ = "csp_gateway_preserve_tz"
 
+# FastAPI collects component schemas under #/components/schemas.
+_REF_TEMPLATE = "#/components/schemas/{model}"
+
 # The in-flight (force_new_id, force_new_timestamp) request. ``BaseModel.__init__`` re-enters the
 # validator without forwarding pydantic's ``context``, so a struct's fields would otherwise never see
 # the flags the caller passed to ``model_validate`` and nested ids would survive a scrub.
@@ -394,7 +397,9 @@ class GatewayPydanticMixin:
         return core_schema.with_info_wrap_validator_function(
             function=cls._validate_gateway_struct,
             schema=schema,
-            serialization=schema.get("serialization"),
+            # No explicit serialization: the wrapped model schema already carries its own, and
+            # overriding it leaves FastAPI unable to derive a response schema (every endpoint would
+            # document as a bare object).
             metadata={_WRAPPED_MARKER: True},
         )
 
@@ -517,6 +522,17 @@ class GatewayStruct(
         the author actually declared is a different thing and is always reported.
         """
         return type(self).__gateway_implicit_fields__ - self.model_fields_set
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema_, handler):
+        json_schema = handler(core_schema_)
+        # `_drop_implicitly_unset` is a wrap serializer, which leaves pydantic unable to describe the
+        # serialized shape -- it degrades to a bare object, and FastAPI then documents every endpoint
+        # that returns a struct as `additionalProperties: true`. Serializing only ever omits fields,
+        # so the validated shape describes it.
+        if handler.mode == "serialization" and "properties" not in json_schema:
+            json_schema.update(cls.model_json_schema(mode="validation", ref_template=_REF_TEMPLATE))
+        return json_schema
 
     @classmethod
     def metadata(cls, typed: bool = False) -> dict[str, Any]:

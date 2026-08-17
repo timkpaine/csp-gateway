@@ -44,12 +44,16 @@ class ChannelValueModel(BaseModel):
     timestamp: datetime
 
 
-class EncodedEngineCycle(BaseModel):
-    """This is a model representing a single engine cycle."""
+class EncodedEngineCycle(csp.Struct):
+    """A single engine cycle, as it travels over a csp adapter.
 
-    # Optional to match what csp.Struct allowed: a cycle can be built with only the encoding.
-    encoding: str = None
-    csp_timestamp: datetime = None
+    Stays a ``csp.Struct`` rather than moving to pydantic with the gateway structs: it is handed to
+    csp's Kafka adapter as a ``ts_type`` with a ``field_map``, and read back with edge field access
+    (``subscribe(...).encoding``). Both are csp.Struct-only mechanisms.
+    """
+
+    encoding: str
+    csp_timestamp: datetime
 
 
 def read_engine_encoding_json_with_duckdb(channels: ChannelsType, filename: str):

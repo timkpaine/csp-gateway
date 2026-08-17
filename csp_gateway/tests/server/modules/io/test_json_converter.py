@@ -56,6 +56,11 @@ class MyPrivateAttrStruct(MyStruct):
     _private: str = "unset"
 
 
+def _with_private(struct: MyPrivateAttrStruct, value: str) -> MyPrivateAttrStruct:
+    struct._private = value
+    return struct
+
+
 class MySelectiveSetModule(GatewayModule):
     requires: ChannelSelection | None = []
     my_data: ts[MyStruct]
@@ -313,7 +318,8 @@ def test_parse_snapshot_dict_with_private_fields():
     channel_values_list = [
         CVM(
             channel=MyPrivateAttrGatewayChannels.my_channel,
-            value=MyPrivateAttrStruct(foo=3.0, _private="howdy"),
+            # Pydantic private attributes are set after construction rather than through __init__.
+            value=_with_private(MyPrivateAttrStruct(foo=3.0), "howdy"),
             timestamp=datetime(2020, 1, 1),
         )
     ]

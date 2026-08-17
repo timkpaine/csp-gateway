@@ -479,7 +479,9 @@ def test_duckdb_states_share_single_connection():
     for i, s in enumerate(reversed(states)):
         idx = len(states) - 1 - i
         res = s.query()
-        assert res == [CspStruct(a=idx, b=f"v{idx}")]
+        # Compare the payload rather than whole structs: each construction mints its own id/timestamp,
+        # so two separately built structs are never equal.
+        assert [(r.a, r.b) for r in res] == [(idx, f"v{idx}")]
 
 
 def test_modify_and_restore_duckdb_threads():
