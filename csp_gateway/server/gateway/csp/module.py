@@ -12,6 +12,7 @@ from .channels import ChannelsType
 
 if TYPE_CHECKING:
     from csp_gateway.server import GatewaySettings, GatewayWebApp
+    from csp_gateway.server.web import GatewayUI
 
 
 class Module(BaseModel, ABC, Generic[ChannelsType]):
@@ -32,6 +33,15 @@ class Module(BaseModel, ABC, Generic[ChannelsType]):
 
     def rest(self, app: "GatewayWebApp") -> None: ...
 
+    def ui(self, app: "GatewayUI") -> None:
+        """Contribute to the spaday-based UI.
+
+        Only invoked when `Settings.UI_PROVIDER == "spaday"`, after `rest`. Modules use the
+        `GatewayUI` handle to register the main panel (e.g. a Perspective workspace) or add
+        navigation actions (links/buttons in the header). Modules that have no UI contribution
+        leave this as a no-op, exactly like `rest`.
+        """
+
     def info(self, settings: "GatewaySettings") -> str | None: ...
 
     @abstractmethod
@@ -48,8 +58,13 @@ class Module(BaseModel, ABC, Generic[ChannelsType]):
         """
 
     def dynamic_state_channels(self) -> set[str] | None:
-        """
-        The set of dynamic channels that have state.
+        """The subset of :meth:`dynamic_channels` for which this module will also call
+        :meth:`GatewayChannels.set_state` from within :meth:`connect`.
+
+        Declaring a name here lets *other* modules call :meth:`GatewayChannels.get_state`
+        on the channel from their own ``connect`` regardless of the order in which modules
+        are connected; the returned state edge is bound to the real state node once the
+        owning module's ``connect`` calls ``set_state``.
         """
 
     # @abc.abstractmethod

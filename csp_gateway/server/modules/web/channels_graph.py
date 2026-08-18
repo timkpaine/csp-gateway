@@ -1,4 +1,5 @@
 from json import dumps
+from typing import TYPE_CHECKING
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
@@ -7,6 +8,9 @@ from csp_gateway.server import GatewayChannels, GatewayModule
 
 # separate to avoid circular
 from csp_gateway.server.web import GatewayWebApp
+
+if TYPE_CHECKING:
+    from csp_gateway.server.web.spaday_ui import GatewayUI
 
 
 class MountChannelsGraph(GatewayModule):
@@ -56,3 +60,9 @@ class MountChannelsGraph(GatewayModule):
                 "channels_graph.html.j2",
                 context={"channels_graph": dumps(channels_graph)},
             )
+
+    def ui(self, app: "GatewayUI") -> None:
+        # Surface the channels-graph page as a link in the spaday settings drawer.
+        from csp_gateway.server.web.spaday_ui import Region
+
+        app.add(Region.DRAWER_RIGHT, app.link_button("Channels Graph", self.route))

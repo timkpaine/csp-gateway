@@ -56,6 +56,11 @@ class MyPrivateAttrStruct(MyStruct):
     _private: str = "unset"
 
 
+def _with_private(struct: MyPrivateAttrStruct, value: str) -> MyPrivateAttrStruct:
+    struct._private = value
+    return struct
+
+
 class MySelectiveSetModule(GatewayModule):
     requires: ChannelSelection | None = []
     my_data: ts[MyStruct]
@@ -74,9 +79,7 @@ class MySelectiveSetModule(GatewayModule):
             self.my_list_data,
         )
         channels.add_send_channel(MyGatewayChannels.my_channel)
-        channels.set_state(MyGatewayChannels.my_channel, "id")
         channels.add_send_channel(MyGatewayChannels.my_list_channel)
-        channels.set_state(MyGatewayChannels.my_list_channel, "id")
 
         if self.by_key:
             channels.set_channel(MyGatewayChannels.my_enum_basket, self.my_data, MyEnum.ONE)
@@ -315,7 +318,8 @@ def test_parse_snapshot_dict_with_private_fields():
     channel_values_list = [
         CVM(
             channel=MyPrivateAttrGatewayChannels.my_channel,
-            value=MyPrivateAttrStruct(foo=3.0, _private="howdy"),
+            # Pydantic private attributes are set after construction rather than through __init__.
+            value=_with_private(MyPrivateAttrStruct(foo=3.0), "howdy"),
             timestamp=datetime(2020, 1, 1),
         )
     ]
@@ -415,7 +419,6 @@ def test_encode_filter_channels(by_key):
         by_key=by_key,
     )
     channels = MyGatewayChannels.fields()
-    assert MyGatewayChannels.s_my_channel in channels
     assert MyGatewayChannels.my_array_channel in channels
     json_encoder = MyJsonEncoder(channels_list=channels)
     gateway = MyGateway(modules=[setter, json_encoder], channels=MyGatewayChannels())
@@ -429,7 +432,6 @@ def test_encode_filter_channels(by_key):
     assert snapshot_model.my_enum_basket[MyEnum.ONE].foo == 1.0
     assert snapshot_model.my_enum_basket[MyEnum.TWO].foo == 2.0
     assert snapshot_model.my_enum_basket_list[MyEnum.ONE] == snapshot_model.my_enum_basket_list[MyEnum.TWO]
-    assert MyGatewayChannels.s_my_channel not in type(snapshot_model).model_fields
     assert getattr(snapshot_model, _CSP_ENGINE_CYCLE_TIMESTAMP_FIELD) == datetime(2020, 1, 1)
 
 

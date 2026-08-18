@@ -21,6 +21,7 @@ from uvicorn.server import Server
 
 from csp_gateway.server.settings import Settings
 from csp_gateway.utils import (
+    enum_by_name,
     get_args,
     get_dict_basket_key_type,
     get_dict_basket_value_type,
@@ -39,10 +40,15 @@ from .routes import (
     add_next_routes,
     add_send_available_channels,
     add_send_routes,
+    add_stage_available_channels,
+    add_stage_routes,
     add_state_available_channels,
     add_state_routes,
 )
 from .static import CacheControlledStaticFiles
+
+if typing.TYPE_CHECKING:
+    from .spaday_ui import GatewayUI
 
 # from uvicorn.supervisors import Multiprocess
 
@@ -112,6 +118,16 @@ class GatewayWebApp:
         if ui:
             self.settings.UI = True
 
+        # spaday UI provider (only when the 'spaday' frontend is selected AND the UI is enabled).
+        # Modules populate this via their `ui()` hook and it is mounted at finalization. Imported
+        # here (not at module load) so the optional `spaday` dependency is only required when the
+        # spaday frontend is actually served.
+        self.ui: "GatewayUI | None" = None  # noqa: UP037
+        if self.settings.UI and self.settings.UI_PROVIDER == "spaday":
+            from .spaday_ui import GatewayUI
+
+            self.ui = GatewayUI(self, self.settings)
+
         # for logging
         self.logger = logger or getLogger(__name__)
 
@@ -133,6 +149,7 @@ class GatewayWebApp:
             "lookup": APIRouter(),
             "next": APIRouter(),
             "send": APIRouter(),
+            "stage": APIRouter(),
             "state": APIRouter(),
         }
 
@@ -364,23 +381,27 @@ class GatewayWebApp:
 
         # Add UI if present, otherwise redirect to docs
         if self.settings.UI:
+            if self.ui is not None:
+                # spaday provider: mount the spaday page (page, tree, and /js assets) at the root.
+                self.ui.mount()
+            else:
 
-            @app_router.get("/", include_in_schema=False, response_class=HTMLResponse)
-            async def serve_react_app(request: Request):
-                root_path = request.scope.get("root_path", "")
-                ui_config = self._prefixed_ui_config(root_path)
-                return self.templates.TemplateResponse(
-                    request,
-                    "index.html.j2",
-                    {
-                        "title": ui_config["title"],
-                        "description": ui_config["description"],
-                        "base_path": root_path,
-                        "ui_config": ui_config,
-                        "custom_css": ui_config["customCss"],
-                        "custom_js": ui_config["customJs"],
-                    },
-                )
+                @app_router.get("/", include_in_schema=False, response_class=HTMLResponse)
+                async def serve_react_app(request: Request):
+                    root_path = request.scope.get("root_path", "")
+                    ui_config = self._prefixed_ui_config(root_path)
+                    return self.templates.TemplateResponse(
+                        request,
+                        "index.html.j2",
+                        {
+                            "title": ui_config["title"],
+                            "description": ui_config["description"],
+                            "base_path": root_path,
+                            "ui_config": ui_config,
+                            "custom_css": ui_config["customCss"],
+                            "custom_js": ui_config["customJs"],
+                        },
+                    )
 
         else:
 
@@ -429,6 +450,12 @@ class GatewayWebApp:
             dependencies=self._middlewares,
         )
         api_router.include_router(
+            self.get_router("stage"),
+            prefix="/stage",
+            tags=["Stage"],
+            dependencies=self._middlewares,
+        )
+        api_router.include_router(
             self.get_router("state"),
             prefix="/state",
             tags=["State"],
@@ -448,7 +475,7 @@ class GatewayWebApp:
         field_type = self._get_field_type(field)
         if is_dict_basket(field_type):
             return (
-                get_dict_basket_key_type(field_type),
+                enum_by_name(get_dict_basket_key_type(field_type)),
                 get_dict_basket_value_type(field_type),
             )
         return None
@@ -531,43 +558,59 @@ class GatewayWebApp:
         add_send_available_channels(api_router=api_router, fields=fields)
 
     def add_state_api(self, field: str) -> None:
+        """Mount REST routes for the given state ``field``.
+
+        ``field`` must be a known state name on the gateway's channels — either
+        declared via ``Annotated[..., State(...)]`` or registered dynamically
+        via ``set_state`` during a module's ``connect``.
+        """
         api_router = self.get_router("state")
 
-        # Prune s_ from start
-        name_without_state = field[2:]
+        spec = self.gateway.channels._states.get(field) or self.gateway.channels_model._declared_states.get(field)
+        if spec is None:
+            raise ValueError(f"Unknown state '{field}' on {self.gateway.channels_model.__name__}")
 
-        dict_basket = self._is_dict_basket_field(field=name_without_state)
-
-        if dict_basket:
-            dict_basket_key_type, model = dict_basket
-            subroute_key = dict_basket_key_type
+        if spec.source_field is not None:
+            dict_basket = self._is_dict_basket_field(field=spec.source_field)
+            if dict_basket:
+                dict_basket_key_type, model = dict_basket
+                # If the annotation pinned an indexer, expose as a non-keyed route on that one key.
+                subroute_key = None if spec.indexer is not None else dict_basket_key_type
+            else:
+                model = self._get_field_pydantic_type(spec.source_field)
+                subroute_key = None
         else:
-            model = self._get_field_pydantic_type(name_without_state)
+            # set_state-registered: source is a raw edge with a known type.
+            state_edge = self.gateway.channels._state_edges.get((field, spec.indexer))
+            model = None
             subroute_key = None
-
-        # Look up the keyby/indexer this state was registered with (if any),
-        # so we can surface it in the route's OpenAPI description.
-        keybys = self.gateway.channels._state_keybys
-        keyby = ()
-        indexer = None
-        for (registered_field, registered_indexer), registered_keyby in keybys.items():
-            if registered_field == field:
-                keyby = registered_keyby
-                indexer = registered_indexer
-                break
+            if state_edge is not None:
+                inner = state_edge.tstype.typ
+                # Unwrap _StateManager[T] -> T for the response model
+                model = getattr(inner, "_typ", inner)
 
         add_state_routes(
             api_router=api_router,
             field=field,
             model=model,
             subroute_key=subroute_key,
-            keyby=keyby,
-            indexer=indexer,
+            keyby=tuple(spec.keyby) if spec.keyby else (),
+            indexer=spec.indexer,
         )
 
     def add_state_available_channels(self, fields: set[str] | None = None) -> None:
         api_router = self.get_router("state")
         add_state_available_channels(api_router=api_router, fields=fields)
+
+    def add_stage_api(self, field: str) -> None:
+        """Mount REST routes for staging on a channel."""
+        api_router = self.get_router("stage")
+        model = self._get_field_pydantic_type(field)
+        add_stage_routes(api_router=api_router, field=field, model=model)
+
+    def add_stage_available_channels(self, fields: set[str] | None = None) -> None:
+        api_router = self.get_router("stage")
+        add_stage_available_channels(api_router=api_router, fields=fields)
 
     def add_controls_api(self, field: str) -> None:
         api_router = self.get_router("controls")

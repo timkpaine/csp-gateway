@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from csp import Struct
+from pydantic import BaseModel
 
 from csp_gateway import GatewayStruct as Base
 from csp_gateway.utils.struct import (
@@ -61,10 +61,10 @@ def test_lookup_fails():
 
 
 def test_add_lookup_mixin_in_subclass():
-    class MyBase(Struct):
-        a: int
-        id: str
-        timestamp: datetime
+    class MyBase(BaseModel):
+        a: int = None
+        id: str = None
+        timestamp: datetime = None
 
     # Start with only Pydantic mixin (no lookup or id generator)
     class PydOnly(GatewayPydanticMixin, MyBase):
@@ -74,7 +74,7 @@ def test_add_lookup_mixin_in_subclass():
     now = datetime.now()
     p = PydOnly(a=1, id="explicit", timestamp=now)
     # TypeAdapter works without lookup mixin
-    p2 = PydOnly.type_adapter().validate_python(p.to_dict())
+    p2 = PydOnly.type_adapter().validate_python(p.model_dump(exclude_unset=True))
     assert p2.id == "explicit"
     assert p2.timestamp == now
 
@@ -92,10 +92,10 @@ def test_add_lookup_mixin_in_subclass():
 
 
 def test_lookup_toggle_isolated_across_inheritance():
-    class MyBase(Struct):
-        a: int
-        id: str
-        timestamp: datetime
+    class MyBase(BaseModel):
+        a: int = None
+        id: str = None
+        timestamp: datetime = None
 
     class Parent(GatewayLookupMixin, MyBase):
         pass
@@ -119,11 +119,11 @@ def test_lookup_toggle_isolated_across_inheritance():
 
 
 def test_lookup_only_mixin_without_fields_mixin():
-    class BaseStruct(Struct):
-        a: int
+    class BaseStruct(BaseModel):
+        a: int = None
         # No fields mixin, declare fields on class
-        id: str
-        timestamp: datetime
+        id: str = None
+        timestamp: datetime = None
 
     class LookupOnly(GatewayLookupMixin, BaseStruct):
         pass
@@ -148,15 +148,15 @@ def test_lookup_only_mixin_without_fields_mixin():
 def test_separate_lookup_registries():
     """Test that class-scoped lookup is isolated between classes."""
 
-    class StructA(Struct):
-        a: int
-        id: str
-        timestamp: datetime
+    class StructA(BaseModel):
+        a: int = None
+        id: str = None
+        timestamp: datetime = None
 
-    class StructB(Struct):
-        b: int
-        id: str
-        timestamp: datetime
+    class StructB(BaseModel):
+        b: int = None
+        id: str = None
+        timestamp: datetime = None
 
     class LookupA(GatewayLookupMixin, StructA):
         pass
@@ -197,15 +197,15 @@ def test_separate_lookup_registries():
 def test_global_lookup_function():
     """Test the global_lookup function for looking up instances by ID."""
 
-    class TestStructA(Struct):
-        a: int
-        id: str
-        timestamp: datetime
+    class TestStructA(BaseModel):
+        a: int = None
+        id: str = None
+        timestamp: datetime = None
 
-    class TestStructB(Struct):
-        b: int
-        id: str
-        timestamp: datetime
+    class TestStructB(BaseModel):
+        b: int = None
+        id: str = None
+        timestamp: datetime = None
 
     class GlobalLookupA(GatewayLookupMixin, TestStructA):
         pass
@@ -234,15 +234,15 @@ def test_global_lookup_function():
 def test_global_id_generator_shared():
     """Test that all classes share the same global ID generator."""
 
-    class SharedGenA(Struct):
-        a: int
-        id: str
-        timestamp: datetime
+    class SharedGenA(BaseModel):
+        a: int = None
+        id: str = None
+        timestamp: datetime = None
 
-    class SharedGenB(Struct):
-        b: int
-        id: str
-        timestamp: datetime
+    class SharedGenB(BaseModel):
+        b: int = None
+        id: str = None
+        timestamp: datetime = None
 
     class LookupSharedA(GatewayLookupMixin, SharedGenA):
         pass

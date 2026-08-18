@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from csp_gateway.server import ChannelSelection
-from csp_gateway.utils import NoProviderException
+from csp_gateway.utils import NoProviderException, coerce_basket_key
 
 from ..utils import get_default_responses
 from .shared import get_fully_qualified_type_name, get_next_tick, prepare_response
@@ -45,7 +45,7 @@ def add_next_routes(
             if subroute_key is str:
                 actual_key = key
             else:
-                actual_key = subroute_key(key)  # type: ignore[misc]
+                actual_key = coerce_basket_key(subroute_key, key)  # type: ignore[misc]
 
             # Throw 404 if not a supported key for channel
             if actual_key not in request.app.gateway.channels.keys_for_channel(field):  # type: ignore[union-attr]

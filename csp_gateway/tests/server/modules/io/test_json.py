@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import Annotated
 
 import csp
 import orjson
@@ -30,9 +31,8 @@ class MyStrStruct(GatewayStruct):
 
 
 class MySmallGatewayChannels(GatewayChannels):
-    example: ts[int] = None
+    example: Annotated[ts[int], State(keyby="id")] = None
     struct_with_str: ts[MyStrStruct] = None
-    s_example: ts[State[int]] = None
     my_str_basket: dict[str, ts[float]] = None
 
 

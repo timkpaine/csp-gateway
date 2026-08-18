@@ -5,19 +5,19 @@ from collections.abc import Callable
 from datetime import date, datetime
 from enum import Enum as PyEnum
 from logging import getLogger
-from typing import Any, Union, get_args, get_origin
+from typing import Annotated, Any, Optional, Union, get_args, get_origin
 
 import orjson
-from csp import Enum, Struct
-from csp.impl.enum import EnumMeta
 from csp.impl.types.container_type_normalizer import ContainerTypeNormalizer
 from numpy import ndarray
+from pydantic import BaseModel
 from typing_extensions import TypeAliasType
 
 __all__ = (
     "CustomJsonifier",
     "ExcludedColumns",
     "PerspectiveUtilityMixin",
+    "model_metadata",
     "psp_flatten",
     "psp_flatten_dict",
     "psp_flatten_list",
@@ -25,6 +25,51 @@ __all__ = (
 )
 
 log = getLogger(__name__)
+
+
+def _strip_annotated(annotation: Any) -> Any:
+    """Drop ``Annotated`` wrappers, including inside an ``Optional``.
+
+    ``GatewayStruct._relax_required_fields`` re-homes a field's constraints into ``Annotated`` so they
+    survive being made nullable. Callers of ``model_metadata`` want the plain type -- perspective,
+    duckdb and pyarrow all feed it straight into ``issubclass``.
+    """
+    while get_origin(annotation) is Annotated:
+        annotation = get_args(annotation)[0]
+    args = get_args(annotation)
+    if get_origin(annotation) in (Union, types.UnionType) and type(None) in args:
+        inner = [_strip_annotated(arg) for arg in args if arg is not type(None)]
+        if len(inner) == 1:
+            return Optional[inner[0]]  # noqa: UP045 -- inner[0] is a runtime value
+    return annotation
+
+
+def model_metadata(cls, typed: bool = False) -> dict[str, Any]:
+    """The field types of a pydantic model, in the shape csp's ``Struct.metadata`` returned.
+
+    ``typed=True`` gives the declared annotation; ``typed=False`` normalizes it the way callers
+    expect -- an optional collapses to its inner type, and a list reports as ``[element_type]``.
+    """
+    out: dict[str, Any] = {}
+    for name, field in cls.model_fields.items():
+        annotation = _strip_annotated(field.annotation)
+        if typed:
+            out[name] = annotation
+            continue
+        origin = get_origin(annotation)
+        if origin is not None and type(None) in get_args(annotation):
+            inner = [arg for arg in get_args(annotation) if arg is not type(None)]
+            annotation = inner[0] if len(inner) == 1 else annotation
+            origin = get_origin(annotation)
+        if origin in (list, set, tuple):
+            args = get_args(annotation)
+            out[name] = [args[0]] if args else origin
+        elif origin is not None:
+            out[name] = origin
+        else:
+            out[name] = annotation
+    return out
+
 
 CustomJsonifier = Callable[[Any], tuple[Any, bool]]
 
@@ -148,8 +193,8 @@ def psp_schema(cls, excluded_columns: ExcludedColumns | None = None) -> dict[str
     """
 
     # Pydantic doesn't support fields that start with underscore
-    schema = {k: v for k, v in cls.metadata(typed=False).items() if not k.startswith("_")}
-    schema_annotated = {k: v for k, v in cls.metadata(typed=True).items() if not k.startswith("_")}
+    schema = {k: v for k, v in model_metadata(cls, typed=False).items() if not k.startswith("_")}
+    schema_annotated = {k: v for k, v in model_metadata(cls, typed=True).items() if not k.startswith("_")}
     add = {}
     remove = []
 
@@ -208,7 +253,7 @@ def psp_schema(cls, excluded_columns: ExcludedColumns | None = None) -> dict[str
             continue
 
         # If its an enum, promote to str
-        if issubclass(value, (Enum, EnumMeta, PyEnum)):
+        if issubclass(value, PyEnum):
             schema[field] = str
             continue
 
@@ -236,7 +281,7 @@ def psp_schema(cls, excluded_columns: ExcludedColumns | None = None) -> dict[str
                 remove.append(field)
 
             # if its a struct, flatten
-            if issubclass(value, Struct):
+            if issubclass(value, BaseModel):
                 if hasattr(value, "psp_schema"):
                     struct_items = value.psp_schema(excluded_sub_fields).items()
                 else:
@@ -271,7 +316,7 @@ class PerspectiveUtilityMixin:
                 return obj.tolist()
             elif isinstance(obj, set):
                 return list(obj)
-            elif isinstance(obj, (PyEnum, Enum)):
+            elif isinstance(obj, PyEnum):
                 return obj.name
             elif isinstance(obj, _thread.LockType):
                 return "<Lock>"

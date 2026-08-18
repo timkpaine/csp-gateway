@@ -42,6 +42,10 @@ modules:
   mount_rest_routes:
     _target_: csp_gateway.MountRestRoutes
     force_mount_all: True
+  mount_send_form:
+    _target_: csp_gateway.MountSendForm
+  mount_staging_panel:
+    _target_: csp_gateway.MountStagingPanel
   mount_websocket_routes:
     _target_: csp_gateway.MountWebSocketRoutes
 
@@ -50,6 +54,7 @@ gateway:
   settings:
     PORT: ${port}
     UI: True
+    UI_PROVIDER: spaday
   modules:
     - /modules/example_module
     - /modules/example_module_feedback
@@ -59,6 +64,8 @@ gateway:
     - /modules/mount_outputs
     - /modules/mount_perspective_tables
     - /modules/mount_rest_routes
+    - /modules/mount_send_form
+    - /modules/mount_staging_panel
     - /modules/mount_websocket_routes
   channels:
     _target_: csp_gateway.server.demo.ExampleGatewayChannels

@@ -3,4 +3,6 @@ from .mount import MountRestRoutes
 from .mount_fields import MountFieldRestRoutes
 from .outputs import MountOutputsFolder
 from .perspective import *
+from .send_form import MountSendForm
+from .staging_panel import MountStagingPanel
 from .websocket import MountWebSocketRoutes

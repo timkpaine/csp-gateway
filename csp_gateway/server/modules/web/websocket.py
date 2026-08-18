@@ -20,7 +20,7 @@ from csp_gateway.server.web import (
     get_default_responses,
     prepare_response,
 )
-from csp_gateway.utils import is_gateway_struct_like
+from csp_gateway.utils import enum_by_name, is_gateway_struct_like
 
 log = getLogger(__name__)
 
@@ -63,7 +63,7 @@ class MountWebSocketRoutes(GatewayModule):
                 keys_for_channel = []
                 for key, edge in maybe_edge.items():
                     if type_adapter is None:
-                        type_adapter = TypeAdapter(key.__class__)
+                        type_adapter = TypeAdapter(enum_by_name(key.__class__))
                     edges_and_keys.append((key, edge))
                     keys_for_channel.append(key)
                 self._dict_basket_keys_and_type_adapter[field] = (type_adapter, keys_for_channel)

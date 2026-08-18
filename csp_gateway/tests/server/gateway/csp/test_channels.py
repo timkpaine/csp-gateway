@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import get_type_hints
+from typing import Annotated, get_type_hints
 
 import csp
 import numpy as np
@@ -58,10 +58,8 @@ class MyGatewayChannels(GatewayChannels):
     my_static: float = 0.0
     my_static_dict: dict[str, float] = {}
     my_static_list: list[str] = []
-    my_channel: ts[MyStruct] = None
-    s_my_channel: ts[State[MyStruct]] = None
-    my_list_channel: ts[list[MyStruct]] = None
-    s_my_list_channel: ts[State[MyStruct]] = None
+    my_channel: Annotated[ts[MyStruct], State(keyby="id")] = None
+    my_list_channel: Annotated[ts[list[MyStruct]], State(keyby="id")] = None
     my_enum_basket: dict[MyEnum, ts[MyStruct]] = None
     my_str_basket: dict[str, ts[MyStruct]] = None
     my_enum_basket_list: dict[MyEnum, ts[list[MyStruct]]] = None

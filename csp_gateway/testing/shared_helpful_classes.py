@@ -1,8 +1,10 @@
 from datetime import timedelta
+from enum import Enum
+from typing import Annotated
 
 import csp
 import numpy as np
-from csp import Enum, ts
+from csp import ts
 from csp.typing import Numpy1DArray
 
 from csp_gateway import (
@@ -46,10 +48,8 @@ class MyGatewayChannels(GatewayChannels):
     my_static: float = 0.0
     my_static_dict: dict[str, float] = {}
     my_static_list: list[str] = []
-    my_channel: ts[MyStruct] = None
-    s_my_channel: ts[State[MyStruct]] = None
-    my_list_channel: ts[list[MyStruct]] = None
-    s_my_list_channel: ts[State[MyStruct]] = None
+    my_channel: Annotated[ts[MyStruct], State(keyby="id")] = None
+    my_list_channel: Annotated[ts[list[MyStruct]], State(keyby="id")] = None
     my_enum_basket: dict[MyEnum, ts[MyStruct]] = None
     my_str_basket: dict[str, ts[MyStruct]] = None
     my_enum_basket_list: dict[MyEnum, ts[list[MyStruct]]] = None
@@ -57,8 +57,7 @@ class MyGatewayChannels(GatewayChannels):
 
 
 class MySmallGatewayChannels(GatewayChannels):
-    example: ts[int] = None
-    s_example: ts[State[int]] = None
+    example: Annotated[ts[int], State(keyby="id")] = None
     my_str_basket: dict[str, ts[float]] = None
 
 
@@ -87,9 +86,7 @@ class MySetModule(GatewayModule):
             self.my_list_data,
         )
         channels.add_send_channel(MyGatewayChannels.my_channel)
-        channels.set_state(MyGatewayChannels.my_channel, "id")
         channels.add_send_channel(MyGatewayChannels.my_list_channel)
-        channels.set_state(MyGatewayChannels.my_list_channel, "id")
 
         channels.set_channel(MyGatewayChannels.my_array_channel, csp.const(np.array([1.0, 2.0])))
 
@@ -179,7 +176,6 @@ class MyExampleModule(GatewayModule):
             self.subscribe(csp.timer(interval=self.interval, value=True)),
         )
         channels.add_send_channel(MySmallGatewayChannels.example)
-        channels.set_state(MySmallGatewayChannels.example, "id")
 
 
 class MyDictBasketModule(GatewayModule):

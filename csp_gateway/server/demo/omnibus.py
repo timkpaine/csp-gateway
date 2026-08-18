@@ -6,6 +6,7 @@ and those tests in turn ensure that this demo works.
 """
 
 from datetime import date, datetime, timedelta, timezone
+from enum import Enum
 from logging import INFO, basicConfig
 from pathlib import Path
 from random import choice
@@ -14,10 +15,10 @@ from typing import Annotated
 
 import csp
 import numpy as np
-from csp import Enum, ts
+from csp import ts
 from csp.typing import Numpy1DArray
 from perspective import Server as PerspectiveServer, Table as PerspectiveTable
-from pydantic import AfterValidator, Field, field_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator
 
 from csp_gateway import (
     Controls,
@@ -25,14 +26,14 @@ from csp_gateway import (
     GatewayChannels,
     GatewayModule,
     GatewaySettings,
-    GatewayStructMixins,
-    IdType,
+    GatewayStruct,
     MountChannelsGraph,
     MountControls,
     MountOutputsFolder,
     MountPerspectiveTables,
     MountRestRoutes,
     MountWebSocketRoutes,
+    Stage,
     State,
 )
 from csp_gateway.server.config import load_gateway
@@ -44,7 +45,7 @@ SCALE = 10
 
 # First, we want to define the edges that will be available to our modules.
 # In `csp-gateway` dialect, these deferred edges are called `channels`.
-# Let's define a few `csp` `Struct` and `Enum` to go with them.
+# Let's define a few `GatewayStruct` and `Enum` to go with them.
 
 # NOTE: See below for the entry point to run this example
 
@@ -59,7 +60,7 @@ __all__ = (
 )
 
 
-class ExampleCspStruct(csp.Struct):
+class ExampleCspStruct(BaseModel):
     z: int = 12
 
 
@@ -69,7 +70,7 @@ def nonnegative_check(v):
     return v
 
 
-class ExampleDataBase(csp.Struct):
+class ExampleData(GatewayStruct):
     x: Annotated[int, AfterValidator(nonnegative_check)]
     y: str = ""
     z: str = ""
@@ -82,14 +83,6 @@ class ExampleDataBase(csp.Struct):
     @classmethod
     def __get_validator_dict__(cls):
         return {"_validate_example": field_validator("x", mode="after")(nonnegative_check)}
-
-
-# We can just add in the mixins to make an existing csp.Struct
-# csp-gateway compatible, but we also could have defined
-# ExampleDataBase to inherit from GatewayStruct directly
-class ExampleData(*GatewayStructMixins, ExampleDataBase):
-    id: IdType
-    timestamp: datetime
 
 
 class ExampleEnum(Enum):
@@ -114,10 +107,20 @@ class ExampleGatewayChannels(GatewayChannels):
     example_list: ts[list[ExampleData]] = None
     never_ticks: ts[ExampleData] = None
 
-    s_example: ts[State[ExampleData]] = None
+    # State fields can be added via annotation or the `set_state` API in the module's `connect` method
+    example_with_state: Annotated[ts[ExampleData], State(("id", "x"))] = None
+    example_with_state_multiple: Annotated[
+        ts[ExampleData],
+        State(("id", "x")),
+        State(("id", "y"), alias="example_with_state_alternative"),
+    ] = None
+    # example: Set in connect with a different schema, to show flexibility of state definition
 
     basket: dict[ExampleEnum, ts[ExampleData]] = None
     str_basket: dict[str, ts[ExampleData]] = None
+
+    # Staging can be added via annotation or the `set_stage` API in the module's `connect` method
+    example_with_stage: Annotated[ts[ExampleData], Stage()] = None
 
     # FIXME
     # basket_list: Dict[ExampleEnum, ts[[ExampleData]]] = None
@@ -178,6 +181,9 @@ class ExampleModule(GatewayModule):
         # Channels set via `set_channel`
         channels.set_channel(ExampleGatewayChannels.example, data)
         channels.set_channel(ExampleGatewayChannels.example_list, data_list)
+        channels.set_channel(ExampleGatewayChannels.example_with_state, data)
+        channels.set_channel(ExampleGatewayChannels.example_with_state_multiple, data)
+        channels.set_channel(ExampleGatewayChannels.example_with_stage, data)
 
         # Generic channel for sending data from non-csp sources
         channels.add_send_channel(ExampleGatewayChannels.example)
@@ -186,8 +192,14 @@ class ExampleModule(GatewayModule):
         channels.add_send_channel(ExampleGatewayChannels.basket, ExampleEnum.C)
         channels.add_send_channel(ExampleGatewayChannels.basket)
 
-        # Rudimentary state accumulation via `set_state`
-        channels.set_state(ExampleGatewayChannels.example, "id")
+        # State accumulation via `set_state`
+        channels.set_state(
+            ExampleGatewayChannels.example,
+            ("id",),
+        )
+
+        # Staging via `set_stage` — enables stage_add/remove/release/list/lookup APIs
+        channels.set_stage(ExampleGatewayChannels.example)
 
         # Create some data streams for dict baskets
         data_a = self.subscribe(

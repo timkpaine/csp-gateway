@@ -111,6 +111,14 @@ client = [
     "packaging",
     "pydantic>=2",
 ]
+spaday = [
+    # Optional spaday-based frontend provider (Settings.UI_PROVIDER = "spaday")
+    # 0.5 splits the component libraries into their own distributions and adds the `Each` repeater the
+    # staging panel renders with.
+    "spaday>=0.5.0",
+    "spaday-perspective>=0.1.0",
+    "spaday-webawesome>=0.1.0",
+]
 
 [project.scripts]
 cspgateway-start = "csp_gateway.server.cli:main"
@@ -231,6 +239,11 @@ ignore = [
     # csp Structs copy mutable class-level defaults per instance, and pydantic deep-copies field
     # defaults, so mutable-class-default (RUF012) is a false positive throughout this codebase.
     "RUF012",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Body",
 ]
 
 [tool.ruff.lint.isort]

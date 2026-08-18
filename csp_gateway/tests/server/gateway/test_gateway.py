@@ -3,14 +3,15 @@ import multiprocessing
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from enum import Enum
 from io import StringIO
-from typing import Any
+from typing import Annotated, Any
 
 import csp
 import numpy as np
 import pytest
 from ccflow import ModelRegistry
-from csp import Enum, ts
+from csp import ts
 from csp.typing import Numpy1DArray
 from omegaconf import OmegaConf
 from pydantic import Field, ValidationError
@@ -51,10 +52,8 @@ class MyGatewayChannels(GatewayChannels):
     my_static_dict: dict[str, float] = {}
     my_static_list: list[str] = []
     my_static_dict_of_objects: dict[str, Any] = {}
-    my_channel: ts[MyStruct] = None
-    s_my_channel: ts[State[MyStruct]] = None
-    my_list_channel: ts[list[MyStruct]] = None
-    s_my_list_channel: ts[State[MyStruct]] = None
+    my_channel: Annotated[ts[MyStruct], State(keyby="id")] = None
+    my_list_channel: Annotated[ts[list[MyStruct]], State(keyby="id")] = None
     my_enum_basket: dict[MyEnum, ts[MyStruct]] = None
     my_str_basket: dict[str, ts[MyStruct]] = None
     my_enum_basket_list: dict[MyEnum, ts[list[MyStruct]]] = None
@@ -85,9 +84,7 @@ class MySetModule(GatewayModule):
             self.my_list_data,
         )
         channels.add_send_channel(MyGatewayChannels.my_channel)
-        channels.set_state(MyGatewayChannels.my_channel, "id")
         channels.add_send_channel(MyGatewayChannels.my_list_channel)
-        channels.set_state(MyGatewayChannels.my_list_channel, "id")
 
         channels.set_channel(MyGatewayChannels.my_array_channel, csp.const(np.array([1.0, 2.0])))
 
@@ -767,14 +764,10 @@ class MySetModuleDynamicChannels(GatewayModule):
         return {self.scalar_channel_name, self.list_channel_name}
 
     def connect(self, channels: MyGatewayChannels) -> None:
-        channels.set_channel(
-            self.scalar_channel_name,
-            csp.const(MyStruct(foo=1.0)),
-        )
-        channels.set_channel(
-            self.list_channel_name,
-            csp.const([MyStruct(foo=2.0), MyStruct(foo=3.0)]),
-        )
+        scalar_edge = csp.const(MyStruct(foo=1.0))
+        list_edge = csp.const([MyStruct(foo=2.0), MyStruct(foo=3.0)])
+        channels.set_channel(self.scalar_channel_name, scalar_edge)
+        channels.set_channel(self.list_channel_name, list_edge)
         channels.set_state(self.scalar_channel_name, keyby="id")
         channels.set_state(self.list_channel_name, keyby="id")
         if self.connect_channels_assertion:
@@ -796,11 +789,11 @@ class MyGetModuleDynamicChannels(GatewayModule):
         )
         csp.add_graph_output(
             f"s_{self.scalar_channel_name}",
-            channels.get_channel(f"s_{self.scalar_channel_name}"),
+            channels.get_state(self.scalar_channel_name),
         )
         csp.add_graph_output(
             f"s_{self.list_channel_name}",
-            channels.get_channel(f"s_{self.list_channel_name}"),
+            channels.get_state(self.list_channel_name),
         )
 
 
@@ -872,6 +865,34 @@ def test_conflicting_dynamic_channels():
     )
     with pytest.raises(ValueError, match="Conflicting types for"):
         csp.build_graph(MyGateway(modules=[setter_1, setter_2], channels=MyGatewayChannels()).graph)
+
+
+@pytest.mark.parametrize("module_order", ["setter_first", "getter_first"])
+def test_dynamic_channels_state_module_order_independence(module_order):
+    """Cross-module get_state/set_state must work regardless of connect() order.
+
+    The setter module declares a dynamic channel and registers state on it from
+    inside connect(). The getter module calls get_state() on that name from
+    inside its own connect(). Whichever module's connect() runs first, the
+    getter must end up wired to the real state edge via DelayedEdge binding.
+    """
+    setter = MySetModuleDynamicChannels(
+        scalar_channel_name="my_dynamic_scalar_channel",
+        list_channel_name="my_dynamic_list_channel",
+    )
+    getter = MyGetModuleDynamicChannels(
+        scalar_channel_name="my_dynamic_scalar_channel",
+        list_channel_name="my_dynamic_list_channel",
+    )
+    modules = [setter, getter] if module_order == "setter_first" else [getter, setter]
+    gateway = MyGateway(modules=modules, channels=MyGatewayChannels())
+
+    out = csp.run(gateway.graph, starttime=datetime(2020, 1, 1), endtime=timedelta(1))
+    assert len(out["my_dynamic_scalar_channel"]) == 1
+    assert out["my_dynamic_scalar_channel"][0][1].foo == 1.0
+    assert len(out["my_dynamic_list_channel"]) == 1
+    assert len(out["s_my_dynamic_scalar_channel"]) == 1
+    assert len(out["s_my_dynamic_list_channel"]) == 2
 
 
 def test_dynamic_channels_same_static_properties():
@@ -991,9 +1012,7 @@ def test_gateway_channels_fields_classmethod():
         "my_static_list",
         "my_static_dict_of_objects",
         "my_channel",
-        "s_my_channel",
         "my_list_channel",
-        "s_my_list_channel",
         "my_enum_basket",
         "my_str_basket",
         "my_enum_basket_list",

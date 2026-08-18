@@ -7,14 +7,13 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 from socket import gethostname
 from time import sleep
-from typing import Any, get_args, get_origin
+from typing import Any
 
 import csp
 from csp import ts
 from csp.impl.wiring import MAX_END_TIME as CSP_MAX_END_TIME
 from pydantic import Field, PrivateAttr, create_model, model_validator
 
-from csp_gateway.server.gateway import State
 from csp_gateway.server.settings import Settings
 from csp_gateway.utils import GatewayException
 
@@ -115,18 +114,12 @@ class Gateway(ChannelsFactory[GatewayChannels]):
         for m in modules:
             module_dynamic_channels = m.dynamic_channels() if hasattr(m, "dynamic_channels") else None
             if module_dynamic_channels:
-                channels_with_state = m.dynamic_state_channels() if hasattr(m, "dynamic_state_channels") else None
                 for n, t in module_dynamic_channels.items():
                     existing_type = dynamic_channels.get(n, None)
                     if existing_type is not None and t is not existing_type:
                         raise ValueError(f"Conflicting types for dynamic channel {n}.")
 
                     dynamic_channels[n] = t
-                    if channels_with_state and n in channels_with_state:
-                        if get_origin(t) is list:
-                            t = get_args(t)[0]
-
-                        dynamic_channels[f"s_{n}"] = State[t]
 
         if dynamic_channels:
             dynamic_channel_kwargs = {n: (ts[t], None) for n, t in dynamic_channels.items()}
@@ -422,6 +415,9 @@ class Gateway(ChannelsFactory[GatewayChannels]):
         for module in self.modules:
             if not module.disable:
                 module.rest(web_app)
+                # When the spaday UI provider is active, let modules contribute to the UI too.
+                if web_app.ui is not None:
+                    module.ui(web_app.ui)
 
         web_app._finalize()
 
