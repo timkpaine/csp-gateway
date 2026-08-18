@@ -6,6 +6,7 @@ and those tests in turn ensure that this demo works.
 """
 
 from datetime import date, datetime, timedelta, timezone
+from enum import Enum
 from logging import INFO, basicConfig
 from pathlib import Path
 from random import choice
@@ -14,10 +15,10 @@ from typing import Annotated
 
 import csp
 import numpy as np
-from csp import Enum, ts
+from csp import ts
 from csp.typing import Numpy1DArray
 from perspective import Server as PerspectiveServer, Table as PerspectiveTable
-from pydantic import AfterValidator, Field, field_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator
 
 from csp_gateway import (
     Controls,
@@ -25,8 +26,7 @@ from csp_gateway import (
     GatewayChannels,
     GatewayModule,
     GatewaySettings,
-    GatewayStructMixins,
-    IdType,
+    GatewayStruct,
     MountChannelsGraph,
     MountControls,
     MountOutputsFolder,
@@ -45,7 +45,7 @@ SCALE = 10
 
 # First, we want to define the edges that will be available to our modules.
 # In `csp-gateway` dialect, these deferred edges are called `channels`.
-# Let's define a few `csp` `Struct` and `Enum` to go with them.
+# Let's define a few `GatewayStruct` and `Enum` to go with them.
 
 # NOTE: See below for the entry point to run this example
 
@@ -60,7 +60,7 @@ __all__ = (
 )
 
 
-class ExampleCspStruct(csp.Struct):
+class ExampleCspStruct(BaseModel):
     z: int = 12
 
 
@@ -70,7 +70,7 @@ def nonnegative_check(v):
     return v
 
 
-class ExampleDataBase(csp.Struct):
+class ExampleData(GatewayStruct):
     x: Annotated[int, AfterValidator(nonnegative_check)]
     y: str = ""
     z: str = ""
@@ -83,14 +83,6 @@ class ExampleDataBase(csp.Struct):
     @classmethod
     def __get_validator_dict__(cls):
         return {"_validate_example": field_validator("x", mode="after")(nonnegative_check)}
-
-
-# We can just add in the mixins to make an existing csp.Struct
-# csp-gateway compatible, but we also could have defined
-# ExampleDataBase to inherit from GatewayStruct directly
-class ExampleData(*GatewayStructMixins, ExampleDataBase):
-    id: IdType
-    timestamp: datetime
 
 
 class ExampleEnum(Enum):

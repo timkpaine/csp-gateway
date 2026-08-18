@@ -1,9 +1,10 @@
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from unittest import mock
 
 import csp
 import datadog
-from csp import Enum, ts
+from csp import ts
 
 from csp_gateway.server.gateway import Gateway, GatewayChannels, GatewayModule
 from csp_gateway.server.modules.logging.datadog import PublishDatadog
@@ -14,9 +15,9 @@ from csp_gateway.server.modules.logging.util import (
 from csp_gateway.testing import GatewayTestHarness
 
 
-class DatadogTestEnum(Enum):
-    GOOD = Enum.auto()
-    BAD = Enum.auto()
+class DatadogTestEnum(str, Enum):
+    GOOD = "GOOD"
+    BAD = "BAD"
 
 
 class DatadogTestChannels(GatewayChannels):

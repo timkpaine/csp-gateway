@@ -2,6 +2,7 @@ import logging
 from abc import abstractmethod
 from datetime import timezone
 from enum import Enum
+from typing import ClassVar
 
 import orjson
 from pydantic import BaseModel
@@ -61,20 +62,6 @@ class MonitoringBase(GatewayStruct):
 
     tags: dict[str, str] = {}
     tag_str: str = ""
-
-    def __init__(self, **kwargs):
-        # We add override __init__ here since csp does not currently
-        # provide type validation for dict typing so we
-        # perform it here manually using csp's internal typing
-        # validation
-        super().__init__(**kwargs)
-        obj_type = self.__class__
-        # based on from csp
-        for field, value in kwargs.items():
-            expected_type = obj_type.__full_metadata_typed__.get(field, None)
-            if expected_type is None:
-                raise KeyError(f"Unexpected field `{field}` for type {obj_type}")
-            setattr(self, field, obj_type._obj_from_python(value, expected_type))
 
     def get_tags(self, extra_tags: dict[str, str] | None = None) -> list[str]:
         """
@@ -175,10 +162,11 @@ class MonitoringEvent(MonitoringBase):
         source (str): Source type of the event.
     """
 
-    DEFAULT_SOURCE = "python"
+    # Annotated as ClassVar so pydantic treats these as constants rather than model fields.
+    DEFAULT_SOURCE: ClassVar[str] = "python"
 
     # leave for backward compatibility
-    AlertType = DatadogLevel
+    AlertType: ClassVar[type] = DatadogLevel
 
     title: str
     text: str

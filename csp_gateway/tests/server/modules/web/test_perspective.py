@@ -1,14 +1,15 @@
 from datetime import date, datetime, timedelta, timezone
+from enum import Enum, auto
 from unittest.mock import MagicMock
 
 import csp
 import numpy as np
 import polars as pl
 import pytest
-from csp import Enum, ts
+from csp import ts
 from csp.typing import Numpy1DArray
 from perspective import Server
-from pydantic import Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from csp_gateway import (
     Gateway,
@@ -20,13 +21,16 @@ from csp_gateway import (
     psp_schema_to_arrow_schema,
 )
 from csp_gateway.testing.harness import GatewayTestHarness
-from csp_gateway.utils.struct import GatewayStructMixins
 
 
 class MyTestEnum(Enum):
-    a = Enum.auto()
-    b = Enum.auto()
-    c = Enum.auto()
+    a = auto()
+    b = auto()
+    c = auto()
+
+    def __lt__(self, other):
+        # so csp doesn't complain about memoization
+        return self.value < other.value
 
 
 class MyTestSubStruct(GatewayStruct):
@@ -88,16 +92,12 @@ class GWCUnused(GatewayChannels):
 
 def test_inherited_container_annotation_schema():
     # Base declares container field
-    from csp import Struct
-
-    class BaseStruct(Struct):
-        arr: list[int]
+    class BaseModelWithContainer(BaseModel):
+        arr: list[int] = None
 
     # Child has no own annotations for arr; relies on inherited annotation
-    class ChildStruct(*GatewayStructMixins, BaseStruct):
-        # explicit id/timestamp, like typical mixin usage
-        id: str
-        timestamp: datetime
+    class ChildStruct(GatewayStruct, BaseModelWithContainer):
+        pass
 
     schema = ChildStruct.psp_schema()
     # Ensure container element type is preserved as int, not str
@@ -105,16 +105,15 @@ def test_inherited_container_annotation_schema():
 
 
 def test_inherited_ndarray_annotation_schema():
-    from csp import Struct
-
     # Base declares numpy array field with element type
-    class BaseStruct(Struct):
+    class BaseModelWithArray(BaseModel):
+        model_config = ConfigDict(arbitrary_types_allowed=True)
+
         arr_nd: Numpy1DArray[float] = np.array([1.0]).view(Numpy1DArray)
 
     # Child inherits without redeclaring annotation
-    class ChildStruct(*GatewayStructMixins, BaseStruct):
-        id: str
-        timestamp: datetime
+    class ChildStruct(GatewayStruct, BaseModelWithArray):
+        pass
 
     schema = ChildStruct.psp_schema()
     # Ensure ndarray element type is preserved as float, not str

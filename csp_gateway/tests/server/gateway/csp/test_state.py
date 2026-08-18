@@ -1,13 +1,14 @@
 import time
 import typing
 from datetime import datetime, timedelta
+from enum import Enum
 
 import pytest
-from csp import Enum, Struct
 
 from csp_gateway import (
     Filter,
     FilterCondition,
+    GatewayStruct,
     Query,
     State,
     StateType,
@@ -25,7 +26,7 @@ class MyEnum(Enum):
     C = 3
 
 
-class CspSubStruct(Struct):
+class CspSubStruct(GatewayStruct):
     suba: int = 1
     subb: str = "b"
     subc: datetime = datetime.now()
@@ -48,7 +49,7 @@ class NonCspStruct:
             setattr(self, k, v)
 
 
-class CspStruct(Struct):
+class CspStruct(GatewayStruct):
     a: int = 0
     b: str
     c: datetime = datetime.now()
@@ -65,19 +66,19 @@ _STATES = [StateType.DUCKDB, StateType.DEFAULT]
 _STRUCTS = [CspStruct, NonCspStruct]
 
 
-class DeepLeaf(Struct):
+class DeepLeaf(GatewayStruct):
     x: int = 0
     y: str = "y"
     unset_leaf: str  # intentionally left unset by default
 
 
-class DeepMid(Struct):
+class DeepMid(GatewayStruct):
     leaf: DeepLeaf = DeepLeaf()
     mid_val: int = 0
     unset_mid: DeepLeaf  # intentionally unset nested struct
 
 
-class DeepRoot(Struct):
+class DeepRoot(GatewayStruct):
     mid: DeepMid = DeepMid()
     root_val: int = 0
     unset_root: DeepMid  # intentionally unset nested struct
@@ -478,7 +479,9 @@ def test_duckdb_states_share_single_connection():
     for i, s in enumerate(reversed(states)):
         idx = len(states) - 1 - i
         res = s.query()
-        assert res == [CspStruct(a=idx, b=f"v{idx}")]
+        # Compare the payload rather than whole structs: each construction mints its own id/timestamp,
+        # so two separately built structs are never equal.
+        assert [(r.a, r.b) for r in res] == [(idx, f"v{idx}")]
 
 
 def test_modify_and_restore_duckdb_threads():
@@ -568,7 +571,7 @@ def test_duckdb_threads_spawn_expected_os_threads():
         restore_duckdb_threads()
 
 
-class _OptStruct(Struct):
+class _OptStruct(GatewayStruct):
     a: int | None = None
     b: int | None = None
     c: int = 0

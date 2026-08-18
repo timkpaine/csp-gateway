@@ -19,10 +19,11 @@ import numpy
 import orjson
 from atomic_counter import Counter
 from ccflow.enums import BaseEnum as CoreBaseEnum, Enum as CoreEnum
-from csp import Struct, ts
-from csp.impl.enum import EnumMeta as CspEnumMeta
+from csp import ts
 from pydantic import BaseModel
 from typing_extensions import override
+
+from csp_gateway.utils.struct.psp import model_metadata
 
 if typing.TYPE_CHECKING:
     from csp_gateway.utils import Query
@@ -252,7 +253,7 @@ class DuckDBState:
     # table for each instance of the DuckDBState class for any particular type
     TABLE_ID = Counter(1)
 
-    def __init__(self, typ: Struct, keyby: tuple[str, ...] | str, schema: dict[str, str] | None = None) -> None:
+    def __init__(self, typ: type[BaseModel], keyby: tuple[str, ...] | str, schema: dict[str, str] | None = None) -> None:
         super().__init__()
         if schema is None:
             schema = {}
@@ -463,7 +464,7 @@ class DuckDBState:
         yield from buf
 
     @override
-    def insert(self, record: Struct) -> None:
+    def insert(self, record: BaseModel) -> None:
         """Insert new record into the table
 
         Create a new entry for the record in the table using the schema for the record type,
@@ -517,7 +518,7 @@ def _remove_optional(cls: Any) -> tuple[Any, bool]:
 def get_duckdb_schema_obj(parent: Any, key: Any, cls: Any) -> tuple[Any, bool]:
     """Create a schema for the passed type object"""
 
-    annotation = parent.__full_metadata_typed__[key]
+    annotation = model_metadata(parent, typed=True)[key]
     annotation, removed = _remove_optional(annotation)
     if removed:
         cls = annotation
@@ -531,7 +532,7 @@ def get_duckdb_schema_obj(parent: Any, key: Any, cls: Any) -> tuple[Any, bool]:
         else:
             return (cls, False)
 
-    if issubclass(cls, Struct):
+    if issubclass(cls, BaseModel):
         # Recursive handling
         return get_duckdb_schema_struct(cls)
 
@@ -562,7 +563,7 @@ def get_duckdb_schema_obj(parent: Any, key: Any, cls: Any) -> tuple[Any, bool]:
         #  except (KeyError, IndexError):
         #      log.warning(f"Cannot handle dict schema in DuckDB {parent}[{key}]{cls}")
         cls = str
-    elif issubclass(cls, (csp.Enum, CoreBaseEnum, CspEnumMeta, PyEnum)):
+    elif issubclass(cls, (CoreBaseEnum, PyEnum)):
         # Enums become strings
         cls = str
     elif issubclass(cls, datetime.datetime):
@@ -583,11 +584,11 @@ def get_duckdb_schema_obj(parent: Any, key: Any, cls: Any) -> tuple[Any, bool]:
         return (cls, False)
 
 
-def get_duckdb_schema_struct(cls: Struct) -> tuple[dict, bool]:
+def get_duckdb_schema_struct(cls: type[BaseModel]) -> tuple[dict, bool]:
     """Create a partial schema for the struct consisting of parts that can be json_serialized and
     stored in duckdb"""
 
-    orig_type_info = {k: v for k, v in cls.metadata().items() if not k.startswith("_")}
+    orig_type_info = {k: v for k, v in model_metadata(cls).items() if not k.startswith("_")}
     new_type_info = {}
     use_duckdb = False
 
@@ -653,7 +654,7 @@ class _StateManager(BaseState, State):
         if typ is None:
             raise TypeError("_StateManager must be parameterized with a type: _StateManager[MyStruct](keyby=...)")
 
-        if _USE_DUCKDB_STATE and isinstance(typ, type) and issubclass(typ, Struct):
+        if _USE_DUCKDB_STATE and isinstance(typ, type) and issubclass(typ, BaseModel):
             schema, use_duckdb = get_duckdb_schema_struct(typ)
             if use_duckdb:
                 self._state_impl = DuckDBState(typ, keyby, schema)
