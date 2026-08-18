@@ -44,16 +44,15 @@ class ChannelValueModel(BaseModel):
     timestamp: datetime
 
 
-class EncodedEngineCycle(csp.Struct):
-    """A single engine cycle, as it travels over a csp adapter.
+class EncodedEngineCycle(PydanticBaseModel):
+    """A serialized engine cycle, plus the engine time it was produced at.
 
-    Stays a ``csp.Struct`` rather than moving to pydantic with the gateway structs: it is handed to
-    csp's Kafka adapter as a ``ts_type`` with a ``field_map``, and read back with edge field access
-    (``subscribe(...).encoding``). Both are csp.Struct-only mechanisms.
+    Plain pydantic rather than ccflow's `BaseModel`: this goes on the wire, and a ``type_``
+    discriminator would change the encoding Kafka and the replay files carry.
     """
 
-    encoding: str
-    csp_timestamp: datetime
+    encoding: str | None = None
+    csp_timestamp: datetime | None = None
 
 
 def read_engine_encoding_json_with_duckdb(channels: ChannelsType, filename: str):
