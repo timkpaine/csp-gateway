@@ -9,7 +9,6 @@ import pytest
 from csp_gateway import ReadWriteMode, State
 from csp_gateway.server import (
     ChannelSelection,
-    EncodedEngineCycle,
     Mirror,
     ReplayEngineJSON,
 )
@@ -41,7 +40,7 @@ def test_kafka_engine_replay_read_and_write_read(mock_object, read_write_mode):
     mock_publish = mock.MagicMock()
 
     def mock_subscribe(*a, **kw):
-        return csp.null_ts(EncodedEngineCycle)
+        return csp.null_ts(str)
 
     mock_object.return_value.subscribe.side_effect = mock_subscribe
     mock_object.return_value.publish = mock_publish

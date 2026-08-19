@@ -15,7 +15,6 @@ from pydantic import ValidationError
 from csp_gateway import (
     AddChannelsToGraphOutput,
     ChannelSelection,
-    EncodedEngineCycle,
     GatewayStruct,
     KafkaChannelProcessor,
     KafkaConfiguration,
@@ -23,6 +22,7 @@ from csp_gateway import (
     ReadWriteMode,
     ReplayEngineKafka,
 )
+from csp_gateway.server.modules.kafka.kafka import _ENVELOPE_TIMESTAMP_FIELD, _decode_envelope
 from csp_gateway.testing.shared_helpful_classes import (
     MyGateway,
     MyGatewayChannels,
@@ -95,6 +95,29 @@ def test_subscribe_with_csp_engine_timestamp_only_if_encoding_expected():
         ReadWriteKafka(config=config, encoding_with_engine_timestamps=False, subscribe_with_csp_engine_timestamp=True)
 
 
+def _adapter_payload(subscribe_kwargs, encoding):
+    """Build what csp's Kafka adapter would hand back for the requested ``ts_type``.
+
+    The raw path yields the message text straight through; the engine-timestamp path yields the
+    envelope struct csp parsed it into.
+    """
+    ts_type = subscribe_kwargs["ts_type"]
+    if ts_type is str:
+        return encoding
+    return ts_type(encoding=encoding)
+
+
+def _published_encodings(printed):
+    """The encodings out of captured ``val_check`` lines, unwrapping the envelope when present."""
+    encodings = []
+    for line in printed.splitlines():
+        _, _, message = line.partition("val_check:")
+        if not message:
+            continue
+        encodings.append(_decode_envelope(message).encoding if _ENVELOPE_TIMESTAMP_FIELD in message else message)
+    return "".join(encodings)
+
+
 @mock.patch("csp.adapters.kafka.KafkaAdapterManager", autospec=True)
 @pytest.mark.parametrize("by_key", [True, False])
 def test_kafka_engine_replay_write(mock_object, by_key):
@@ -144,7 +167,7 @@ def test_kafka_engine_replay_read_and_write_read(mock_object, read_write_mode):
     mock_publish = mock.MagicMock()
 
     def mock_subscribe(*a, **kw):
-        return csp.null_ts(EncodedEngineCycle)
+        return csp.null_ts(kw["ts_type"])
 
     mock_object.return_value.subscribe.side_effect = mock_subscribe
     mock_object.return_value.publish = mock_publish
@@ -179,7 +202,7 @@ def test_kafka_read_write_fails_with_dict_basket(mock_object):
     mock_publish = mock.MagicMock()
 
     def mock_subscribe(*a, **kw):
-        return csp.null_ts(EncodedEngineCycle)
+        return csp.null_ts(kw["ts_type"])
 
     mock_object.return_value.subscribe.side_effect = mock_subscribe
     mock_object.return_value.publish = mock_publish
@@ -220,16 +243,14 @@ def test_kafka_read_write_read(mock_object, encoding_with_engine_timestamps, cap
         if kw["topic"] == "kafka_topic1" and kw["key"] == "kafka_key2":
             # If Kafka publishes to this key on this topic, we capture it
             # with a print statement.
-            if encoding_with_engine_timestamps:
-                csp.print("val_check", kw["x"].encoding)
-            else:
-                csp.print("val_check", kw["x"])
+            # Published messages are raw text on both paths now.
+            csp.print("val_check", kw["x"])
 
     mock_publish = mock.MagicMock(side_effect=mock_publish_action)
     # mock_publish = mock.MagicMock()
 
     def mock_subscribe(*a, **kw):
-        return csp.null_ts(EncodedEngineCycle)
+        return csp.null_ts(kw["ts_type"])
 
     mock_object.return_value.subscribe.side_effect = mock_subscribe
     mock_object.return_value.publish = mock_publish
@@ -282,13 +303,13 @@ def test_kafka_read_write_write(mock_object):
     def mock_subscribe(*a, **kw):
         if kw["topic"] == "kafka_topic1" and kw["key"] == "kafka_key":
             encoding = orjson.dumps({"foo": 9.1}).decode()
-            return csp.const(EncodedEngineCycle(encoding=encoding))
+            return csp.const(_adapter_payload(kw, encoding))
         elif kw["topic"] == "kafka_topic1" and kw["key"] == "kafka_key2":
             encoding = orjson.dumps([{"foo": 0.1}, {"my_flag": False}]).decode()
-            return csp.const(EncodedEngineCycle(encoding=encoding), timedelta(seconds=1))
+            return csp.const(_adapter_payload(kw, encoding), timedelta(seconds=1))
         elif kw["topic"] == "kafka_topic2" and kw["key"] == "kafka_key":
             encoding = orjson.dumps({"arr": [7.2, -1001.3]}).decode()
-            return csp.const(EncodedEngineCycle(encoding=encoding), timedelta(seconds=1))
+            return csp.const(_adapter_payload(kw, encoding), timedelta(seconds=1))
         else:
             raise ValueError("This should never be hit")
 
@@ -336,10 +357,10 @@ def test_kafka_read_write_write_overwrite_id_timestamp(mock_object, use_struct_i
     def mock_subscribe(*a, **kw):
         if kw["topic"] == "kafka_topic1" and kw["key"] == "kafka_key":
             encoding = orjson.dumps({"foo": 9.1, "id": "howdy"}).decode()
-            return csp.const(EncodedEngineCycle(encoding=encoding))
+            return csp.const(_adapter_payload(kw, encoding))
         elif kw["topic"] == "kafka_topic1" and kw["key"] == "kafka_key2":
             encoding = orjson.dumps([{"foo": 0.1, "timestamp": datetime(2021, 1, 1)}, {"my_flag": False}]).decode()
-            return csp.const(EncodedEngineCycle(encoding=encoding), timedelta(seconds=1))
+            return csp.const(_adapter_payload(kw, encoding), timedelta(seconds=1))
         else:
             raise ValueError("This should never be hit")
 
@@ -392,13 +413,13 @@ def test_kafka_read_write_filter_write(mock_object, my_flag):
     def mock_subscribe(*a, **kw):
         if kw["topic"] == "kafka_topic1" and kw["key"] == "kafka_key":
             encoding = orjson.dumps({"foo": 9.1}).decode()
-            return csp.const(EncodedEngineCycle(encoding=encoding))
+            return csp.const(_adapter_payload(kw, encoding))
         elif kw["topic"] == "kafka_topic1" and kw["key"] == "kafka_key2":
             encoding = orjson.dumps([{"foo": 0.1}, {"my_flag": my_flag}]).decode()
-            return csp.const(EncodedEngineCycle(encoding=encoding), timedelta(seconds=1))
+            return csp.const(_adapter_payload(kw, encoding), timedelta(seconds=1))
         elif kw["topic"] == "kafka_topic2" and kw["key"] == "kafka_key":
             encoding = orjson.dumps({"arr": [7.2, -1001.3]}).decode()
-            return csp.const(EncodedEngineCycle(encoding=encoding), timedelta(seconds=1))
+            return csp.const(_adapter_payload(kw, encoding), timedelta(seconds=1))
         else:
             raise ValueError("This should never be hit")
 
@@ -452,15 +473,13 @@ def test_kafka_read_write_filter_read(mock_object, encoding_with_engine_timestam
         if kw["topic"] == "kafka_topic1" and kw["key"] == "kafka_key":
             # If Kafka publishes to this key on this topic, we capture it
             # with a print statement.
-            if encoding_with_engine_timestamps:
-                csp.print("val_check", kw["x"].encoding)
-            else:
-                csp.print("val_check", kw["x"])
+            # Published messages are raw text on both paths now.
+            csp.print("val_check", kw["x"])
 
     mock_publish = mock.MagicMock(side_effect=mock_publish_action)
 
     def mock_subscribe(*a, **kw):
-        return csp.null_ts(EncodedEngineCycle)
+        return csp.null_ts(kw["ts_type"])
 
     mock_object.return_value.subscribe.side_effect = mock_subscribe
     mock_object.return_value.publish = mock_publish
@@ -506,9 +525,10 @@ def test_kafka_read_write_filter_read(mock_object, encoding_with_engine_timestam
     assert topic_and_call_args["topic"]["kafka_topic1"] == 2
     assert topic_and_call_args["topic"]["kafka_topic2"] == 1
     captured = capsys.readouterr()
+    published = _published_encodings(captured.out)
     if filter_key == "kafka_key":
-        assert captured.out.count('"foo":1.0') == 2
-        assert captured.out.count('"foo":99.0') == 0
+        assert published.count('"foo":1.0') == 2
+        assert published.count('"foo":99.0') == 0
     else:
-        assert captured.out.count('"foo":1.0') == 0
-        assert captured.out.count('"foo":99.0') == 2
+        assert published.count('"foo":1.0') == 0
+        assert published.count('"foo":99.0') == 2

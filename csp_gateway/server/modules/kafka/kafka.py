@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, get_args, get_origin
 
 import csp
@@ -34,6 +34,47 @@ __all__ = (
     "ReadWriteKafka",
     "ReplayEngineKafka",
 )
+
+#: Wire field names of the envelope a message is wrapped in when engine timestamps are included.
+_ENVELOPE_ENCODING_FIELD = "encoding"
+_ENVELOPE_TIMESTAMP_FIELD = "csp_timestamp"
+
+
+class _EngineCycleEnvelope(csp.Struct):
+    """The envelope as csp's Kafka adapter sees it, for the one case that needs csp to parse it.
+
+    Subscribing with ``tick_timestamp_from_field`` makes csp replay each message at the engine time
+    recorded in it, which means csp -- not us -- has to read that field out of the payload. It can
+    only do that into a ``csp.Struct``, so this is the last one in the package. Everything else,
+    including the publish side, reads and writes the same wire format through `EncodedEngineCycle`.
+    """
+
+    encoding: str
+    csp_timestamp: datetime
+
+
+def _encode_envelope(encoding: str, csp_timestamp: datetime) -> str:
+    """Serialize the envelope exactly as csp's ``JSONTextMessageMapper`` would.
+
+    csp writes ``DateTimeType.UINT64_MILLIS`` as epoch milliseconds and reads it back the same way,
+    so a subscriber using the mapper parses this unchanged.
+    """
+    return orjson.dumps(
+        {
+            _ENVELOPE_ENCODING_FIELD: encoding,
+            _ENVELOPE_TIMESTAMP_FIELD: int(csp_timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000),
+        }
+    ).decode()
+
+
+def _decode_envelope(message: str) -> EncodedEngineCycle:
+    """Read an envelope written by `_encode_envelope` or by csp's ``JSONTextMessageMapper``."""
+    raw = orjson.loads(message)
+    timestamp = raw.get(_ENVELOPE_TIMESTAMP_FIELD)
+    return EncodedEngineCycle(
+        encoding=raw[_ENVELOPE_ENCODING_FIELD],
+        csp_timestamp=datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc).replace(tzinfo=None) if timestamp is not None else None,
+    )
 
 
 # NOTE: If the authorization parameters are not correct, the graph may hang indefinitely
@@ -278,22 +319,24 @@ class ReadWriteKafka(GatewayModule):
         return self.serialize(x)
 
     @csp.node
-    def serialize_with_engine_timestamp_csp(self, x: ts[object]) -> ts[EncodedEngineCycle]:
-        encoding = self.serialize(x)
-        return EncodedEngineCycle(encoding=encoding, csp_timestamp=csp.now())
+    def serialize_with_engine_timestamp_csp(self, x: ts[object]) -> ts[str]:
+        return _encode_envelope(self.serialize(x), csp.now())
 
     def connect(self, channels: GatewayChannels):
+        # Published messages are always written by us as raw text. Only the subscribe side of the
+        # engine-timestamp path needs csp's JSON mapper, to read csp_timestamp back out for
+        # tick_timestamp_from_field.
         if self.encoding_with_engine_timestamps:
-            msg_mapper = JSONTextMessageMapper(datetime_type=DateTimeType.UINT64_MILLIS)
-            publish_field_map = {
-                "encoding": "encoding",
-                "csp_timestamp": "csp_timestamp",
+            subscribe_msg_mapper = JSONTextMessageMapper(datetime_type=DateTimeType.UINT64_MILLIS)
+            subscribe_ts_type = _EngineCycleEnvelope
+            subscribe_field_map = {
+                _ENVELOPE_ENCODING_FIELD: _ENVELOPE_ENCODING_FIELD,
+                _ENVELOPE_TIMESTAMP_FIELD: _ENVELOPE_TIMESTAMP_FIELD,
             }
-            subscribe_field_map = publish_field_map
         else:
-            msg_mapper = RawTextMessageMapper()
-            publish_field_map = None
-            subscribe_field_map = {"": "encoding"}
+            subscribe_msg_mapper = RawTextMessageMapper()
+            subscribe_ts_type = str
+            subscribe_field_map = None
 
         for channel_name, topic_to_key in self.publish_channel_to_topic_and_key.items():
             channel = channels.get_channel(channel_name)
@@ -311,14 +354,13 @@ class ReadWriteKafka(GatewayModule):
                 else:
                     encoded_value = self.serialize_csp(raw_value)
                 self._kafkaadapter.publish(
-                    msg_mapper=msg_mapper,
-                    field_map=publish_field_map,
+                    msg_mapper=RawTextMessageMapper(),
                     topic=topic,
                     key=key,
                     x=encoded_value,
                 )
 
-        tick_timestamp_from_field = "csp_timestamp" if self.subscribe_with_csp_engine_timestamp else None
+        tick_timestamp_from_field = _ENVELOPE_TIMESTAMP_FIELD if self.subscribe_with_csp_engine_timestamp else None
 
         for (
             channel_name,
@@ -327,16 +369,18 @@ class ReadWriteKafka(GatewayModule):
             values_to_tick = []
             for topic, key in topic_to_key.items():
                 sub = self._kafkaadapter.subscribe(
-                    ts_type=EncodedEngineCycle,
+                    ts_type=subscribe_ts_type,
                     topic=topic,
-                    msg_mapper=msg_mapper,
+                    msg_mapper=subscribe_msg_mapper,
                     key=key,
                     field_map=subscribe_field_map,
                     tick_timestamp_from_field=tick_timestamp_from_field,
                     adjust_out_of_order_time=True,
                     include_msg_before_start_time=self.include_subscribe_messages_before_engine_start,
                     push_mode=csp.PushMode.NON_COLLAPSING,
-                ).encoding
+                )
+                if self.encoding_with_engine_timestamps:
+                    sub = sub.encoding
                 channel_type = channels.get_outer_type(channel_name).typ
                 deserialized_sub = self.deserialize_csp(encoding=sub, ts_typ=channel_type)
                 channel_processor = self.subscribe_channel_processors.get(channel_name)
@@ -421,27 +465,34 @@ class ReplayEngineKafka(EngineReplay):
             poll_timeout=self.config.poll_timeout,
         )
 
+    @csp.node
+    def _extract_encoding(self, message: ts[str]) -> ts[str]:
+        if csp.ticked(message):
+            return _decode_envelope(message).encoding
+
+    @csp.node
+    def _to_envelope(self, cycle: ts[EncodedEngineCycle]) -> ts[str]:
+        if csp.ticked(cycle):
+            return _encode_envelope(cycle.encoding, cycle.csp_timestamp)
+
     @override
     def subscribe(self):
-        return self._kafkaadapter.subscribe(
-            ts_type=EncodedEngineCycle,
-            msg_mapper=JSONTextMessageMapper(datetime_type=DateTimeType.UINT64_MILLIS),
+        message = self._kafkaadapter.subscribe(
+            ts_type=str,
+            msg_mapper=RawTextMessageMapper(),
             topic=self.topic,
             key=self.key,
-            field_map={"encoding": "encoding", "csp_timestamp": "csp_timestamp"},
-            meta_field_map={"timestamp": "csp_timestamp"},  # don't use the timestamp provided by kafka, but the one encoded on the message
-            # adjust_out_of_order_time=True,  we do this in python and log when it happens
             push_mode=csp.PushMode.NON_COLLAPSING,
-        ).encoding
+        )
+        return self._extract_encoding(message)
 
     @override
     def publish(self, encoded_channels: ts[EncodedEngineCycle]):
         self._kafkaadapter.publish(
-            msg_mapper=JSONTextMessageMapper(datetime_type=DateTimeType.UINT64_MILLIS),
-            field_map={"encoding": "encoding", "csp_timestamp": "csp_timestamp"},
+            msg_mapper=RawTextMessageMapper(),
             topic=self.topic,
             key=self.key,
-            x=encoded_channels,
+            x=self._to_envelope(encoded_channels),
         )
 
     @override
