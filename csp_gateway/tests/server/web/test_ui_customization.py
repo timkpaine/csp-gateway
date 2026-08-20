@@ -169,3 +169,48 @@ class TestRootPathNormalization:
             assert '<base href="/watchtower/" />' in client.get("/").text
         finally:
             gateway.stop()
+
+
+class TestSpadayUiCustomization:
+    """The spaday provider must honour the same white-labeling settings as the default UI."""
+
+    def test_custom_css_and_js_are_emitted(self, tmp_path):
+        pytest.importorskip("spaday")
+        client, gateway = _make_client(
+            tmp_path,
+            UI_PROVIDER="spaday",
+            CUSTOM_CSS=["https://cdn.example.com/extra.css"],
+            CUSTOM_JS=["https://cdn.example.com/extra.js"],
+        )
+        try:
+            html = client.get("/").text
+            assert '<link rel="stylesheet" href="https://cdn.example.com/extra.css">' in html
+            # spaday loads extra scripts as ES modules from its bootstrap module.
+            assert 'import "https://cdn.example.com/extra.js";' in html
+        finally:
+            gateway.stop()
+
+    def test_custom_static_dir_is_emitted(self, tmp_path):
+        pytest.importorskip("spaday")
+        (tmp_path / "a.js").write_text("// js")
+        (tmp_path / "b.css").write_text("/* css */")
+        client, gateway = _make_client(tmp_path, UI_PROVIDER="spaday", CUSTOM_STATIC_DIR=str(tmp_path))
+        try:
+            html = client.get("/").text
+            assert 'href="/custom/b.css"' in html
+            assert 'import "/custom/a.js";' in html
+            assert client.get("/custom/a.js").status_code == 200
+        finally:
+            gateway.stop()
+
+    def test_custom_assets_are_root_path_prefixed(self, tmp_path):
+        pytest.importorskip("spaday")
+        (tmp_path / "a.js").write_text("// js")
+        (tmp_path / "b.css").write_text("/* css */")
+        client, gateway = _make_client(tmp_path, UI_PROVIDER="spaday", ROOT_PATH="watchtower/", CUSTOM_STATIC_DIR=str(tmp_path))
+        try:
+            html = client.get("/").text
+            assert 'href="/watchtower/custom/b.css"' in html
+            assert 'import "/watchtower/custom/a.js";' in html
+        finally:
+            gateway.stop()

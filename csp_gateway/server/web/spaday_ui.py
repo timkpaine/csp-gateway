@@ -18,6 +18,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field as _dc_field
+from html import escape
 from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter
@@ -233,6 +234,19 @@ class GatewayUI:
         if root and path and path.startswith("/"):
             return f"{root}{path}"
         return path
+
+    def _custom_assets(self) -> tuple[str, list[str]]:
+        """The configured `Settings.CUSTOM_CSS` / `CUSTOM_JS` as head markup and script URLs.
+
+        Both are resolved by `GatewayWebApp._resolve_ui_assets` first, so local paths have already
+        been mounted and turned into URLs, and anything discovered under ``CUSTOM_STATIC_DIR`` is
+        included. Scripts are handed to spaday as ES modules rather than the classic ``<script>``
+        tags the default UI emits.
+        """
+        ui_config = getattr(self._web_app, "_ui_config_raw", None) or {}
+        links = "".join(f'<link rel="stylesheet" href="{escape(self.url(href), quote=True)}">' for href in ui_config.get("customCss") or [])
+        scripts = [self.url(src) for src in ui_config.get("customJs") or []]
+        return links, scripts
 
     def _region(self, region: Region, *builtin: Any) -> list[Any]:
         """The composed, order-sorted components for a region.
@@ -691,6 +705,7 @@ class GatewayUI:
         """
         title = getattr(self._settings, "TITLE", "Gateway")
         root = getattr(self._settings, "ROOT_PATH", "") or ""
+        custom_css, custom_scripts = self._custom_assets()
         # spaday's mount() appends plain Starlette routes, which do not carry the FastAPI auth
         # dependencies. Build them on a scratch app under the ROOT_PATH prefix (so the emitted page URLs
         # — /js runtime, wasm — resolve under a proxied sub-path), then re-register with the prefix
@@ -719,7 +734,9 @@ class GatewayUI:
             wire=wire,
             routes=routes,
             store={"dark": False, **self._store_seeds},
-            head=THEME_CSS,
+            # Custom CSS last so a downstream stylesheet can override the shell theme.
+            head=THEME_CSS + custom_css,
+            scripts=custom_scripts,
             title=title,
             prefix=root,
         )
