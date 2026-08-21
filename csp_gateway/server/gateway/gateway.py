@@ -6,7 +6,8 @@ import warnings
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from socket import gethostname
-from time import sleep
+from threading import Event
+from time import monotonic, sleep
 from typing import Any
 
 import csp
@@ -27,6 +28,9 @@ __all__ = (
 
 
 log = logging.getLogger(__name__)
+
+# How often startup re-checks that the csp thread is still alive while waiting for it to signal.
+_STARTUP_LIVENESS_INTERVAL = 0.1
 
 
 class GatewayChannels(Channels):
@@ -85,6 +89,8 @@ class Gateway(ChannelsFactory[GatewayChannels]):
     _in_test: bool = PrivateAttr(False)
     _module_shutdown_timeout: int = PrivateAttr()
     _dynamic_channels_instantiated: bool = PrivateAttr(False)
+    # Signalled by the csp thread once the engine is running or the graph build has failed.
+    _startup_complete: Event = PrivateAttr(default_factory=Event)
 
     def __init__(
         self,
@@ -174,6 +180,7 @@ class Gateway(ChannelsFactory[GatewayChannels]):
 
         except Exception:
             self.graph_build_failed = True
+            self._startup_complete.set()
             raise
 
         log.info("Launching CSP")
@@ -186,6 +193,7 @@ class Gateway(ChannelsFactory[GatewayChannels]):
     def _start_csp_detector(self):
         with csp.start():
             self.running = True
+            self._startup_complete.set()
 
     @csp.node
     def _stop_csp_detector(self):
@@ -392,24 +400,26 @@ class Gateway(ChannelsFactory[GatewayChannels]):
         )
 
         # Wait until graph is built by csp thread
-        elapsed = 0
-
-        while not self.running and not self.graph_build_failed:
-            # FIXME ugly
-            sleep(0.5)
-            elapsed += 0.5
-
-            if elapsed >= timeout:
+        # The csp thread signals both outcomes it can report, so the common paths wake immediately.
+        # The polling interval is only a safety net for a thread that dies without signalling at all
+        # (a failure raised inside csp.run before the graph function is entered).
+        deadline = monotonic() + timeout
+        while not self._startup_complete.wait(_STARTUP_LIVENESS_INTERVAL):
+            if not self.output.is_alive():
+                break
+            if monotonic() >= deadline:
                 log.critical("Timeout during startup of graph, shutting down")
                 raise RuntimeError("Graph start timeout")
 
-            if not self.output.is_alive():
-                log.critical("Graph start failure")
-                raise RuntimeError("Graph start failure")
-
+        # Ordered so a build failure is always reported as one: the flag is set before the csp thread
+        # unwinds, so it cannot be masked by the thread having since exited.
         if self.graph_build_failed:
             log.critical("Startup of graph failed, shutting down")
             raise RuntimeError("Graph build failure")
+
+        if not self.running:
+            log.critical("Graph start failure")
+            raise RuntimeError("Graph start failure")
 
         # Revisit each module and connect to rest, if necessary
         for module in self.modules:
