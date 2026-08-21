@@ -1,6 +1,6 @@
 from collections.abc import Callable
 from contextvars import ContextVar
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any, ClassVar, Literal, Optional, TypeVar
 
 from pydantic import BaseModel, ConfigDict, ValidationInfo, field_serializer, model_serializer, model_validator
@@ -121,7 +121,7 @@ class GatewayLookupMixin:
         if "timestamp" in fields and "timestamp" not in data:
             # Naive UTC, the only shape a csp timestamp ever had; mixing aware and naive values
             # in one field makes ordinary comparisons raise.
-            missing["timestamp"] = datetime.now(timezone.utc).replace(tzinfo=None)
+            missing["timestamp"] = datetime.now(UTC).replace(tzinfo=None)
         # Copy rather than mutate: the caller owns the dict handed to model_validate.
         return {**data, **missing} if missing else data
 
@@ -410,7 +410,7 @@ def _to_naive_utc(value: datetime) -> datetime:
     A naive input is assumed to already be UTC.
     """
     if value.tzinfo is not None:
-        return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value.astimezone(UTC).replace(tzinfo=None)
     return value
 
 

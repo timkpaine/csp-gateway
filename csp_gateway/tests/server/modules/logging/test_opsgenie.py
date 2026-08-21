@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum, auto
 from unittest import mock
 from unittest.mock import Mock
@@ -162,7 +162,7 @@ def test_opsgenie(
     h.delay(timedelta(seconds=1))
     csp.run(
         gateway.graph,
-        starttime=datetime.now(timezone.utc),
+        starttime=datetime.now(UTC),
         endtime=timedelta(seconds=5),
     )
 
@@ -288,7 +288,7 @@ def test_opsgenie_disable_heartbeat_failure_is_logged(
     h.delay(timedelta(seconds=1))
     csp.run(
         gateway.graph,
-        starttime=datetime.now(timezone.utc),
+        starttime=datetime.now(UTC),
         endtime=timedelta(seconds=2),
     )
 

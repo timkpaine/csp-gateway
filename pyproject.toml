@@ -15,7 +15,7 @@ description = "csp-gateway is a framework for building high-performance streamin
 readme = "README.md"
 license = { text = "Apache-2.0" }
 version = "2.9.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 keywords = [
     "csp",
     "csp-gateway",
@@ -80,6 +80,10 @@ develop = [
     "pandas",
     "logfire",
     "opentelemetry-instrumentation-fastapi",
+    # spaday UI provider, so its tests are exercised rather than skipped
+    "spaday>=0.7.1",
+    "spaday-perspective>=0.2.0",
+    "spaday-webawesome>=0.2.0",
 ]
 server = [
     "atomic-counter>=0.1.3",

@@ -5,7 +5,7 @@ NOTE: The webserver tests use this code internally to validate rest endpoints,
 and those tests in turn ensure that this demo works.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from enum import Enum
 from logging import INFO, basicConfig
 from pathlib import Path
@@ -77,8 +77,8 @@ class ExampleData(GatewayStruct):
     internal_csp_struct: ExampleCspStruct = ExampleCspStruct()
     data: Numpy1DArray[float] = np.array([])
     mapping: dict[str, int] = {}
-    dt: datetime = datetime.now(timezone.utc)
-    d: date = datetime.now(timezone.utc).date()
+    dt: datetime = datetime.now(UTC)
+    d: date = datetime.now(UTC).date()
 
     @classmethod
     def __get_validator_dict__(cls):

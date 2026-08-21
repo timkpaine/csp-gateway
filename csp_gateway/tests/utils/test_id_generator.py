@@ -1,5 +1,5 @@
 import importlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 # csp_gateway.utils gets shadowed in sys.modules by csp_gateway.server.web.utils,
@@ -28,7 +28,7 @@ def test_base_uses_utc_midnight():
         # `counter.current() == real_now_ns - mocked_base_ns`. A hardcoded
         # date makes that delta grow without bound as the real clock walks
         # forward, blowing past the upper-bound assertion below.
-        fake_now = datetime.now(timezone.utc).replace(hour=1, minute=0, second=0, microsecond=0)
+        fake_now = datetime.now(UTC).replace(hour=1, minute=0, second=0, microsecond=0)
 
         with patch.object(_id_gen_mod, "datetime") as mock_dt:
             mock_dt.now.return_value = fake_now

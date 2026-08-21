@@ -1,10 +1,11 @@
 """Tests for the optional spaday UI provider (`Settings.UI_PROVIDER == "spaday"`)."""
 
 from datetime import timedelta
+from enum import Enum, auto
 
 import csp
 import pytest
-from csp import Enum, ts
+from csp import ts
 from fastapi.testclient import TestClient
 
 from csp_gateway import (
@@ -174,8 +175,8 @@ class Order(GatewayStruct):
 
 
 class BasketKey(Enum):
-    A = Enum.auto()
-    B = Enum.auto()
+    A = auto()
+    B = auto()
 
 
 class DetailChannels(GatewayChannels):

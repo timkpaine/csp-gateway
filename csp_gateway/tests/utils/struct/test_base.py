@@ -1,5 +1,5 @@
 import decimal
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from enum import Enum, auto
 from typing import Annotated, Any
 
@@ -283,7 +283,7 @@ def test_gateway_struct_timestamp_serialization():
     g = GatewayStruct(id="", timestamp=datetime(2020, 1, 1))
     assert GatewayStruct.type_adapter().dump_json(g).decode("utf-8") == target
 
-    g = GatewayStruct(id="", timestamp=datetime(2020, 1, 1, tzinfo=timezone.utc))
+    g = GatewayStruct(id="", timestamp=datetime(2020, 1, 1, tzinfo=UTC))
     assert GatewayStruct.type_adapter().dump_json(g).decode("utf-8") == target
     g = GatewayStruct(id="", timestamp=datetime.fromtimestamp(datetime(2020, 1, 1).timestamp()))
     assert GatewayStruct.type_adapter().dump_json(g).decode("utf-8") == target

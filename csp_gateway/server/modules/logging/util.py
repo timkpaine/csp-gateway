@@ -1,6 +1,6 @@
 import logging
 from abc import abstractmethod
-from datetime import timezone
+from datetime import UTC, timezone
 from enum import Enum
 from typing import ClassVar
 
@@ -81,7 +81,7 @@ class MonitoringBase(GatewayStruct):
             self.tags["monitoring_id"] = self.id
         return [f"{k}:{v}" for k, v in self.tags.items()]
 
-    def get_datadog_timestamp(self, from_tz: timezone = timezone.utc, to_tz: timezone | None = None) -> float:
+    def get_datadog_timestamp(self, from_tz: timezone = UTC, to_tz: timezone | None = None) -> float:
         """
         Provides Datadog timestamp.
         Optionally converts timestamp time zone into Datadog instance time zone.
