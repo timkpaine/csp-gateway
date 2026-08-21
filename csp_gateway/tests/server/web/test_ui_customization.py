@@ -12,6 +12,9 @@ from csp_gateway.server.web.app import GatewayWebApp
 
 
 def _make_client(tmp_path, **settings_kwargs) -> TestClient:
+    # These assertions are against the legacy provider's markup, so pin it unless a test asks
+    # for another one.
+    settings_kwargs.setdefault("UI_PROVIDER", "default")
     settings = GatewaySettings(PORT=0, UI=True, **settings_kwargs)
     gateway = Gateway(
         modules=[ExampleModule(), MountControls(), MountRestRoutes(force_mount_all=True)],
@@ -154,7 +157,7 @@ class TestRootPathNormalization:
     def test_normalized_root_path_prefixes_urls(self, tmp_path):
         # A non-leading-slash, trailing-slash value is normalized before use.
         (tmp_path / "logo.svg").write_text("<svg></svg>")
-        settings = GatewaySettings(PORT=0, UI=True, ROOT_PATH="watchtower/", HEADER_LOGO=str(tmp_path / "logo.svg"))
+        settings = GatewaySettings(PORT=0, UI=True, UI_PROVIDER="default", ROOT_PATH="watchtower/", HEADER_LOGO=str(tmp_path / "logo.svg"))
         gateway = Gateway(
             modules=[ExampleModule(), MountControls(), MountRestRoutes(force_mount_all=True)],
             channels=ExampleGatewayChannels(),

@@ -80,10 +80,6 @@ develop = [
     "pandas",
     "logfire",
     "opentelemetry-instrumentation-fastapi",
-    # spaday UI provider, so its tests are exercised rather than skipped
-    "spaday>=0.7.1",
-    "spaday-perspective>=0.2.0",
-    "spaday-webawesome>=0.2.0",
 ]
 server = [
     "atomic-counter>=0.1.3",
@@ -103,6 +99,10 @@ server = [
     "psutil",
     "pyarrow",
     "pydantic>=2",
+    # Default frontend provider (Settings.UI_PROVIDER = "spaday").
+    "spaday>=0.7.1",
+    "spaday-perspective>=0.2.0",
+    "spaday-webawesome>=0.2.0",
     "uvicorn>=0.28.1,<0.50",
     "uvloop",
     "websockets",
@@ -114,13 +114,6 @@ client = [
     "nest-asyncio",
     "packaging",
     "pydantic>=2",
-]
-spaday = [
-    # Optional spaday-based frontend provider (Settings.UI_PROVIDER = "spaday")
-    # 0.7.1 ships the shell's dark palette and the nonce-stamped `stylesheets=` mount option.
-    "spaday>=0.7.1",
-    "spaday-perspective>=0.2.0",
-    "spaday-webawesome>=0.2.0",
 ]
 
 [project.scripts]

@@ -35,17 +35,11 @@ The rightmost top bar button opens the settings drawer. Depending on your server
 - Logs: if your server includes the [`MountOutputsFolder`](MountOutputsFolder) module, this will link to an integrated log and configuration viewer
 - Graph View: if your server includes the [`MountChannelsGraph`](MountChannelsGraph) module, this will link to an integrated graph viewer
 
-## Alternative frontend: spaday
+## Frontend providers
 
-The React/Perspective UI above is the default. `csp-gateway` can optionally serve an alternative frontend built with [spaday](https://github.com/1kbgz/spaday), selected per gateway with the `UI_PROVIDER` setting. It renders the same pieces from the same modules — the Perspective workspace, layout selector, theme toggle, and the settings-drawer actions (shutdown, logs, channels graph, email), plus a "send to a channel" form panel — only the frontend technology differs.
+The UI above is served by [spaday](https://github.com/1kbgz/spaday), the default frontend provider. The legacy React/Perspective frontend is still available, selected per gateway with the `UI_PROVIDER` setting. Both render the same pieces from the same modules — the Perspective workspace, layout selector, theme toggle, and the settings-drawer actions (shutdown, logs, channels graph, email) — and the spaday provider adds a "send to a channel" form panel.
 
-It is an optional extra (it pulls in the `spaday` dependency):
-
-```bash
-pip install 'csp-gateway[spaday]'
-```
-
-Select it in your gateway configuration:
+Select a provider in your gateway configuration:
 
 ```yaml
 port: 8000
@@ -55,6 +49,6 @@ gateway:
     UI_PROVIDER: spaday
 ```
 
-`UI_PROVIDER` defaults to `default` (the React/Perspective UI); set it to `spaday` to use the spaday frontend. Everything else — modules, the REST API, authentication, and `ROOT_PATH` sub-path serving — behaves the same. Selecting `spaday` without the extra installed raises a clear error at startup.
+`UI_PROVIDER` defaults to `spaday`; set it to `default` for the legacy React/Perspective UI, which requires the bundled Javascript build and is slated for removal. Everything else — modules, the REST API, authentication, and `ROOT_PATH` sub-path serving — behaves the same.
 
 The white-labeling settings (`TITLE`, `HEADER_LOGO`, `FOOTER_LOGO`, `CUSTOM_CSS`, `CUSTOM_JS`, `CUSTOM_STATIC_DIR`) apply to both providers, with two differences under spaday. `CUSTOM_JS` files are imported as ES modules rather than loaded as classic `<script>` tags, so a custom script cannot rely on being in global scope. `CUSTOM_CSS` files are linked ahead of the shell's own theme, so overriding a shell style needs a more specific selector rather than relying on source order.
