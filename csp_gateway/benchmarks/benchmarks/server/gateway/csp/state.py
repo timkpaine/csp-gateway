@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 
 from csp_gateway import (
@@ -29,7 +29,7 @@ class MyEnum(Enum):
 class CspSubStruct(GatewayStruct):
     suba: int = 1
     subb: str = "b"
-    subc: datetime = datetime.now(timezone.utc)
+    subc: datetime = datetime.now(UTC)
     subd: str
     sube: dict[str, str]
     subf: MyEnum = MyEnum.A
@@ -38,7 +38,7 @@ class CspSubStruct(GatewayStruct):
 class NonCspStruct:
     a: int = 0
     b: str
-    c: datetime = datetime.now(timezone.utc)
+    c: datetime = datetime.now(UTC)
     d: str = ""
     e: dict[str, str] = {"A": "hhello", "B": "bbye"}
     f: MyEnum = MyEnum.A
@@ -52,7 +52,7 @@ class NonCspStruct:
 class CspStruct(GatewayStruct):
     a: int = 0
     b: str
-    c: datetime = datetime.now(timezone.utc)
+    c: datetime = datetime.now(UTC)
     d: str = ""
     e: dict[str, str] = {"A": "hhello", "B": "bbye"}
     f: MyEnum = MyEnum.A

@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from enum import Enum, auto
 from unittest.mock import MagicMock
 
@@ -190,7 +190,7 @@ def test_recursive_perspective_schema():
 
 
 def test_recursive_perspective_flattening():
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
 
     # List with 1 element
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
@@ -387,7 +387,7 @@ def test_exclude_columns_schema():
 
 
 def test_pyarrow_conversion():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     now_date = now.date()
     schema = MyPyArrowStruct.psp_schema()
     arrow_schema = psp_schema_to_arrow_schema(schema)
@@ -428,7 +428,7 @@ def test_MountPerspectiveTables(use_external_perspective):
         test_dynamic_keys={"dict_channel": ["test_key"]},
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
 
     # List with 1 element
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
@@ -499,7 +499,7 @@ def test_MountPerspectiveTables_exclude_columns(exclude_columns):
         test_dynamic_keys={"dict_channel": ["test_key"]},
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
 
     # List with 1 element
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
@@ -595,7 +595,7 @@ def test_additional_tables():
         test_channels=[GWC.test_channel, GWC.limit_channel],
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
 
     for _ in range(10):
@@ -656,7 +656,7 @@ def test_additional_tables_with_dict_channel():
         test_dynamic_keys={"dict_channel": ["test_key"]},
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
 
     for _ in range(5):
@@ -697,7 +697,7 @@ def test_additional_tables_invalid_channel():
         test_channels=[GWC.test_channel],
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
     h.send(GWC.test_channel, o)
 
@@ -729,7 +729,7 @@ def test_tables_unified_api():
         test_channels=[GWC.test_channel, GWC.limit_channel],
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
 
     for _ in range(10):

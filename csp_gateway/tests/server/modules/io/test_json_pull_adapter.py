@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import csp
 import numpy as np
@@ -54,7 +54,7 @@ def test_json_reading(tmpdir):
     h = GatewayTestHarness(test_channels=[GWC.test_json])
     first_tick_value = (
         datetime(2020, 1, 1),
-        {_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 1, tzinfo=timezone.utc).isoformat()},
+        {_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 1, tzinfo=UTC).isoformat()},
     )
     h.assert_ticked_values(GWC.test_json, _assert_equal([first_tick_value]))
     h.delay(timedelta(days=7))
@@ -62,7 +62,7 @@ def test_json_reading(tmpdir):
     second_tick_value = (
         datetime(2020, 1, 8),
         {
-            _CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 8, tzinfo=timezone.utc).isoformat(),
+            _CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 8, tzinfo=UTC).isoformat(),
             "float": 7.0,
             "str": "\nabc",
         },
@@ -89,7 +89,7 @@ def test_first_entries_before_start(tmpdir):
     h = GatewayTestHarness(test_channels=[GWC.test_json])
     first_tick_value = (
         datetime(2020, 1, 3),
-        {_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 3, tzinfo=timezone.utc).isoformat()},
+        {_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 3, tzinfo=UTC).isoformat()},
     )
     h.assert_ticked_values(GWC.test_json, _assert_equal([first_tick_value]))
     json_input_adapter_module = MyTestJSONGatewayModule(filename=file)
@@ -115,7 +115,7 @@ def test_first_tick_after_start(tmpdir):
     h.delay(timedelta(days=1))
     first_tick_value = (
         datetime(2020, 1, 1),
-        {_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 1, tzinfo=timezone.utc).isoformat()},
+        {_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 1, tzinfo=UTC).isoformat()},
     )
 
     h.assert_ticked_values(GWC.test_json, _assert_equal([first_tick_value]))
@@ -123,7 +123,7 @@ def test_first_tick_after_start(tmpdir):
     second_tick_value = (
         datetime(2020, 1, 2),
         {
-            _CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 2, tzinfo=timezone.utc).isoformat(),
+            _CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 2, tzinfo=UTC).isoformat(),
             "float": 7.0,
             "str": "\nabc",
         },
@@ -151,12 +151,12 @@ def test_same_timestamp(tmpdir):
     ticked_values = [
         (
             datetime(2020, 1, 1),
-            {_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 1, tzinfo=timezone.utc).isoformat()},
+            {_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 1, tzinfo=UTC).isoformat()},
         ),
         (
             datetime(2020, 1, 1),
             {
-                _CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 1, tzinfo=timezone.utc).isoformat(),
+                _CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
                 "test_outer": 7.0,
             },
         ),
@@ -186,10 +186,10 @@ def test_gateway_struct(tmpdir):
         (
             datetime(2020, 1, 1),
             {
-                _CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 1, tzinfo=timezone.utc).isoformat(),
+                _CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
                 "test_outer": {
                     "id": "9",
-                    "timestamp": datetime(2020, 1, 1, tzinfo=timezone.utc).isoformat(),
+                    "timestamp": datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
                 },
             },
         ),
@@ -216,7 +216,7 @@ def test_enum(tmpdir):
         (
             datetime(2020, 1, 1),
             {
-                _CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 1, tzinfo=timezone.utc).isoformat(),
+                _CSP_ENGINE_CYCLE_TIMESTAMP_FIELD: datetime(2020, 1, 1, tzinfo=UTC).isoformat(),
                 "enum": MyEnum.ONE.name,
             },
         ),
@@ -241,7 +241,7 @@ def test_numpy_array(tmpdir):
 
     def assert_numpy_equal(x):
         assert x[0][0] == datetime(2020, 1, 1)
-        assert x[0][1][_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD] == datetime(2020, 1, 1, tzinfo=timezone.utc).isoformat()
+        assert x[0][1][_CSP_ENGINE_CYCLE_TIMESTAMP_FIELD] == datetime(2020, 1, 1, tzinfo=UTC).isoformat()
         assert np.array_equal(x[0][1]["np_array"], np.array([5.0, 7.0]))
         assert len(x) == 1
         assert len(x[0]) == 2

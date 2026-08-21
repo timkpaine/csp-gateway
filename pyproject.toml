@@ -15,7 +15,7 @@ description = "csp-gateway is a framework for building high-performance streamin
 readme = "README.md"
 license = { text = "Apache-2.0" }
 version = "2.9.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 keywords = [
     "csp",
     "csp-gateway",
