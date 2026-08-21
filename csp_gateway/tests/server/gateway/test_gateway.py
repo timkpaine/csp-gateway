@@ -3,7 +3,7 @@ import multiprocessing
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from enum import Enum
+from enum import IntEnum
 from io import StringIO
 from typing import Annotated, Any
 
@@ -29,10 +29,13 @@ from csp_gateway.testing import GatewayTestHarness
 from csp_gateway.utils import NoProviderException
 
 
-class MyEnum(Enum):
+class MyEnum(IntEnum):
     ZERO = 0
     ONE = 1
     TWO = 2
+
+    def __str__(self):
+        return f"{type(self).__name__}.{self.name}"
 
 
 class MyStruct(GatewayStruct):

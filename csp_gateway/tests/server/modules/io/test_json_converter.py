@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from enum import IntEnum
 from typing import Annotated, Any
 
 import csp
@@ -291,7 +292,7 @@ def test_convert_orjson_compatible():
 
 
 def test_create_snapshot_dict_with_zero_valued_enum_key():
-    class ZeroBasedEnum(csp.Enum):
+    class ZeroBasedEnum(IntEnum):
         ZERO = 0
 
     value = MyStruct(foo=1.0)
