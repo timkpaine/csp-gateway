@@ -30,6 +30,7 @@ from csp_gateway.utils import NoProviderException
 
 
 class MyEnum(Enum):
+    ZERO = 0
     ONE = 1
     TWO = 2
 
@@ -89,16 +90,19 @@ class MySetModule(GatewayModule):
         channels.set_channel(MyGatewayChannels.my_array_channel, csp.const(np.array([1.0, 2.0])))
 
         if self.by_key:
+            channels.set_channel(MyGatewayChannels.my_enum_basket, self.my_data, MyEnum.ZERO)
             channels.set_channel(MyGatewayChannels.my_enum_basket, self.my_data, MyEnum.ONE)
             channels.set_channel(MyGatewayChannels.my_enum_basket, self.my_data2, MyEnum.TWO)
             channels.set_channel(MyGatewayChannels.my_str_basket, self.my_data, "my_key")
             channels.set_channel(MyGatewayChannels.my_str_basket, self.my_data2, "my_key2")
+            channels.set_channel(MyGatewayChannels.my_enum_basket_list, self.my_list_data, MyEnum.ZERO)
             channels.set_channel(MyGatewayChannels.my_enum_basket_list, self.my_list_data, MyEnum.ONE)
             channels.set_channel(MyGatewayChannels.my_enum_basket_list, self.my_list_data, MyEnum.TWO)
         else:
             channels.set_channel(
                 MyGatewayChannels.my_enum_basket,
                 {
+                    MyEnum.ZERO: self.my_data,
                     MyEnum.ONE: self.my_data,
                     MyEnum.TWO: self.my_data2,
                 },
@@ -113,6 +117,7 @@ class MySetModule(GatewayModule):
             channels.set_channel(
                 MyGatewayChannels.my_enum_basket_list,
                 {
+                    MyEnum.ZERO: self.my_list_data,
                     MyEnum.ONE: self.my_list_data,
                     MyEnum.TWO: self.my_list_data,
                 },
@@ -185,6 +190,10 @@ class MyGetModule(GatewayModule):
             csp.add_graph_output(f"my_enum_basket_list[{k}]", v)
 
         # Get by indexer
+        csp.add_graph_output(
+            "my_enum_basket_ZERO",
+            channels.get_channel(MyGatewayChannels.my_enum_basket, MyEnum.ZERO),
+        )
         csp.add_graph_output(
             "my_enum_basket_ONE",
             channels.get_channel(MyGatewayChannels.my_enum_basket, MyEnum.ONE),
@@ -585,7 +594,9 @@ def test_last(by_key):
 
         output = gateway.channels.last("my_enum_basket")
         assert isinstance(output, dict)
-        assert len(output) == 2
+        assert len(output) == 3
+        output = gateway.channels.last("my_enum_basket", MyEnum.ZERO)
+        assert isinstance(output, MyStruct)
         output = gateway.channels.last("my_enum_basket", MyEnum.ONE)
         assert isinstance(output, MyStruct)
 
@@ -598,7 +609,7 @@ def test_last(by_key):
 
         output = gateway.channels.last("my_enum_basket_list")
         assert isinstance(output, dict)
-        assert len(output) == 2
+        assert len(output) == 3
     finally:
         gateway.stop()
 
