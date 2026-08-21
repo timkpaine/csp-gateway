@@ -184,7 +184,7 @@ class TestSpadayUiCustomization:
         )
         try:
             html = client.get("/").text
-            assert '<link rel="stylesheet" href="https://cdn.example.com/extra.css">' in html
+            assert '<link rel="stylesheet" href="https://cdn.example.com/extra.css" />' in html
             # spaday loads extra scripts as ES modules from its bootstrap module.
             assert 'import "https://cdn.example.com/extra.js";' in html
         finally:
