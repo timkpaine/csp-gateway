@@ -103,7 +103,9 @@ def test_start_and_then_graph_start_error(caplog, free_port):
     )
     with pytest.raises(RuntimeError):
         gateway.start(realtime=True, rest=True, block=False, build_timeout=timedelta(seconds=60))
-    assert "Graph start failure" in caplog.text
+    # Which message wins is a race between the build-failure flag being observed and the csp thread
+    # exiting, since the startup loop only polls every half second. Both mean the same thing.
+    assert "Graph start failure" in caplog.text or "Startup of graph failed" in caplog.text
 
 
 def test_stop_with_shutdown(free_port):
