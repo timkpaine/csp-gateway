@@ -56,3 +56,5 @@ gateway:
 ```
 
 `UI_PROVIDER` defaults to `default` (the React/Perspective UI); set it to `spaday` to use the spaday frontend. Everything else — modules, the REST API, authentication, and `ROOT_PATH` sub-path serving — behaves the same. Selecting `spaday` without the extra installed raises a clear error at startup.
+
+The white-labeling settings (`TITLE`, `HEADER_LOGO`, `FOOTER_LOGO`, `CUSTOM_CSS`, `CUSTOM_JS`, `CUSTOM_STATIC_DIR`) apply to both providers, with two differences under spaday. `CUSTOM_JS` files are imported as ES modules rather than loaded as classic `<script>` tags, so a custom script cannot rely on being in global scope. `CUSTOM_CSS` files are linked ahead of the shell's own theme, so overriding a shell style needs a more specific selector rather than relying on source order.

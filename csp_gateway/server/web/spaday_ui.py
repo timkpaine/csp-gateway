@@ -234,6 +234,19 @@ class GatewayUI:
             return f"{root}{path}"
         return path
 
+    def _custom_assets(self) -> tuple[list[str], list[str]]:
+        """The configured `Settings.CUSTOM_CSS` / `CUSTOM_JS` as stylesheet and script URLs.
+
+        Both are resolved by `GatewayWebApp._resolve_ui_assets` first, so local paths have already
+        been mounted and turned into URLs, and anything discovered under ``CUSTOM_STATIC_DIR`` is
+        included. Scripts are handed to spaday as ES modules rather than the classic ``<script>``
+        tags the default UI emits.
+        """
+        ui_config = getattr(self._web_app, "_ui_config_raw", None) or {}
+        stylesheets = [self.url(href) for href in ui_config.get("customCss") or []]
+        scripts = [self.url(src) for src in ui_config.get("customJs") or []]
+        return stylesheets, scripts
+
     def _region(self, region: Region, *builtin: Any) -> list[Any]:
         """The composed, order-sorted components for a region.
 
@@ -691,6 +704,7 @@ class GatewayUI:
         """
         title = getattr(self._settings, "TITLE", "Gateway")
         root = getattr(self._settings, "ROOT_PATH", "") or ""
+        custom_css, custom_scripts = self._custom_assets()
         # spaday's mount() appends plain Starlette routes, which do not carry the FastAPI auth
         # dependencies. Build them on a scratch app under the ROOT_PATH prefix (so the emitted page URLs
         # — /js runtime, wasm — resolve under a proxied sub-path), then re-register with the prefix
@@ -719,7 +733,11 @@ class GatewayUI:
             wire=wire,
             routes=routes,
             store={"dark": False, **self._store_seeds},
+            # Custom CSS last so a downstream stylesheet can override the shell theme.
+            # spaday emits these ahead of `head`, so the shell theme still wins a specificity tie.
             head=THEME_CSS,
+            stylesheets=custom_css,
+            scripts=custom_scripts,
             title=title,
             prefix=root,
         )
