@@ -51,4 +51,13 @@ gateway:
 
 `UI_PROVIDER` defaults to `spaday`; set it to `default` for the legacy React/Perspective UI, which requires the bundled Javascript build and is slated for removal. Everything else — modules, the REST API, authentication, and `ROOT_PATH` sub-path serving — behaves the same.
 
-The white-labeling settings (`TITLE`, `HEADER_LOGO`, `FOOTER_LOGO`, `CUSTOM_CSS`, `CUSTOM_JS`, `CUSTOM_STATIC_DIR`) apply to both providers, with two differences under spaday. `CUSTOM_JS` files are imported as ES modules rather than loaded as classic `<script>` tags, so a custom script cannot rely on being in global scope. `CUSTOM_CSS` files are linked ahead of the shell's own theme, so overriding a shell style needs a more specific selector rather than relying on source order.
+The white-labeling settings (`TITLE`, `HEADER_LOGO`, `FOOTER_LOGO`, `CUSTOM_CSS`, `CUSTOM_JS`, `CUSTOM_STATIC_DIR`) apply to both providers, with one difference under spaday: `CUSTOM_JS` files are imported as ES modules rather than loaded as classic `<script>` tags, so a custom script cannot rely on being in global scope.
+
+The spaday UI takes its colours from the shell's own light and dark palettes, which are published as the `--spa-surface`, `--spa-surface-2`, `--spa-border` and `--spa-muted` custom properties at zero specificity. A `CUSTOM_CSS` file is linked after them, so redefining those properties is enough to rebrand the chrome:
+
+```css
+spa-app { --spa-surface: #ffffff; --spa-border: #dde3ec; }
+html.wa-dark spa-app { --spa-surface: #222b39; --spa-border: #3b4860; }
+```
+
+Component internals are shadow DOM and cannot be selected from an external stylesheet, so restyling those means setting the WebAwesome custom properties they document rather than writing rules against their markup.

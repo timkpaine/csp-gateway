@@ -80,22 +80,14 @@ log = logging.getLogger(__name__)
 _ANONYMOUS_TENANT = "__anonymous__"
 
 
-# Minimal shell theming so the spaday page looks reasonable in both light and dark modes.
-# Keyed off the ``wa-dark`` class that ``App().bind_root_class("wa-dark", "dark")`` toggles.
-THEME_CSS = """<style>
+# Page-level resets that spaday's document template does not ship. The palette is deliberately absent:
+# the shell supplies its own light and dark values for the ``spa-*`` tokens, keyed off the ``wa-dark``
+# class that ``App().bind_root_class("wa-dark", "dark")`` toggles, and WebAwesome sets the matching
+# ``color-scheme`` so the page canvas follows.
+PAGE_CSS = """<style>
       html, body { height: 100%; }
       body { margin: 0; font-family: system-ui, sans-serif; }
-      spa-app { --spa-gap: 0.75rem; height: 100vh; }
-      html:not(.wa-dark) { background: #eef1f5; }
-      html:not(.wa-dark) spa-app {
-        --spa-surface: #ffffff; --spa-surface-2: #f3f5f8; --spa-border: #dde3ec; --spa-muted: #5a6a80;
-        color: #1a2230; background: #eef1f5;
-      }
-      html.wa-dark { background: #1b222e; }
-      html.wa-dark spa-app {
-        --spa-surface: #222b39; --spa-surface-2: #2a3445; --spa-border: #3b4860; --spa-muted: #8fa3c0;
-        color: #e6eefb; background: #1b222e;
-      }
+      spa-app { --spa-gap: 0.75rem; }
     </style>"""
 
 
@@ -732,11 +724,11 @@ class GatewayUI:
             wire=wire,
             routes=routes,
             store={"dark": False, **self._store_seeds},
-            # Custom CSS last so a downstream stylesheet can override the shell theme.
-            # spaday emits these ahead of `head`, so the shell theme still wins a specificity tie.
-            head=THEME_CSS,
+            # Emitted after the component packages' own CSS, so a custom stylesheet can override the
+            # shell palette, and before `head`, which carries only document resets.
             stylesheets=custom_css,
             scripts=custom_scripts,
+            head=PAGE_CSS,
             title=title,
             prefix=root,
         )
