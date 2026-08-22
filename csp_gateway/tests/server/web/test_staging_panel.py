@@ -307,14 +307,14 @@ class TestStagingPanelSharesTheBottomDrawer:
 
 
 class TestStagingPanelDefaultUI:
-    """Under the default (React) provider the module contributes no UI at all."""
+    """Under the legacy (React) provider the module contributes no UI at all."""
 
     @pytest.fixture(scope="class")
     def gateway(self, free_port):
         return Gateway(
             modules=[StagingModule(), MountRestRoutes(force_mount_all=True), MountStagingPanel()],
             channels=StagedChannels(),
-            settings=GatewaySettings(PORT=free_port, UI=True),
+            settings=GatewaySettings(PORT=free_port, UI=True, UI_PROVIDER="default"),
         )
 
     def test_gateway_starts_without_the_spaday_provider(self, gateway):

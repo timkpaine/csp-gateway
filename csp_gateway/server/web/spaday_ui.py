@@ -1,15 +1,14 @@
 """spaday-based frontend provider for the Gateway web application.
 
-This is the optional alternative to the built-in Perspective/React UI, selected via
-`Settings.UI_PROVIDER == "spaday"`. A `GatewayUI` handle is passed to each module's
-`ui()` hook (mirroring how `GatewayWebApp` is passed to `rest()`); modules register a
+This is the default UI, selected via `Settings.UI_PROVIDER == "spaday"` (the legacy
+Perspective/React frontend remains available as `"default"`). A `GatewayUI` handle is passed to
+each module's `ui()` hook (mirroring how `GatewayWebApp` is passed to `rest()`); modules register a
 main panel or add header actions, and `GatewayUI` assembles a single spaday page and
 mounts it onto the FastAPI app.
 
 This module imports `spaday` at import time, so it is imported only when the spaday provider is
 selected — from `GatewayWebApp` when `UI_PROVIDER == "spaday"`, and lazily from the modules' `ui()`
-hooks (which only run under that provider) — never from `csp_gateway.server.web` at large. It requires
-the optional `spaday` extra (`pip install 'csp-gateway[spaday]'`).
+hooks (which only run under that provider) — never from `csp_gateway.server.web` at large.
 """
 
 from __future__ import annotations
@@ -30,8 +29,8 @@ try:
     import spaday  # noqa: F401
 except ImportError as exc:  # pragma: no cover
     raise ImportError(
-        "The spaday UI provider (Settings.UI_PROVIDER='spaday') requires the optional 'spaday' "
-        "dependency. Install it with: pip install 'csp-gateway[spaday]'."
+        "The spaday UI provider (Settings.UI_PROVIDER='spaday') requires the 'spaday' "
+        "dependency, which ships with csp-gateway. Reinstall it with: pip install csp-gateway."
     ) from exc
 
 from spaday import element
