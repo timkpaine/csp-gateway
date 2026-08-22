@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, date, datetime, timedelta
 from enum import Enum, auto
 from unittest.mock import MagicMock
@@ -20,6 +21,7 @@ from csp_gateway import (
     create_pyarrow_table,
     psp_schema_to_arrow_schema,
 )
+from csp_gateway.server.modules.web.perspective import migrate_perspective_layout
 from csp_gateway.testing.harness import GatewayTestHarness
 
 
@@ -756,3 +758,65 @@ def test_tables_unified_api():
     assert table_len("test_channel_limited") == 3
     # limit_channel has limit=5
     assert table_len("limit_channel") == 5
+
+
+class TestLayoutMigration:
+    """Perspective 4 workspace layouts are rewritten to the Perspective 5 shape."""
+
+    V4_LAYOUT = json.dumps(
+        {
+            "sizes": [1],
+            "detail": {
+                "main": {
+                    "type": "split-area",
+                    "orientation": "vertical",
+                    "sizes": [0.3, 0.7],
+                    "children": [
+                        {"type": "tab-area", "widgets": ["A"], "currentIndex": 0},
+                        {"type": "tab-area", "widgets": ["B", "C"], "currentIndex": 1},
+                    ],
+                }
+            },
+            "master": {"sizes": [], "widgets": ["A"]},
+            "mode": "globalFilters",
+            "viewers": {
+                "A": {"table": "example", "plugin": "Datagrid"},
+                "B": {"table": "example", "plugin": "Treemap"},
+                "C": {"table": "other", "plugin": "Datagrid"},
+            },
+        }
+    )
+
+    def test_widget_tree_becomes_layout_tree(self):
+        migrated = json.loads(migrate_perspective_layout(self.V4_LAYOUT))
+        assert migrated["layout"] == {
+            "type": "split-layout",
+            "orientation": "vertical",
+            "sizes": [0.3, 0.7],
+            "children": [
+                {"type": "tab-layout", "tabs": ["A"], "selected": 0},
+                {"type": "tab-layout", "tabs": ["B", "C"], "selected": 1},
+            ],
+        }
+
+    def test_viewers_become_panels_and_masters_are_kept(self):
+        migrated = json.loads(migrate_perspective_layout(self.V4_LAYOUT))
+        assert sorted(migrated["panels"]) == ["A", "B", "C"]
+        assert migrated["panels"]["B"] == {"table": "example", "plugin": "Treemap"}
+        assert migrated["masters"] == ["A"]
+        # The v4-only envelope keys do not survive.
+        assert "viewers" not in migrated
+        assert "detail" not in migrated
+
+    def test_already_migrated_layout_is_untouched(self):
+        once = migrate_perspective_layout(self.V4_LAYOUT)
+        assert migrate_perspective_layout(once) == once
+
+    @pytest.mark.parametrize("layout", ["", "not json", "[]", '{"panels": {}}'])
+    def test_non_v4_input_passes_through(self, layout):
+        assert migrate_perspective_layout(layout) == layout
+
+    def test_configured_layouts_are_migrated_on_validation(self):
+        module = MountPerspectiveTables(layouts={"Server Defined Layout": self.V4_LAYOUT})
+        migrated = json.loads(module.layouts["Server Defined Layout"])
+        assert sorted(migrated) == ["layout", "masters", "panels"]

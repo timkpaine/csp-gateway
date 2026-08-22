@@ -4,6 +4,7 @@ from io import BytesIO
 from logging import getLogger
 from typing import (
     TYPE_CHECKING,
+    Any,
     Literal,
     TypeVar,
 )
@@ -153,6 +154,55 @@ class TableConfig(BaseModel):
 # Backwards compat alias
 AdditionalTableConfig = TableConfig
 
+# Perspective 4 stored a workspace layout as a Lumino widget tree (`detail`/`master` of `split-area`
+# and `tab-area` nodes) alongside a `viewers` map. Perspective 5 folded the workspace into
+# `<perspective-viewer>` itself, which takes a `layout` tree of `split-layout`/`tab-layout` nodes and
+# a `panels` map. Per-panel bodies are unchanged -- the viewer migrates those from their own stamped
+# `version` -- so only the envelope is rewritten here.
+_LAYOUT_NODE_TYPES = {"split-area": "split-layout", "tab-area": "tab-layout"}
+
+
+def _migrate_layout_node(node: Any) -> Any:
+    if not isinstance(node, dict):
+        return node
+    node_type = _LAYOUT_NODE_TYPES.get(node.get("type"))
+    if node_type == "tab-layout":
+        migrated = {"type": node_type, "tabs": list(node.get("widgets") or [])}
+        if "currentIndex" in node:
+            migrated["selected"] = node["currentIndex"]
+        return migrated
+    if node_type == "split-layout":
+        return {
+            "type": node_type,
+            "orientation": node.get("orientation", "horizontal"),
+            "sizes": list(node.get("sizes") or []),
+            "children": [_migrate_layout_node(child) for child in node.get("children") or []],
+        }
+    return node
+
+
+def migrate_perspective_layout(layout: str) -> str:
+    """Rewrite a Perspective 4 workspace layout as the Perspective 5 equivalent.
+
+    Layouts already in the version 5 shape, and anything unparseable, are returned untouched so this
+    is safe to apply to every configured layout on every startup.
+    """
+    try:
+        parsed = orjson.loads(layout)
+    except orjson.JSONDecodeError:
+        return layout
+    if not isinstance(parsed, dict) or "viewers" not in parsed:
+        return layout
+
+    migrated: dict[str, Any] = {"panels": parsed.get("viewers") or {}}
+    root = (parsed.get("detail") or {}).get("main")
+    if root is not None:
+        migrated["layout"] = _migrate_layout_node(root)
+    masters = (parsed.get("master") or {}).get("widgets") or []
+    if masters:
+        migrated["masters"] = list(masters)
+    return orjson.dumps(migrated).decode()
+
 
 def _is_channel_selection_input(v) -> bool:
     """Detect whether a raw input value looks like a ChannelSelection (old-style tables field)."""
@@ -236,6 +286,11 @@ class MountPerspectiveTables(GatewayModule):
         None,
         description="Default layout to use for all tables if no specific layout is provided.",
     )
+
+    @field_validator("layouts")
+    @classmethod
+    def _migrate_layouts(cls, layouts: dict[str, str]) -> dict[str, str]:
+        return {name: migrate_perspective_layout(layout) for name, layout in layouts.items()}
 
     update_interval: timedelta = Field(default=timedelta(seconds=2))
     perspective_field: str = Field(
@@ -480,7 +535,8 @@ class MountPerspectiveTables(GatewayModule):
         self._client = self._server.new_local_client()
         self._layouts = self.layouts.copy()
         if self.layouts_field:
-            self._layouts.update(getattr(channels, self.layouts_field))
+            # Not reachable from the field validator, so migrate on the way in.
+            self._layouts.update({name: migrate_perspective_layout(layout) for name, layout in getattr(channels, self.layouts_field).items()})
         self._connect_all_tables(channels)
 
         # Run perspective on background daemon threads
