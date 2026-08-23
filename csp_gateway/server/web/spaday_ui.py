@@ -264,15 +264,17 @@ class GatewayUI:
         *,
         route: str,
         tables: list[str] | None = None,
+        default_tables: list[str] | None = None,
         layouts: dict[str, str] | None = None,
     ) -> Any:
         """A Perspective workspace panel (the primary data view), bound to the theme + `view` state.
 
         Data rides Perspective's own websocket at ``route``; the panel only carries the workspace
-        layout/theme config. Add it to `Region.MAIN`.
+        layout/theme config. ``default_tables`` are the ones the generated layout opens, defaulting
+        to all of ``tables``. Add it to `Region.MAIN`.
         """
         tables = list(tables or [])
-        layout_expr: Any = self._default_layout(tables)
+        layout_expr: Any = self._default_layout(list(default_tables) if default_tables is not None else tables)
         for name, layout_json in (layouts or {}).items():
             try:
                 parsed = json.loads(layout_json)

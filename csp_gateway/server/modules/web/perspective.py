@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 from io import BytesIO
 from logging import getLogger
@@ -285,6 +286,18 @@ class MountPerspectiveTables(GatewayModule):
     default_layout: str | None = Field(
         None,
         description="Default layout to use for all tables if no specific layout is provided.",
+    )
+    default_layout_tables: list[str] = Field(
+        default_factory=list,
+        description="Tables the generated default layout shows, by table name and in this order. "
+        "Empty means the first `default_layout_max_tables` tables in name order. Names that are not "
+        "registered tables are ignored.",
+    )
+    default_layout_max_tables: int = Field(
+        5,
+        description="How many tables the generated default layout shows when `default_layout_tables` "
+        "is not set. Every table is still available to add by hand; this only bounds the generated "
+        "layout, whose tabs get narrower the more it holds.",
     )
 
     @field_validator("layouts")
@@ -675,10 +688,19 @@ class MountPerspectiveTables(GatewayModule):
                 "default_architecture": self.default_architecture,
                 "layouts": self.layouts,
                 "default_layout": self.default_layout,
+                "default_layout_tables": self._select_default_layout_tables(self._get_tables()),
                 "tables": self._get_tables(),
                 "unused_tables": self._unused_tables,
                 "table_sizes": self._get_table_sizes(),
             }
+
+    def _select_default_layout_tables(self, available: Iterable[str]) -> list[str]:
+        """The tables the generated default layout shows, in display order."""
+        names = list(available)
+        if self.default_layout_tables:
+            known = set(names)
+            return [name for name in self.default_layout_tables if name in known]
+        return sorted(names)[: self.default_layout_max_tables]
 
     def ui(self, app: "GatewayUI") -> None:
         # Register the Perspective workspace as the main panel of the spaday UI. Data rides
@@ -687,11 +709,13 @@ class MountPerspectiveTables(GatewayModule):
         from csp_gateway.server.web.spaday_ui import Region
 
         layouts = dict(self._layouts)
+        tables = self._get_tables()
         app.add(
             Region.MAIN,
             app.perspective_panel(
                 route=f"{app.settings.API_STR}{self._route}",
-                tables=list(self._get_tables().keys()),
+                tables=list(tables.keys()),
+                default_tables=self._select_default_layout_tables(tables),
                 layouts=layouts,
             ),
         )

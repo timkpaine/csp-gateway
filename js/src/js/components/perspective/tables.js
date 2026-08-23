@@ -53,5 +53,10 @@ export const fetchTables = async () => {
     return acc;
   }, {});
 
-  return { worker, websocket, tables: new_tables };
+  return {
+    worker,
+    websocket,
+    tables: new_tables,
+    defaultLayoutTables: meta.default_layout_tables ?? table_names,
+  };
 };

@@ -820,3 +820,29 @@ class TestLayoutMigration:
         module = MountPerspectiveTables(layouts={"Server Defined Layout": self.V4_LAYOUT})
         migrated = json.loads(module.layouts["Server Defined Layout"])
         assert sorted(migrated) == ["layout", "masters", "panels"]
+
+
+class TestDefaultLayoutTables:
+    """Which tables the generated default layout opens."""
+
+    AVAILABLE = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf"]
+
+    @staticmethod
+    def _module(**kwargs) -> MountPerspectiveTables:
+        return MountPerspectiveTables(**kwargs)
+
+    def test_caps_at_five_in_name_order_by_default(self):
+        module = self._module()
+        assert module._select_default_layout_tables(self.AVAILABLE) == ["alpha", "bravo", "charlie", "delta", "echo"]
+
+    def test_max_is_configurable(self):
+        module = self._module(default_layout_max_tables=2)
+        assert module._select_default_layout_tables(self.AVAILABLE) == ["alpha", "bravo"]
+
+    def test_explicit_tables_win_and_keep_their_order(self):
+        module = self._module(default_layout_tables=["golf", "alpha"], default_layout_max_tables=1)
+        assert module._select_default_layout_tables(self.AVAILABLE) == ["golf", "alpha"]
+
+    def test_unknown_table_names_are_dropped(self):
+        module = self._module(default_layout_tables=["golf", "not_a_table"])
+        assert module._select_default_layout_tables(self.AVAILABLE) == ["golf"]

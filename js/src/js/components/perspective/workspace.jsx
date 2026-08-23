@@ -153,7 +153,8 @@ export const Workspace = forwardRef(function Workspace(
 
     (async () => {
       // 1. Fetch tables from perspective server
-      const { worker, websocket, tables } = await fetchTables();
+      const { worker, websocket, tables, defaultLayoutTables } =
+        await fetchTables();
       if (cancelled) return;
 
       // 2. Build default layout from tables
@@ -163,8 +164,10 @@ export const Workspace = forwardRef(function Workspace(
       if (processTables) {
         processTables(defaultLayout, tables, theme);
       } else {
-        const sortedNames = Object.keys(tables).sort();
-        sortedNames.forEach((tableName, index) => {
+        // The server decides which tables the generated layout opens; tabs share the strip's width,
+        // so opening every table makes each label unreadable.
+        const openNames = defaultLayoutTables.filter((name) => name in tables);
+        openNames.forEach((tableName, index) => {
           const { schema } = tables[tableName];
           const generated_id = `${tableName.toUpperCase()}_GENERATED_${index + 1}`;
           defaultLayout.layout.tabs.push(generated_id);
