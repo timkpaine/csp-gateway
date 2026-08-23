@@ -72,7 +72,7 @@ develop = [
     # client
     "aiohttp",
     "aiostream",
-    "httpx",
+    "httpx2",
     "jsonref",
     "nest-asyncio",
     "packaging",
@@ -90,7 +90,7 @@ server = [
     "duckdb>=1.4.1",
     "fastapi>=0.110",
     "fsspec",
-    "httpx",
+    "httpx2",
     "hydra-core",
     "janus",
     "omegaconf",
@@ -109,7 +109,7 @@ server = [
 ]
 client = [
     # NOTE: Optional
-    "httpx",
+    "httpx2",
     "jsonref",
     "nest-asyncio",
     "packaging",

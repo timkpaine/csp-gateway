@@ -67,7 +67,7 @@ class TestOAuth2OIDCDiscovery:
             client_id="my-client-id",
         )
 
-        with patch("httpx.get") as mock_get:
+        with patch("httpx2.get") as mock_get:
             mock_response = MagicMock()
             mock_response.json.return_value = MOCK_OIDC_CONFIG
             mock_response.raise_for_status = MagicMock()
@@ -88,7 +88,7 @@ class TestOAuth2OIDCDiscovery:
             client_id="my-client-id",
         )
 
-        with patch("httpx.get") as mock_get:
+        with patch("httpx2.get") as mock_get:
             mock_response = MagicMock()
             mock_response.json.return_value = MOCK_OIDC_CONFIG
             mock_response.raise_for_status = MagicMock()
@@ -143,7 +143,7 @@ class TestOAuth2TokenExchange:
         }
         mock_response.raise_for_status = MagicMock()
 
-        with patch("httpx.AsyncClient") as mock_client:
+        with patch("httpx2.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_instance.post = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value = mock_instance
@@ -176,7 +176,7 @@ class TestOAuth2UserInfo:
         }
         mock_response.raise_for_status = MagicMock()
 
-        with patch("httpx.AsyncClient") as mock_client:
+        with patch("httpx2.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_instance.get = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value = mock_instance
@@ -208,7 +208,7 @@ class TestOAuth2TokenIntrospection:
         }
         mock_response.raise_for_status = MagicMock()
 
-        with patch("httpx.AsyncClient") as mock_client:
+        with patch("httpx2.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_instance.post = AsyncMock(return_value=mock_response)
             mock_client.return_value.__aenter__.return_value = mock_instance

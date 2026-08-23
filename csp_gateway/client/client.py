@@ -19,8 +19,8 @@ from importlib import import_module
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Literal, Union, cast
 
-import httpx
-from httpx import AsyncClient as httpx_AsyncClient, Response, get as GET, patch as PATCH, post as POST, put as PUT
+import httpx2
+from httpx2 import AsyncClient as httpx2_AsyncClient, Response, get as GET, patch as PATCH, post as POST, put as PUT
 from jsonref import replace_refs
 from nest_asyncio import apply as applyAsyncioNesting
 from packaging import version
@@ -394,7 +394,7 @@ class BaseGatewayClient(BaseModel):
     config: GatewayClientConfig = Field(default_factory=GatewayClientConfig)
 
     http_args: dict[str, Any] = Field(
-        default={"follow_redirects": True}, description="Additional arguments to pass to httpx requests (e.g., headers, auth, etc.)"
+        default={"follow_redirects": True}, description="Additional arguments to pass to httpx2 requests (e.g., headers, auth, etc.)"
     )
 
     # Additional initialization for bearer_token
@@ -591,7 +591,7 @@ class BaseGatewayClient(BaseModel):
     ) -> ResponseType:
         params = params or {}
         resolved_route, extra_params = self._buildroute(route)
-        async with httpx_AsyncClient() as client:
+        async with httpx2_AsyncClient() as client:
             return self._handle_response(
                 await client.get(resolved_route, params={**params, **extra_params}, timeout=timeout, **self.http_args), route=route
             )
@@ -618,7 +618,7 @@ class BaseGatewayClient(BaseModel):
     ) -> ResponseType:
         params = params or {}
         resolved_route, extra_params = self._buildroute(route)
-        async with httpx_AsyncClient() as client:
+        async with httpx2_AsyncClient() as client:
             return self._handle_response(
                 await client.post(resolved_route, params={**params, **extra_params}, json=data, timeout=timeout, **self.http_args), route=route
             )
@@ -635,7 +635,7 @@ class BaseGatewayClient(BaseModel):
         kwargs: dict[str, Any] = {"params": {**params, **extra_params}, "timeout": timeout, **self.http_args}
         if data is not None:
             kwargs["json"] = data
-        return self._handle_response(httpx.request("DELETE", resolved_route, **kwargs), route=route)
+        return self._handle_response(httpx2.request("DELETE", resolved_route, **kwargs), route=route)
 
     async def _deleteasync(
         self,
@@ -649,7 +649,7 @@ class BaseGatewayClient(BaseModel):
         kwargs: dict[str, Any] = {"params": {**params, **extra_params}, "timeout": timeout, **self.http_args}
         if data is not None:
             kwargs["json"] = data
-        async with httpx_AsyncClient() as client:
+        async with httpx2_AsyncClient() as client:
             return self._handle_response(await client.request("DELETE", resolved_route, **kwargs), route=route)
 
     def _patch(
@@ -670,7 +670,7 @@ class BaseGatewayClient(BaseModel):
     ) -> ResponseType:
         params = params or {}
         resolved_route, extra_params = self._buildroute(route)
-        async with httpx_AsyncClient() as client:
+        async with httpx2_AsyncClient() as client:
             return self._handle_response(
                 await client.patch(resolved_route, params={**params, **extra_params}, timeout=timeout, **self.http_args), route=route
             )
@@ -693,7 +693,7 @@ class BaseGatewayClient(BaseModel):
     ) -> ResponseType:
         params = params or {}
         resolved_route, extra_params = self._buildroute(route)
-        async with httpx_AsyncClient() as client:
+        async with httpx2_AsyncClient() as client:
             return self._handle_response(
                 await client.put(resolved_route, params={**params, **extra_params}, timeout=timeout, **self.http_args), route=route
             )
