@@ -21,13 +21,12 @@
     "react-modern-drawer": "^1.4.0"
   },
   "devDependencies": {
-    "@perspective-dev/client": "~4.5.1",
-    "@perspective-dev/react": "~4.5.1",
-    "@perspective-dev/server": "~4.5.1",
-    "@perspective-dev/viewer": "~4.5.1",
-    "@perspective-dev/viewer-charts": "~4.5.1",
-    "@perspective-dev/viewer-datagrid": "~4.5.1",
-    "@perspective-dev/workspace": "~4.5.1",
+    "@perspective-dev/client": "~5.2.0",
+    "@perspective-dev/react": "~5.2.0",
+    "@perspective-dev/server": "~5.2.0",
+    "@perspective-dev/viewer": "~5.2.0",
+    "@perspective-dev/viewer-charts": "~5.2.0",
+    "@perspective-dev/viewer-datagrid": "~5.2.0",
     "cpy": "^13.2.2",
     "esbuild": "^0.28.0",
     "lightningcss": "^1.29.3",
@@ -37,13 +36,12 @@
     "react-dom": "19.2.6"
   },
   "peerDependencies": {
-    "@perspective-dev/client": "~4.5.1",
-    "@perspective-dev/react": "~4.5.1",
-    "@perspective-dev/server": "~4.5.1",
-    "@perspective-dev/viewer": "~4.5.1",
-    "@perspective-dev/viewer-charts": "~4.5.1",
-    "@perspective-dev/viewer-datagrid": "~4.5.1",
-    "@perspective-dev/workspace": "~4.5.1",
+    "@perspective-dev/client": "~5.2.0",
+    "@perspective-dev/react": "~5.2.0",
+    "@perspective-dev/server": "~5.2.0",
+    "@perspective-dev/viewer": "~5.2.0",
+    "@perspective-dev/viewer-charts": "~5.2.0",
+    "@perspective-dev/viewer-datagrid": "~5.2.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   }
