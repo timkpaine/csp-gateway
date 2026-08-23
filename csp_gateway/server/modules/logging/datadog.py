@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from queue import Queue
 from threading import Thread
 
@@ -66,7 +66,7 @@ def _send_to_datadog(queue: Queue, dd_latency_log_threshold_seconds: int) -> Non
 
         for event_or_metric_type, event_or_metric_body in data:
             try:
-                start_time = datetime.now(timezone.utc)
+                start_time = datetime.now(UTC)
                 if issubclass(event_or_metric_type, MonitoringEvent):
                     res = api.Event.create(**event_or_metric_body)
                 elif issubclass(event_or_metric_type, MonitoringMetric):
@@ -76,7 +76,7 @@ def _send_to_datadog(queue: Queue, dd_latency_log_threshold_seconds: int) -> Non
             except Exception:
                 log.exception("Error sending monitoring data to Datadog")
             else:
-                end_time = datetime.now(timezone.utc)
+                end_time = datetime.now(UTC)
                 _log_result(event_or_metric_type.__name__, event_or_metric_body, res)
                 elapsed_seconds = (end_time - start_time).total_seconds()
                 if elapsed_seconds > dd_latency_log_threshold_seconds:

@@ -1,15 +1,14 @@
 """spaday-based frontend provider for the Gateway web application.
 
-This is the optional alternative to the built-in Perspective/React UI, selected via
-`Settings.UI_PROVIDER == "spaday"`. A `GatewayUI` handle is passed to each module's
-`ui()` hook (mirroring how `GatewayWebApp` is passed to `rest()`); modules register a
+This is the default UI, selected via `Settings.UI_PROVIDER == "spaday"` (the legacy
+Perspective/React frontend remains available as `"default"`). A `GatewayUI` handle is passed to
+each module's `ui()` hook (mirroring how `GatewayWebApp` is passed to `rest()`); modules register a
 main panel or add header actions, and `GatewayUI` assembles a single spaday page and
 mounts it onto the FastAPI app.
 
 This module imports `spaday` at import time, so it is imported only when the spaday provider is
 selected — from `GatewayWebApp` when `UI_PROVIDER == "spaday"`, and lazily from the modules' `ui()`
-hooks (which only run under that provider) — never from `csp_gateway.server.web` at large. It requires
-the optional `spaday` extra (`pip install 'csp-gateway[spaday]'`).
+hooks (which only run under that provider) — never from `csp_gateway.server.web` at large.
 """
 
 from __future__ import annotations
@@ -30,8 +29,8 @@ try:
     import spaday  # noqa: F401
 except ImportError as exc:  # pragma: no cover
     raise ImportError(
-        "The spaday UI provider (Settings.UI_PROVIDER='spaday') requires the optional 'spaday' "
-        "dependency. Install it with: pip install 'csp-gateway[spaday]'."
+        "The spaday UI provider (Settings.UI_PROVIDER='spaday') requires the 'spaday' "
+        "dependency, which ships with csp-gateway. Reinstall it with: pip install csp-gateway."
     ) from exc
 
 from spaday import element
@@ -81,22 +80,14 @@ log = logging.getLogger(__name__)
 _ANONYMOUS_TENANT = "__anonymous__"
 
 
-# Minimal shell theming so the spaday page looks reasonable in both light and dark modes.
-# Keyed off the ``wa-dark`` class that ``App().bind_root_class("wa-dark", "dark")`` toggles.
-THEME_CSS = """<style>
+# Page-level resets that spaday's document template does not ship. The palette is deliberately absent:
+# the shell supplies its own light and dark values for the ``spa-*`` tokens, keyed off the ``wa-dark``
+# class that ``App().bind_root_class("wa-dark", "dark")`` toggles, and WebAwesome sets the matching
+# ``color-scheme`` so the page canvas follows.
+PAGE_CSS = """<style>
       html, body { height: 100%; }
       body { margin: 0; font-family: system-ui, sans-serif; }
-      spa-app { --spa-gap: 0.75rem; height: 100vh; }
-      html:not(.wa-dark) { background: #eef1f5; }
-      html:not(.wa-dark) spa-app {
-        --spa-surface: #ffffff; --spa-surface-2: #f3f5f8; --spa-border: #dde3ec; --spa-muted: #5a6a80;
-        color: #1a2230; background: #eef1f5;
-      }
-      html.wa-dark { background: #1b222e; }
-      html.wa-dark spa-app {
-        --spa-surface: #222b39; --spa-surface-2: #2a3445; --spa-border: #3b4860; --spa-muted: #8fa3c0;
-        color: #e6eefb; background: #1b222e;
-      }
+      spa-app { --spa-gap: 0.75rem; }
     </style>"""
 
 
@@ -234,6 +225,19 @@ class GatewayUI:
             return f"{root}{path}"
         return path
 
+    def _custom_assets(self) -> tuple[list[str], list[str]]:
+        """The configured `Settings.CUSTOM_CSS` / `CUSTOM_JS` as stylesheet and script URLs.
+
+        Both are resolved by `GatewayWebApp._resolve_ui_assets` first, so local paths have already
+        been mounted and turned into URLs, and anything discovered under ``CUSTOM_STATIC_DIR`` is
+        included. Scripts are handed to spaday as ES modules rather than the classic ``<script>``
+        tags the default UI emits.
+        """
+        ui_config = getattr(self._web_app, "_ui_config_raw", None) or {}
+        stylesheets = [self.url(href) for href in ui_config.get("customCss") or []]
+        scripts = [self.url(src) for src in ui_config.get("customJs") or []]
+        return stylesheets, scripts
+
     def _region(self, region: Region, *builtin: Any) -> list[Any]:
         """The composed, order-sorted components for a region.
 
@@ -260,15 +264,17 @@ class GatewayUI:
         *,
         route: str,
         tables: list[str] | None = None,
+        default_tables: list[str] | None = None,
         layouts: dict[str, str] | None = None,
     ) -> Any:
         """A Perspective workspace panel (the primary data view), bound to the theme + `view` state.
 
         Data rides Perspective's own websocket at ``route``; the panel only carries the workspace
-        layout/theme config. Add it to `Region.MAIN`.
+        layout/theme config. ``default_tables`` are the ones the generated layout opens, defaulting
+        to all of ``tables``. Add it to `Region.MAIN`.
         """
         tables = list(tables or [])
-        layout_expr: Any = self._default_layout(tables)
+        layout_expr: Any = self._default_layout(list(default_tables) if default_tables is not None else tables)
         for name, layout_json in (layouts or {}).items():
             try:
                 parsed = json.loads(layout_json)
@@ -392,19 +398,16 @@ class GatewayUI:
 
     @staticmethod
     def _default_layout(tables: list[str]) -> dict[str, Any]:
-        """A perspective-workspace layout that shows every table in its own datagrid tab."""
-        widgets: dict[str, Any] = {}
-        widget_ids: list[str] = []
+        """A perspective workspace config that shows every table in its own datagrid tab."""
+        panels: dict[str, Any] = {}
+        panel_ids: list[str] = []
         for i, table in enumerate(tables):
-            widget_id = f"CSP_GATEWAY_{i}"
-            widgets[widget_id] = {"table": table, "plugin": "Datagrid", "title": table}
-            widget_ids.append(widget_id)
+            panel_id = f"CSP_GATEWAY_{i}"
+            panels[panel_id] = {"table": table, "plugin": "Datagrid", "title": table}
+            panel_ids.append(panel_id)
         return {
-            "sizes": [1],
-            "detail": {"main": {"type": "tab-area", "widgets": widget_ids, "currentIndex": 0}},
-            "master": {"sizes": [], "widgets": []},
-            "mode": "globalFilters",
-            "viewers": widgets,
+            "layout": {"type": "tab-layout", "tabs": panel_ids, "selected": 0},
+            "panels": panels,
         }
 
     def send_panel(self, specs: list[SendSpec]) -> Any:
@@ -691,6 +694,7 @@ class GatewayUI:
         """
         title = getattr(self._settings, "TITLE", "Gateway")
         root = getattr(self._settings, "ROOT_PATH", "") or ""
+        custom_css, custom_scripts = self._custom_assets()
         # spaday's mount() appends plain Starlette routes, which do not carry the FastAPI auth
         # dependencies. Build them on a scratch app under the ROOT_PATH prefix (so the emitted page URLs
         # — /js runtime, wasm — resolve under a proxied sub-path), then re-register with the prefix
@@ -719,7 +723,11 @@ class GatewayUI:
             wire=wire,
             routes=routes,
             store={"dark": False, **self._store_seeds},
-            head=THEME_CSS,
+            # Emitted after the component packages' own CSS, so a custom stylesheet can override the
+            # shell palette, and before `head`, which carries only document resets.
+            stylesheets=custom_css,
+            scripts=custom_scripts,
+            head=PAGE_CSS,
             title=title,
             prefix=root,
         )

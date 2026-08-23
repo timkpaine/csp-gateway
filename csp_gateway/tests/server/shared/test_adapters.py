@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest import mock
 
 import csp
@@ -28,7 +28,7 @@ def test_sql_polling_adapter_error(caplog_level, caplog):
     )
     csp.run(
         my_poll,
-        starttime=datetime.now(timezone.utc),
+        starttime=datetime.now(UTC),
         endtime=timedelta(seconds=1),
         realtime=True,
     )
@@ -58,7 +58,7 @@ def test_sql_polling_adapter_poll():
     )
     out = csp.run(
         my_poll,
-        starttime=datetime.now(timezone.utc),
+        starttime=datetime.now(UTC),
         endtime=timedelta(seconds=1),
         realtime=True,
     )
@@ -85,7 +85,7 @@ def test_sql_polling_adapter_poll_with_arrow(mock_arrow_table_db):
     )
     out = csp.run(
         my_poll,
-        starttime=datetime.now(timezone.utc),
+        starttime=datetime.now(UTC),
         endtime=timedelta(seconds=1),
         realtime=True,
     )
@@ -114,7 +114,7 @@ def test_sql_polling_adapter_poll_with_pandas(mock_arrow_table_db):
     )
     out = csp.run(
         my_poll,
-        starttime=datetime.now(timezone.utc),
+        starttime=datetime.now(UTC),
         endtime=timedelta(seconds=1),
         realtime=True,
     )
@@ -143,7 +143,7 @@ def test_sql_polling_adapter_poll_timeout():
     )
     out = csp.run(
         my_poll,
-        starttime=datetime.now(timezone.utc),
+        starttime=datetime.now(UTC),
         endtime=timedelta(seconds=1),
         realtime=True,
     )
@@ -177,7 +177,7 @@ def test_sql_polling_adapter_poll_with_callback():
     )
     out = csp.run(
         my_poll,
-        starttime=datetime.now(timezone.utc),
+        starttime=datetime.now(UTC),
         endtime=timedelta(seconds=1),
         realtime=True,
     )

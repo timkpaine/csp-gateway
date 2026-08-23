@@ -15,7 +15,7 @@ description = "csp-gateway is a framework for building high-performance streamin
 readme = "README.md"
 license = { text = "Apache-2.0" }
 version = "2.9.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 keywords = [
     "csp",
     "csp-gateway",
@@ -72,7 +72,7 @@ develop = [
     # client
     "aiohttp",
     "aiostream",
-    "httpx",
+    "httpx2",
     "jsonref",
     "nest-asyncio",
     "packaging",
@@ -90,34 +90,30 @@ server = [
     "duckdb>=1.4.1",
     "fastapi>=0.110",
     "fsspec",
-    "httpx",
+    "httpx2",
     "hydra-core",
     "janus",
     "omegaconf",
     "orjson",
-    "perspective-python>=4.5,<4.6",
+    "perspective-python>=5.2,<6",
     "psutil",
     "pyarrow",
     "pydantic>=2",
+    # Default frontend provider (Settings.UI_PROVIDER = "spaday"). 0.4 tracks perspective 5.
+    "spaday>=0.7.1",
+    "spaday-perspective>=0.4.1",
+    "spaday-webawesome>=0.2.0",
     "uvicorn>=0.28.1,<0.50",
     "uvloop",
     "websockets",
 ]
 client = [
     # NOTE: Optional
-    "httpx",
+    "httpx2",
     "jsonref",
     "nest-asyncio",
     "packaging",
     "pydantic>=2",
-]
-spaday = [
-    # Optional spaday-based frontend provider (Settings.UI_PROVIDER = "spaday")
-    # 0.5 splits the component libraries into their own distributions and adds the `Each` repeater the
-    # staging panel renders with.
-    "spaday>=0.5.0",
-    "spaday-perspective>=0.1.0",
-    "spaday-webawesome>=0.1.0",
 ]
 
 [project.scripts]

@@ -3,7 +3,6 @@ import perspective_viewer from "@perspective-dev/viewer";
 import SERVER_WASM from "@perspective-dev/server/dist/wasm/perspective-server.wasm";
 import CLIENT_WASM from "@perspective-dev/viewer/dist/wasm/perspective-viewer.wasm";
 
-import "@perspective-dev/workspace";
 import "@perspective-dev/viewer-datagrid";
 import "@perspective-dev/viewer-charts";
 
@@ -54,5 +53,10 @@ export const fetchTables = async () => {
     return acc;
   }, {});
 
-  return { worker, websocket, tables: new_tables };
+  return {
+    worker,
+    websocket,
+    tables: new_tables,
+    defaultLayoutTables: meta.default_layout_tables ?? table_names,
+  };
 };

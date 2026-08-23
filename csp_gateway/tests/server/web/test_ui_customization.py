@@ -12,6 +12,9 @@ from csp_gateway.server.web.app import GatewayWebApp
 
 
 def _make_client(tmp_path, **settings_kwargs) -> TestClient:
+    # These assertions are against the legacy provider's markup, so pin it unless a test asks
+    # for another one.
+    settings_kwargs.setdefault("UI_PROVIDER", "default")
     settings = GatewaySettings(PORT=0, UI=True, **settings_kwargs)
     gateway = Gateway(
         modules=[ExampleModule(), MountControls(), MountRestRoutes(force_mount_all=True)],
@@ -154,7 +157,7 @@ class TestRootPathNormalization:
     def test_normalized_root_path_prefixes_urls(self, tmp_path):
         # A non-leading-slash, trailing-slash value is normalized before use.
         (tmp_path / "logo.svg").write_text("<svg></svg>")
-        settings = GatewaySettings(PORT=0, UI=True, ROOT_PATH="watchtower/", HEADER_LOGO=str(tmp_path / "logo.svg"))
+        settings = GatewaySettings(PORT=0, UI=True, UI_PROVIDER="default", ROOT_PATH="watchtower/", HEADER_LOGO=str(tmp_path / "logo.svg"))
         gateway = Gateway(
             modules=[ExampleModule(), MountControls(), MountRestRoutes(force_mount_all=True)],
             channels=ExampleGatewayChannels(),
@@ -167,5 +170,50 @@ class TestRootPathNormalization:
             assert config["basePath"] == "/watchtower"
             assert config["headerLogo"].startswith("/watchtower/custom-assets/")
             assert '<base href="/watchtower/" />' in client.get("/").text
+        finally:
+            gateway.stop()
+
+
+class TestSpadayUiCustomization:
+    """The spaday provider must honour the same white-labeling settings as the default UI."""
+
+    def test_custom_css_and_js_are_emitted(self, tmp_path):
+        pytest.importorskip("spaday")
+        client, gateway = _make_client(
+            tmp_path,
+            UI_PROVIDER="spaday",
+            CUSTOM_CSS=["https://cdn.example.com/extra.css"],
+            CUSTOM_JS=["https://cdn.example.com/extra.js"],
+        )
+        try:
+            html = client.get("/").text
+            assert '<link rel="stylesheet" href="https://cdn.example.com/extra.css" />' in html
+            # spaday loads extra scripts as ES modules from its bootstrap module.
+            assert 'import "https://cdn.example.com/extra.js";' in html
+        finally:
+            gateway.stop()
+
+    def test_custom_static_dir_is_emitted(self, tmp_path):
+        pytest.importorskip("spaday")
+        (tmp_path / "a.js").write_text("// js")
+        (tmp_path / "b.css").write_text("/* css */")
+        client, gateway = _make_client(tmp_path, UI_PROVIDER="spaday", CUSTOM_STATIC_DIR=str(tmp_path))
+        try:
+            html = client.get("/").text
+            assert 'href="/custom/b.css"' in html
+            assert 'import "/custom/a.js";' in html
+            assert client.get("/custom/a.js").status_code == 200
+        finally:
+            gateway.stop()
+
+    def test_custom_assets_are_root_path_prefixed(self, tmp_path):
+        pytest.importorskip("spaday")
+        (tmp_path / "a.js").write_text("// js")
+        (tmp_path / "b.css").write_text("/* css */")
+        client, gateway = _make_client(tmp_path, UI_PROVIDER="spaday", ROOT_PATH="watchtower/", CUSTOM_STATIC_DIR=str(tmp_path))
+        try:
+            html = client.get("/").text
+            assert 'href="/watchtower/custom/b.css"' in html
+            assert 'import "/watchtower/custom/a.js";' in html
         finally:
             gateway.stop()

@@ -7,7 +7,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import csp.impl.error_handling
-import httpx
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
@@ -90,7 +90,6 @@ def test_start_and_then_die_with_error(free_port):
         gateway.start(realtime=True, rest=True)
 
 
-@pytest.mark.skipif(sys.platform == "darwin", reason="Flaky on MacOS GHA runners")
 def test_start_and_then_graph_start_error(caplog, free_port):
     gateway = Gateway(
         settings=GatewaySettings(PORT=free_port),
@@ -103,7 +102,7 @@ def test_start_and_then_graph_start_error(caplog, free_port):
     )
     with pytest.raises(RuntimeError):
         gateway.start(realtime=True, rest=True, block=False, build_timeout=timedelta(seconds=60))
-    assert "Graph start failure" in caplog.text
+    assert "Startup of graph failed" in caplog.text
 
 
 def test_stop_with_shutdown(free_port):
@@ -170,10 +169,10 @@ def test_signal_with_shutdown(signal_val, free_port):
             assert p.exitcode == 0
         try:
             time.sleep(REQUEST_RETRY_TIMEOUT)
-            resp = httpx.get(url, timeout=1, follow_redirects=True)
+            resp = httpx2.get(url, timeout=1, follow_redirects=True)
             resp.raise_for_status()
             break
-        except (httpx.HTTPStatusError, httpx.TransportError):
+        except (httpx2.HTTPStatusError, httpx2.TransportError):
             pass
 
     print("Server is up")
@@ -215,16 +214,16 @@ def test_shutdown_with_big_red_button(free_port):
             assert p.exitcode == 0
         try:
             time.sleep(REQUEST_RETRY_TIMEOUT)
-            resp = httpx.get(state_url, timeout=1, follow_redirects=True)
+            resp = httpx2.get(state_url, timeout=1, follow_redirects=True)
             resp.raise_for_status()
             break
-        except (httpx.HTTPStatusError, httpx.TransportError):
+        except (httpx2.HTTPStatusError, httpx2.TransportError):
             print("Server not up yet")
             continue
     print("Server is up")
     # Send signal to invoke shutdown
     print("Sending Shutdown Request")
-    resp = httpx.post(shutdown_url, timeout=1, follow_redirects=True)
+    resp = httpx2.post(shutdown_url, timeout=1, follow_redirects=True)
     # Wait for gateway to react to signal
     p.join(AFTER_SHUTDOWN_WAIT_TIME)
     # Check if gateway shutdown with proper exit status

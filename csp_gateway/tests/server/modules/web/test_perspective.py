@@ -1,4 +1,5 @@
-from datetime import date, datetime, timedelta, timezone
+import json
+from datetime import UTC, date, datetime, timedelta
 from enum import Enum, auto
 from unittest.mock import MagicMock
 
@@ -20,6 +21,7 @@ from csp_gateway import (
     create_pyarrow_table,
     psp_schema_to_arrow_schema,
 )
+from csp_gateway.server.modules.web.perspective import migrate_perspective_layout
 from csp_gateway.testing.harness import GatewayTestHarness
 
 
@@ -190,7 +192,7 @@ def test_recursive_perspective_schema():
 
 
 def test_recursive_perspective_flattening():
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
 
     # List with 1 element
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
@@ -387,7 +389,7 @@ def test_exclude_columns_schema():
 
 
 def test_pyarrow_conversion():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     now_date = now.date()
     schema = MyPyArrowStruct.psp_schema()
     arrow_schema = psp_schema_to_arrow_schema(schema)
@@ -428,7 +430,7 @@ def test_MountPerspectiveTables(use_external_perspective):
         test_dynamic_keys={"dict_channel": ["test_key"]},
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
 
     # List with 1 element
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
@@ -499,7 +501,7 @@ def test_MountPerspectiveTables_exclude_columns(exclude_columns):
         test_dynamic_keys={"dict_channel": ["test_key"]},
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
 
     # List with 1 element
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
@@ -595,7 +597,7 @@ def test_additional_tables():
         test_channels=[GWC.test_channel, GWC.limit_channel],
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
 
     for _ in range(10):
@@ -656,7 +658,7 @@ def test_additional_tables_with_dict_channel():
         test_dynamic_keys={"dict_channel": ["test_key"]},
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
 
     for _ in range(5):
@@ -697,7 +699,7 @@ def test_additional_tables_invalid_channel():
         test_channels=[GWC.test_channel],
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
     h.send(GWC.test_channel, o)
 
@@ -729,7 +731,7 @@ def test_tables_unified_api():
         test_channels=[GWC.test_channel, GWC.limit_channel],
     )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=timezone.utc)
+    now = datetime.now(UTC).replace(tzinfo=UTC)
     o = MyTestStruct(sub=MyTestSubStruct(y=[1], timestamp=now), timestamp=now)
 
     for _ in range(10):
@@ -756,3 +758,91 @@ def test_tables_unified_api():
     assert table_len("test_channel_limited") == 3
     # limit_channel has limit=5
     assert table_len("limit_channel") == 5
+
+
+class TestLayoutMigration:
+    """Perspective 4 workspace layouts are rewritten to the Perspective 5 shape."""
+
+    V4_LAYOUT = json.dumps(
+        {
+            "sizes": [1],
+            "detail": {
+                "main": {
+                    "type": "split-area",
+                    "orientation": "vertical",
+                    "sizes": [0.3, 0.7],
+                    "children": [
+                        {"type": "tab-area", "widgets": ["A"], "currentIndex": 0},
+                        {"type": "tab-area", "widgets": ["B", "C"], "currentIndex": 1},
+                    ],
+                }
+            },
+            "master": {"sizes": [], "widgets": ["A"]},
+            "mode": "globalFilters",
+            "viewers": {
+                "A": {"table": "example", "plugin": "Datagrid"},
+                "B": {"table": "example", "plugin": "Treemap"},
+                "C": {"table": "other", "plugin": "Datagrid"},
+            },
+        }
+    )
+
+    def test_widget_tree_becomes_layout_tree(self):
+        migrated = json.loads(migrate_perspective_layout(self.V4_LAYOUT))
+        assert migrated["layout"] == {
+            "type": "split-layout",
+            "orientation": "vertical",
+            "sizes": [0.3, 0.7],
+            "children": [
+                {"type": "tab-layout", "tabs": ["A"], "selected": 0},
+                {"type": "tab-layout", "tabs": ["B", "C"], "selected": 1},
+            ],
+        }
+
+    def test_viewers_become_panels_and_masters_are_kept(self):
+        migrated = json.loads(migrate_perspective_layout(self.V4_LAYOUT))
+        assert sorted(migrated["panels"]) == ["A", "B", "C"]
+        assert migrated["panels"]["B"] == {"table": "example", "plugin": "Treemap"}
+        assert migrated["masters"] == ["A"]
+        # The v4-only envelope keys do not survive.
+        assert "viewers" not in migrated
+        assert "detail" not in migrated
+
+    def test_already_migrated_layout_is_untouched(self):
+        once = migrate_perspective_layout(self.V4_LAYOUT)
+        assert migrate_perspective_layout(once) == once
+
+    @pytest.mark.parametrize("layout", ["", "not json", "[]", '{"panels": {}}'])
+    def test_non_v4_input_passes_through(self, layout):
+        assert migrate_perspective_layout(layout) == layout
+
+    def test_configured_layouts_are_migrated_on_validation(self):
+        module = MountPerspectiveTables(layouts={"Server Defined Layout": self.V4_LAYOUT})
+        migrated = json.loads(module.layouts["Server Defined Layout"])
+        assert sorted(migrated) == ["layout", "masters", "panels"]
+
+
+class TestDefaultLayoutTables:
+    """Which tables the generated default layout opens."""
+
+    AVAILABLE = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf"]
+
+    @staticmethod
+    def _module(**kwargs) -> MountPerspectiveTables:
+        return MountPerspectiveTables(**kwargs)
+
+    def test_caps_at_five_in_name_order_by_default(self):
+        module = self._module()
+        assert module._select_default_layout_tables(self.AVAILABLE) == ["alpha", "bravo", "charlie", "delta", "echo"]
+
+    def test_max_is_configurable(self):
+        module = self._module(default_layout_max_tables=2)
+        assert module._select_default_layout_tables(self.AVAILABLE) == ["alpha", "bravo"]
+
+    def test_explicit_tables_win_and_keep_their_order(self):
+        module = self._module(default_layout_tables=["golf", "alpha"], default_layout_max_tables=1)
+        assert module._select_default_layout_tables(self.AVAILABLE) == ["golf", "alpha"]
+
+    def test_unknown_table_names_are_dropped(self):
+        module = self._module(default_layout_tables=["golf", "not_a_table"])
+        assert module._select_default_layout_tables(self.AVAILABLE) == ["golf"]

@@ -1,6 +1,6 @@
 import logging
 import timeit
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,14 +21,14 @@ from csp_gateway.utils.struct.base import GatewayStruct
 class MockGatewayStruct(GatewayStruct):
     def __init__(self, **kwargs):
         self.id = kwargs.get("id", "test_id")
-        self.timestamp = kwargs.get("timestamp", datetime.now(timezone.utc))
+        self.timestamp = kwargs.get("timestamp", datetime.now(UTC))
 
 
 @pytest.fixture
 def monitoring_event():
     return MonitoringEvent(
         id="event_id",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         title="Test Event",
         text="This is a test event",
         event_type="test_event",
@@ -47,7 +47,7 @@ def monitoring_event():
 def monitoring_metric():
     return MonitoringMetric(
         id="metric_id",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         metric="test_metric",
         metric_type=MonitoringMetric.MetricType.gauge,
         value=1.0,
@@ -89,7 +89,7 @@ def test_monitoring_base_init():
         def to_opsgenie(self, extra_tags=None):
             return {}
 
-    base = ConcreteMonitoring(id="base_id", timestamp=datetime.now(timezone.utc), tags={"env": "test"})
+    base = ConcreteMonitoring(id="base_id", timestamp=datetime.now(UTC), tags={"env": "test"})
     assert base.id == "base_id"
     assert base.tags == {"env": "test"}
 
@@ -262,7 +262,7 @@ def test_monitoring_level_mapping_from_alert_type():
 def test_monitoring_event_class_methods():
     event = MonitoringEvent(
         id="event_id",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         title="Test Event",
         text="This is a test event",
         event_type="test_event",
@@ -280,7 +280,7 @@ def test_monitoring_event_class_methods():
 def test_monitoring_metric_class_methods():
     metric = MonitoringMetric(
         id="metric_id",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         metric="test_metric",
         metric_type=MonitoringMetric.MetricType.gauge,
         value=1.0,

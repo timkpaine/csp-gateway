@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from unittest import mock
 
@@ -141,7 +141,7 @@ def test_datadog_bad_connection():
     h.delay(timedelta(seconds=1))
     csp.run(
         gateway.graph,
-        starttime=datetime.now(timezone.utc),
+        starttime=datetime.now(UTC),
         endtime=timedelta(seconds=5),
     )
 
@@ -180,7 +180,7 @@ def test_datadog(mock_send_metric, mock_event_create, mock_initialize):
     h.assert_ticked_values("event", assert_func)
     csp.run(
         gateway.graph,
-        starttime=datetime.now(timezone.utc),
+        starttime=datetime.now(UTC),
         endtime=timedelta(seconds=5),
     )
 

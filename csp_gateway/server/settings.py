@@ -44,10 +44,10 @@ class Settings(BaseSettings):
     UI: bool = Field(False, description="Enables ui in the web application")
 
     UI_PROVIDER: Literal["default", "spaday"] = Field(
-        "default",
-        description="Frontend provider for the UI. 'default' serves the built-in "
-        "Perspective/React UI; 'spaday' serves a spaday-based UI that mimics it "
-        "(requires the 'spaday' optional dependency).",
+        "spaday",
+        description="Frontend provider for the UI. 'spaday' serves the spaday-based UI; "
+        "'default' serves the legacy Perspective/React UI, which requires the bundled "
+        "Javascript build and is slated for removal.",
     )
 
     # UI customization fields that let downstream applications white-label the

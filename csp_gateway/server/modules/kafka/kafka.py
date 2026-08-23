@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any, get_args, get_origin
 
 import csp
@@ -62,7 +62,7 @@ def _encode_envelope(encoding: str, csp_timestamp: datetime) -> str:
     return orjson.dumps(
         {
             _ENVELOPE_ENCODING_FIELD: encoding,
-            _ENVELOPE_TIMESTAMP_FIELD: int(csp_timestamp.replace(tzinfo=timezone.utc).timestamp() * 1000),
+            _ENVELOPE_TIMESTAMP_FIELD: int(csp_timestamp.replace(tzinfo=UTC).timestamp() * 1000),
         }
     ).decode()
 
@@ -73,7 +73,7 @@ def _decode_envelope(message: str) -> EncodedEngineCycle:
     timestamp = raw.get(_ENVELOPE_TIMESTAMP_FIELD)
     return EncodedEngineCycle(
         encoding=raw[_ENVELOPE_ENCODING_FIELD],
-        csp_timestamp=datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc).replace(tzinfo=None) if timestamp is not None else None,
+        csp_timestamp=datetime.fromtimestamp(timestamp / 1000, tz=UTC).replace(tzinfo=None) if timestamp is not None else None,
     )
 
 

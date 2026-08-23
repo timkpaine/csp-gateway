@@ -1,10 +1,11 @@
 """Tests for the optional spaday UI provider (`Settings.UI_PROVIDER == "spaday"`)."""
 
 from datetime import timedelta
+from enum import Enum, auto
 
 import csp
 import pytest
-from csp import Enum, ts
+from csp import ts
 from fastapi.testclient import TestClient
 
 from csp_gateway import (
@@ -174,8 +175,8 @@ class Order(GatewayStruct):
 
 
 class BasketKey(Enum):
-    A = Enum.auto()
-    B = Enum.auto()
+    A = auto()
+    B = auto()
 
 
 class DetailChannels(GatewayChannels):
@@ -232,3 +233,17 @@ class TestSpadaySendFormDetails:
         tree = client.get("/tree.json").text
         assert "/api/v1/send/basket" in tree
         assert "send_key_basket" in tree
+
+
+class TestDefaultLayout:
+    """The generated layout is a Perspective 5 whole-element config."""
+
+    def test_one_datagrid_panel_per_table(self):
+        from csp_gateway.server.web.spaday_ui import GatewayUI
+
+        layout = GatewayUI._default_layout(["orders", "fills"])
+        assert layout["layout"] == {"type": "tab-layout", "tabs": ["CSP_GATEWAY_0", "CSP_GATEWAY_1"], "selected": 0}
+        assert layout["panels"] == {
+            "CSP_GATEWAY_0": {"table": "orders", "plugin": "Datagrid", "title": "orders"},
+            "CSP_GATEWAY_1": {"table": "fills", "plugin": "Datagrid", "title": "fills"},
+        }

@@ -1,6 +1,6 @@
 import logging
 from collections import defaultdict, deque
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, TypeVar
 
@@ -269,7 +269,7 @@ class JSONConverter(BaseModel):
                         if exclude_field == "id":
                             value.id = value.generate_id()
                         elif exclude_field == "timestamp":
-                            value.timestamp = datetime.now(timezone.utc)
+                            value.timestamp = datetime.now(UTC)
                         elif hasattr(value, exclude_field):
                             delattr(value, exclude_field)
                 if isinstance(value, (list, tuple)):
