@@ -21,8 +21,9 @@ import { getCurrentTheme, getViewerTheme } from "./theme";
 /**
  * Self-contained Perspective workspace component.
  *
- * Uses the raw <perspective-workspace> custom element directly
- * to control the exact order of load() → restore().
+ * Uses the raw <perspective-viewer> custom element directly, which in Perspective 5 hosts the
+ * multi-panel layout that <perspective-workspace> used to provide, so we control the exact order
+ * of load() -> restoreWorkspace().
  *
  * Exposes imperative methods via ref:
  *   - getLayouts()       → current layouts map
@@ -62,7 +63,7 @@ export const Workspace = forwardRef(function Workspace(
         try {
           clearViewerSelections(ws);
           await flushWorkspace(ws);
-          await ws.restore(themedLayout);
+          await ws.restoreWorkspace(themedLayout);
           await flushWorkspace(ws);
           if (syncUrl && generation === restoreGenerationRef.current) {
             await setUrlLayout(themedLayout);
@@ -120,7 +121,7 @@ export const Workspace = forwardRef(function Workspace(
         await restoreQueueRef.current.catch(() => {});
         const ws = wsRef.current;
         if (!ws) return;
-        const config = stripTransientFields(await ws.save());
+        const config = stripTransientFields(await ws.saveWorkspace());
         saveCustomLayout(config);
         setLayouts((prev) => ({ ...prev, "Custom Layout": config }));
         setActiveLayoutName("Custom Layout");
@@ -129,7 +130,7 @@ export const Workspace = forwardRef(function Workspace(
         await restoreQueueRef.current.catch(() => {});
         const ws = wsRef.current;
         if (!ws) return null;
-        const config = stripTransientFields(await ws.save());
+        const config = stripTransientFields(await ws.saveWorkspace());
         return JSON.stringify(config).replace(
           /PERSPECTIVE_GENERATED_/g,
           "CSP_GATEWAY_GENERATED_",
@@ -166,8 +167,8 @@ export const Workspace = forwardRef(function Workspace(
         sortedNames.forEach((tableName, index) => {
           const { schema } = tables[tableName];
           const generated_id = `${tableName.toUpperCase()}_GENERATED_${index + 1}`;
-          defaultLayout.detail.main.widgets.push(generated_id);
-          defaultLayout.viewers[generated_id] = getDefaultViewerConfig(
+          defaultLayout.layout.tabs.push(generated_id);
+          defaultLayout.panels[generated_id] = getDefaultViewerConfig(
             tableName,
             schema,
             theme,
@@ -190,12 +191,12 @@ export const Workspace = forwardRef(function Workspace(
       };
       if (cancelled) return;
 
-      // 4. CRITICAL: load client FIRST, then restore layout
+      // 4. CRITICAL: load clients FIRST, then restore layout
       //    Load local worker first (has client-server tables as local copies).
       //    Load websocket second (for server-only tables).
-      //    The workspace iterates clients in order, so client-server tables
-      //    will match on the local worker, giving each viewer an independent
-      //    local table (no shared views / no scroll sync between viewers).
+      //    The viewer resolves a panel's `table` name across every loaded client in order, so
+      //    client-server tables match on the local worker, giving each panel an independent
+      //    local table (no shared views / no scroll sync between panels).
       await ws.load(worker);
       if (websocket !== worker) {
         await ws.load(websocket);
@@ -212,10 +213,10 @@ export const Workspace = forwardRef(function Workspace(
       initializedRef.current = true;
 
       // 7. Sync layout to URL on every workspace change
-      ws.addEventListener("workspace-layout-update", async () => {
+      ws.addEventListener("perspective-config-update", async () => {
         if (!initializedRef.current || restoringRef.current) return;
         try {
-          const config = stripTransientFields(await ws.save());
+          const config = stripTransientFields(await ws.saveWorkspace());
           if (!restoringRef.current) {
             await setUrlLayout(config);
           }
@@ -235,43 +236,22 @@ export const Workspace = forwardRef(function Workspace(
     };
   }, []);
 
-  // Apply theme to newly added viewers (right-click → add table)
-  // Only fires AFTER initial restore is complete (guarded by initializedRef)
-  // so it doesn't race with the bootstrap sequence.
-  useEffect(() => {
-    const ws = wsRef.current;
-    if (!ws) return;
-
-    const onNewView = ({ detail: { widget } }) => {
-      if (!initializedRef.current || restoringRef.current) return;
-      if (widget?.viewer) {
-        const theme = getCurrentTheme();
-        widget.viewer.setAttribute("theme", getViewerTheme(theme));
-      }
-    };
-
-    ws.addEventListener("workspace-new-view", onNewView);
-    return () => ws.removeEventListener("workspace-new-view", onNewView);
-  }, []);
-
-  return <perspective-workspace id="workspace" ref={wsRef} />;
+  // Theme is element-level in Perspective 5, so panels added later inherit it from the viewer and
+  // no per-panel hook is needed; `applyTheme` restores it across every mounted viewer.
+  return <perspective-viewer id="workspace" ref={wsRef} />;
 });
 
-/** Clone a layout config and fill in missing viewer themes */
+/** Clone a layout config and fill in missing panel themes */
 function applyThemeToLayout(layout) {
   const theme = getCurrentTheme();
   const cloned = structuredClone(layout);
-  if (cloned?.viewers) {
-    Object.keys(cloned.viewers).forEach((id) => {
-      if (!cloned.viewers[id].theme) {
-        cloned.viewers[id].theme = getViewerTheme(theme);
+  if (cloned?.panels) {
+    Object.values(cloned.panels).forEach((panel) => {
+      if (!panel.theme) {
+        panel.theme = getViewerTheme(theme);
       }
-    });
-  }
-  if (cloned?.viewers) {
-    Object.values(cloned.viewers).forEach((viewer) => {
-      viewer.plugin_config = {
-        ...viewer.plugin_config,
+      panel.plugin_config = {
+        ...panel.plugin_config,
         edit_mode: "SELECT_REGION",
       };
     });
@@ -279,15 +259,13 @@ function applyThemeToLayout(layout) {
   return cloned;
 }
 
-function clearViewerSelections(workspace) {
-  for (const viewer of workspace.querySelectorAll("perspective-viewer")) {
-    try {
-      if (viewer.getSelection?.()) {
-        viewer.setSelection?.();
-      }
-    } catch {
-      // The viewer may already be mid-delete during a rapid restore.
+function clearViewerSelections(viewer) {
+  try {
+    if (viewer.getSelection?.()) {
+      viewer.setSelection?.();
     }
+  } catch {
+    // The viewer may already be mid-delete during a rapid restore.
   }
 }
 
@@ -295,7 +273,7 @@ async function flushWorkspace(workspace) {
   try {
     await workspace.flush?.();
   } catch {
-    // Perspective can reject stale viewer flushes while replacing layouts.
+    // Perspective can reject stale panel flushes while replacing layouts.
   }
 }
 

@@ -22,12 +22,12 @@ export const saveCustomLayout = (layout) => {
  */
 export const stripTransientFields = (layout) => {
   const cloned = structuredClone(layout);
-  if (cloned?.viewers) {
-    Object.values(cloned.viewers).forEach((viewer) => {
-      delete viewer.theme;
+  if (cloned?.panels) {
+    Object.values(cloned.panels).forEach((panel) => {
+      delete panel.theme;
       // Strip datagrid column width overrides from plugin_config
-      if (viewer.plugin_config?.columns) {
-        for (const col of Object.values(viewer.plugin_config.columns)) {
+      if (panel.plugin_config?.columns) {
+        for (const col of Object.values(panel.plugin_config.columns)) {
           delete col.column_size_override;
         }
       }
@@ -101,20 +101,12 @@ export const setUrlLayout = async (layout) => {
   );
 };
 
-/** Build an empty workspace layout shell that tables can be added into */
+/** Build an empty whole-element workspace config that panels can be added into */
 export const buildEmptyLayout = () => ({
-  sizes: [1],
-  detail: {
-    main: {
-      type: "tab-area",
-      widgets: [],
-      currentIndex: 0,
-    },
+  layout: {
+    type: "tab-layout",
+    tabs: [],
+    selected: 0,
   },
-  master: {
-    sizes: [],
-    widgets: [],
-  },
-  mode: "globalFilters",
-  viewers: {},
+  panels: {},
 });
