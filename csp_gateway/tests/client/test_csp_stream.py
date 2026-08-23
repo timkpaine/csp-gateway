@@ -413,15 +413,15 @@ def _run_gateway_for_csp_stream(port_str):
 
 def _wait_for_server(url: str, timeout: int = 30):
     """Wait for the server to be ready."""
-    import httpx
+    import httpx2
 
     start = time.time()
     while time.time() - start < timeout:
         try:
-            resp = httpx.get(url, timeout=1, follow_redirects=True)
+            resp = httpx2.get(url, timeout=1, follow_redirects=True)
             resp.raise_for_status()
             return True
-        except (httpx.HTTPStatusError, httpx.TransportError):
+        except (httpx2.HTTPStatusError, httpx2.TransportError):
             time.sleep(0.5)
     return False
 
@@ -484,11 +484,11 @@ def test_stream_csp_integration_subscribe_and_receive(csp_stream_free_port):
 
     finally:
         # Shutdown the gateway
-        import httpx
+        import httpx2
 
         try:
-            httpx.post(shutdown_url, timeout=1, follow_redirects=True)
-        except httpx.RequestError as e:
+            httpx2.post(shutdown_url, timeout=1, follow_redirects=True)
+        except httpx2.RequestError as e:
             logger.debug("Error shutting down gateway during test cleanup: %s", e)
         p.join(timeout=10)
         if p.is_alive():
@@ -560,11 +560,11 @@ def test_stream_csp_integration_dynamic_subscribe_unsubscribe(csp_stream_free_po
 
     finally:
         # Shutdown the gateway
-        import httpx
+        import httpx2
 
         try:
-            httpx.post(shutdown_url, timeout=1, follow_redirects=True)
-        except httpx.RequestError as e:
+            httpx2.post(shutdown_url, timeout=1, follow_redirects=True)
+        except httpx2.RequestError as e:
             logger.debug("Error shutting down gateway during test cleanup: %s", e)
         p.join(timeout=10)
         if p.is_alive():

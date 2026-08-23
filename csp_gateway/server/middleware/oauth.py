@@ -6,7 +6,7 @@ from socket import gethostname
 from typing import Any
 from uuid import uuid4
 
-import httpx
+import httpx2
 from fastapi import APIRouter, Depends, HTTPException, Request, Security
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
@@ -81,7 +81,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
 
         discovery_url = f"{self.issuer.rstrip('/')}/.well-known/openid-configuration"
         try:
-            response = httpx.get(discovery_url, verify=self.verify_ssl)
+            response = httpx2.get(discovery_url, verify=self.verify_ssl)
             response.raise_for_status()
             self._oidc_config = response.json()
             return self._oidc_config
@@ -118,7 +118,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
         if self.client_secret:
             data["client_secret"] = self.client_secret
 
-        async with httpx.AsyncClient(verify=self.verify_ssl) as client:
+        async with httpx2.AsyncClient(verify=self.verify_ssl) as client:
             response = await client.post(token_url, data=data)
             response.raise_for_status()
             return response.json()
@@ -126,7 +126,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
     async def _get_userinfo(self, access_token: str) -> dict[str, Any]:
         """Fetch user info from userinfo endpoint."""
         userinfo_url = self._get_userinfo_url()
-        async with httpx.AsyncClient(verify=self.verify_ssl) as client:
+        async with httpx2.AsyncClient(verify=self.verify_ssl) as client:
             response = await client.get(
                 userinfo_url,
                 headers={"Authorization": f"Bearer {access_token}"},
@@ -151,7 +151,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
         else:
             data["client_id"] = self.client_id
 
-        async with httpx.AsyncClient(verify=self.verify_ssl) as client:
+        async with httpx2.AsyncClient(verify=self.verify_ssl) as client:
             response = await client.post(introspection_url, data=data, auth=auth)
             response.raise_for_status()
             return response.json()
