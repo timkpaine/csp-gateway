@@ -1,5 +1,7 @@
 /* Dark */
-[data-theme="dark"] perspective-workspace[theme="Pro Dark"],
+/* Perspective 5 hosts the multi-panel layout on <perspective-viewer> itself, so the top-level
+   element selectors below address it by id rather than the removed <perspective-workspace>. */
+[data-theme="dark"] perspective-viewer#workspace[theme="Pro Dark"],
 [data-theme="dark"] perspective-indicator[theme="Pro Dark"] {
   --psp-theme-name: "Pro Dark";
 }
@@ -47,7 +49,7 @@
   --settings-button--margin: 10px 0 0 0;
 }
 
-[data-theme="dark"] perspective-workspace {
+[data-theme="dark"] perspective-viewer#workspace {
   font-family: "Roboto Mono";
   --open-settings-button--content: "expand_more";
   --close-settings-button--content: "expand_less";
@@ -124,14 +126,19 @@
 }
 
 /* Light */
-perspective-workspace,
-perspective-workspace[theme="Pro Light"],
+perspective-viewer#workspace,
+perspective-viewer#workspace[theme="Pro Light"],
 perspective-indicator[theme="Pro Light"] {
   --psp-theme-name: "Pro Light";
-  flex-grow: 1;
 }
 
-perspective-workspace {
+/* The workspace fills the flex column between the header and footer. */
+perspective-viewer#workspace {
+  flex-grow: 1;
+  min-height: 0;
+}
+
+perspective-viewer#workspace {
   font-family: "Roboto Mono";
   --open-settings-button--content: "expand_more";
   --close-settings-button--content: "expand_less";
