@@ -396,19 +396,16 @@ class GatewayUI:
 
     @staticmethod
     def _default_layout(tables: list[str]) -> dict[str, Any]:
-        """A perspective-workspace layout that shows every table in its own datagrid tab."""
-        widgets: dict[str, Any] = {}
-        widget_ids: list[str] = []
+        """A perspective workspace config that shows every table in its own datagrid tab."""
+        panels: dict[str, Any] = {}
+        panel_ids: list[str] = []
         for i, table in enumerate(tables):
-            widget_id = f"CSP_GATEWAY_{i}"
-            widgets[widget_id] = {"table": table, "plugin": "Datagrid", "title": table}
-            widget_ids.append(widget_id)
+            panel_id = f"CSP_GATEWAY_{i}"
+            panels[panel_id] = {"table": table, "plugin": "Datagrid", "title": table}
+            panel_ids.append(panel_id)
         return {
-            "sizes": [1],
-            "detail": {"main": {"type": "tab-area", "widgets": widget_ids, "currentIndex": 0}},
-            "master": {"sizes": [], "widgets": []},
-            "mode": "globalFilters",
-            "viewers": widgets,
+            "layout": {"type": "tab-layout", "tabs": panel_ids, "selected": 0},
+            "panels": panels,
         }
 
     def send_panel(self, specs: list[SendSpec]) -> Any:
