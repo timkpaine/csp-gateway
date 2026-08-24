@@ -281,6 +281,7 @@ class TestSpadayPerspectiveLayoutActions:
     def test_layout_action_script_is_served(self, client: TestClient):
         page = client.get("/").text
         assert "/components/csp-gateway/actions.js" in page
+        assert "/components/csp-gateway-perspective-charts/spaday-charts.js" in page
         assert "globalThis.cspGatewayCustomLayout" in page
         assert '"gateway-workspace"' in client.get("/tree.json").text
         script = client.get("/components/csp-gateway/actions.js")
@@ -293,6 +294,10 @@ class TestSpadayPerspectiveLayoutActions:
         assert 'new Event("input", { bubbles: true })' in script.text
         assert '"gateway-workspace"' in script.text
         assert client.get("/js/cdn/index.js").status_code == 200
+        charts = client.get("/components/csp-gateway-perspective-charts/spaday-charts.js")
+        assert charts.status_code == 200
+        assert "X Bar" in charts.text
+        assert "Treemap" in charts.text
 
     def test_layout_download_is_a_same_origin_attachment(self, client: TestClient):
         layout = {"layout": {"type": "tab-layout", "tabs": []}, "panels": {}}
