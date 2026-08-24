@@ -735,6 +735,10 @@ class MountPerspectiveTables(GatewayModule):
             return [name for name in self.default_layout_tables if name in known]
         return sorted(names)[: self.default_layout_max_tables]
 
+    def build_default_ui_layout(self, tables: dict[str, dict[str, str]]) -> dict[str, Any] | None:
+        """Return a custom default Spaday workspace layout, or `None` to use the generated layout."""
+        return None
+
     def ui(self, app: "GatewayUI") -> None:
         # Register the Perspective workspace as the main panel of the spaday UI. Data rides
         # Perspective's own websocket (mounted by rest() at {API_STR}/perspective); the spaday
@@ -751,6 +755,7 @@ class MountPerspectiveTables(GatewayModule):
                 default_tables=self._select_default_layout_tables(tables),
                 layouts=layouts,
                 schemas=tables,
+                default_layout=self.build_default_ui_layout(tables),
             ),
         )
         default_view = self.default_layout or "__default__"

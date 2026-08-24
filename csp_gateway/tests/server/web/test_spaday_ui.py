@@ -270,6 +270,23 @@ class TestDefaultLayout:
         assert "sort" not in panel
         assert "columns" not in panel
 
+    def test_custom_default_layout_replaces_generated_layout(self):
+        from csp_gateway.server.web.spaday_ui import GatewayUI
+
+        ui = object.__new__(GatewayUI)
+        ui._store_seeds = {}
+        ui._settings = GatewaySettings()
+        custom = {
+            "layout": {"type": "tab-layout", "tabs": ["custom"]},
+            "panels": {"custom": {"table": "orders", "plugin": "X Bar"}},
+        }
+
+        panel = ui.perspective_panel(route="/perspective", tables=["orders"], default_layout=custom)
+        node = panel.to_node()
+
+        assert "X Bar" in json.dumps(node)
+        assert "CSP_GATEWAY_0" not in json.dumps(node)
+
 
 class TestDarkBoot:
     """The page seeds `dark` from the browser's prefers-color-scheme, like the legacy UI."""

@@ -285,19 +285,18 @@ class GatewayUI:
         default_tables: list[str] | None = None,
         layouts: dict[str, str] | None = None,
         schemas: dict[str, dict[str, str]] | None = None,
+        default_layout: dict[str, Any] | None = None,
     ) -> Any:
         """A Perspective workspace panel (the primary data view), bound to the theme + `view` state.
 
         Data rides Perspective's own websocket at ``route``; the panel only carries the workspace
-        layout/theme config. ``default_tables`` are the ones the generated layout opens, defaulting
-        to all of ``tables``. ``schemas`` (table name -> column name -> type) lets the generated
-        layout apply per-table defaults (timestamp sort, hidden id column). Add it to `Region.MAIN`.
+        layout/theme config. ``default_layout`` replaces the generated initial layout when supplied.
+        Otherwise ``default_tables`` are the ones the generated layout opens, defaulting to all of
+        ``tables``. ``schemas`` (table name -> column name -> type) lets the generated layout apply
+        per-table defaults (timestamp sort, hidden id column). Add it to `Region.MAIN`.
         """
         tables = list(tables or [])
-        default_layout = self._default_layout(
-            list(default_tables) if default_tables is not None else tables,
-            schemas=schemas,
-        )
+        default_layout = default_layout or self._default_layout(list(default_tables) if default_tables is not None else tables, schemas=schemas)
         layout_expr: Any = default_layout
         for name, layout_json in (layouts or {}).items():
             try:
