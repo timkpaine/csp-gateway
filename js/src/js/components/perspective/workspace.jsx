@@ -65,6 +65,14 @@ export const Workspace = forwardRef(function Workspace(
           await flushWorkspace(ws);
           await ws.restoreWorkspace(themedLayout);
           await flushWorkspace(ws);
+          // Perspective 5.2: restoring a layout with no `active` (sidebar closed) onto an
+          // already-closed viewer force-toggles settings as a no-op, but still flips the
+          // persisted settings flag and host `settings` attribute first — so the datagrid
+          // shows per-column Edit buttons and the next settings click is eaten. A bare
+          // toggleConfig() flips the stale flag back without opening the sidebar.
+          if (!themedLayout.active && ws.hasAttribute("settings")) {
+            await ws.toggleConfig();
+          }
           if (syncUrl && generation === restoreGenerationRef.current) {
             await setUrlLayout(themedLayout);
           }
