@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field as _dc_field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter
@@ -33,9 +34,10 @@ except ImportError as exc:  # pragma: no cover
         "dependency, which ships with csp-gateway. Reinstall it with: pip install csp-gateway."
     ) from exc
 
-from spaday import element
+from spaday import Js, element
 from spaday.actions import (
     CallEndpoint,
+    NamedJs,
     Sequence,
     SetField,
     Toggle,
@@ -51,6 +53,7 @@ from spaday.actions import (
 )
 from spaday.backends.starlette import mount as _spaday_mount
 from spaday.components.shell import AppShell, Column, Region, Row, Show
+from spaday.packages import ComponentPackage
 from spaday_perspective import PerspectivePanel
 from spaday_webawesome import (
     FormField,
@@ -78,6 +81,15 @@ log = logging.getLogger(__name__)
 
 # The tenant every connection shares when no auth middleware can identify it.
 _ANONYMOUS_TENANT = "__anonymous__"
+_CUSTOM_LAYOUT_NAME = "Custom Layout"
+_CUSTOM_LAYOUT_STORAGE_KEY = "csp_gateway_demo_config"
+_SAVE_LAYOUT_HANDLER = "csp-gateway:save-layout"
+_DOWNLOAD_LAYOUT_HANDLER = "csp-gateway:download-layout"
+_GATEWAY_COMPONENT_PACKAGE = ComponentPackage(
+    name="csp-gateway",
+    assets_dir=Path(__file__).with_name("spaday_assets"),
+    assets=(("js", "actions.js"),),
+)
 
 
 # Page-level resets that spaday's document template does not ship. The palette is deliberately absent:
@@ -274,13 +286,27 @@ class GatewayUI:
         to all of ``tables``. Add it to `Region.MAIN`.
         """
         tables = list(tables or [])
-        layout_expr: Any = self._default_layout(list(default_tables) if default_tables is not None else tables)
+        default_layout = self._default_layout(list(default_tables) if default_tables is not None else tables)
+        layout_expr: Any = default_layout
         for name, layout_json in (layouts or {}).items():
             try:
                 parsed = json.loads(layout_json)
             except (TypeError, ValueError):
                 continue
             layout_expr = cond(eq(field("view"), name), parsed, layout_expr)
+        fallback = json.dumps(default_layout).replace("<", "\\u003c")
+        storage_key = json.dumps(_CUSTOM_LAYOUT_STORAGE_KEY)
+        self._store_seeds["custom_layout"] = Js(
+            "globalThis.cspGatewayCustomLayout = (() => { "
+            f"const fallback = {fallback}; "
+            f'try {{ const value = JSON.parse(localStorage.getItem({storage_key}) ?? "null"); '
+            'return value && typeof value === "object" && !Array.isArray(value) '
+            '&& value.layout && typeof value.layout === "object" && !Array.isArray(value.layout) '
+            '&& value.panels && typeof value.panels === "object" && !Array.isArray(value.panels) ? value : fallback; } '
+            "catch { return fallback; } "
+            "})()"
+        )
+        layout_expr = cond(eq(field("view"), _CUSTOM_LAYOUT_NAME), field("custom_layout"), layout_expr)
 
         return (
             PerspectivePanel()
@@ -291,7 +317,7 @@ class GatewayUI:
         )
 
     def layout_selector(self, layouts: dict[str, str], *, value: str | None = None) -> Any:
-        """A dropdown two-way bound to the `view` state, listing "All Tables" + each named layout.
+        """A dropdown bound to `view`, listing the generated, saved, and custom layouts.
 
         Add it to `Region.HEADER_RIGHT` (and `seed_store(view=...)`).
         """
@@ -299,7 +325,20 @@ class GatewayUI:
         select = select.child(WaOption(value="__default__").text("All Tables"))
         for name in layouts:
             select = select.child(WaOption(value=name).text(name))
-        return select
+        return select.child(WaOption(value=_CUSTOM_LAYOUT_NAME).text(_CUSTOM_LAYOUT_NAME))
+
+    def save_layout_button(self) -> Any:
+        """A header button that saves the current Perspective workspace in the browser."""
+        return WaButton(appearance="plain", title="Save current layout").on("click", NamedJs(_SAVE_LAYOUT_HANDLER)).child(WaIcon(name="floppy-disk"))
+
+    def download_layout_button(self, url: str) -> Any:
+        """A header button that downloads the current Perspective workspace as JSON."""
+        return (
+            WaButton(appearance="plain", title="Download layout")
+            .prop("data-download-url", self.url(url))
+            .on("click", NamedJs(_DOWNLOAD_LAYOUT_HANDLER))
+            .child(WaIcon(name="download"))
+        )
 
     def link_button(self, label: str, href: str, *, target: str = "_blank", variant: str | None = None) -> Any:
         """A full-width link button (opens `href`), for a drawer/gutter. Add it to a region."""
@@ -715,7 +754,7 @@ class GatewayUI:
             scratch,
             self.build_page,
             # Component libraries ship as their own distributions and are resolved by entry point.
-            packages=["webawesome", "perspective"],
+            packages=["webawesome", "perspective", _GATEWAY_COMPONENT_PACKAGE],
             # spaday infers "source checkout" from a `js/` dir next to itself, which any distribution
             # shipping a top-level `js/` package (plotly does) satisfies -- serving assets we consume
             # from the wheel, never from a spaday checkout.

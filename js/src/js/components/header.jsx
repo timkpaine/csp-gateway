@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { FaBars, FaDownload, FaMoon, FaSave, FaSun } from "react-icons/fa";
 import { CspGatewayLogo } from "./logo";
-import { getCurrentTheme } from "./perspective/theme";
+import { downloadLayout } from "./perspective/download";
 
 const ICON_SIZE = 20;
 
@@ -59,12 +59,7 @@ export function Header(props) {
   const onDownload = useCallback(async () => {
     const json = await workspaceRef?.current?.exportLayout();
     if (!json) return;
-    const link = document.createElement("a");
-    link.href = `data:application/json;base64,${btoa(json)}`;
-    link.download = "layout.json";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadLayout(json);
   }, [workspaceRef]);
 
   return (

@@ -9,6 +9,7 @@ from typing import (
     Literal,
     TypeVar,
 )
+from urllib.parse import parse_qs
 
 import csp
 import orjson
@@ -16,7 +17,7 @@ import pyarrow
 import pyarrow.json
 import uvloop
 from csp import ts
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, HTTPException, Request, Response, WebSocket
 from perspective import Client, Server, Table
 from perspective.handlers.starlette import PerspectiveStarletteHandler
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
@@ -42,6 +43,8 @@ T = TypeVar("T")
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 log = getLogger(__name__)
+
+_MAX_LAYOUT_DOWNLOAD_BYTES = 16 * 1024 * 1024
 
 _PSP_ARROW_MAP = {
     int: pyarrow.int64(),
@@ -654,6 +657,36 @@ class MountPerspectiveTables(GatewayModule):
             """
             return self._layouts
 
+        @api_router.post("{}/{}".format(self._route, "download-layout"), include_in_schema=False)
+        async def download_perspective_layout(request: Request) -> Response:
+            try:
+                content_length = int(request.headers.get("content-length", 0))
+                if content_length > _MAX_LAYOUT_DOWNLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="Layout is too large")
+                body = bytearray()
+                async for chunk in request.stream():
+                    body.extend(chunk)
+                    if len(body) > _MAX_LAYOUT_DOWNLOAD_BYTES:
+                        raise HTTPException(status_code=413, detail="Layout is too large")
+                fields = parse_qs(body.decode("utf-8"), strict_parsing=True, max_num_fields=1)
+                layout = fields["layout"][0]
+                parsed = orjson.loads(layout)
+                if not isinstance(parsed, dict) or not isinstance(parsed.get("layout"), dict) or not isinstance(parsed.get("panels"), dict):
+                    raise TypeError
+            except HTTPException:
+                raise
+            except (KeyError, TypeError, UnicodeDecodeError, ValueError, orjson.JSONDecodeError) as exc:
+                raise HTTPException(status_code=400, detail="Invalid layout") from exc
+            return Response(
+                content=layout,
+                media_type="application/json",
+                headers={
+                    "Cache-Control": "no-store",
+                    "Content-Disposition": 'attachment; filename="layout.json"',
+                    "X-Content-Type-Options": "nosniff",
+                },
+            )
+
         # add route to fetch layouts
         @api_router.get(
             "{}/{}".format(self._route, "meta"),
@@ -721,8 +754,13 @@ class MountPerspectiveTables(GatewayModule):
         )
         default_view = self.default_layout or "__default__"
         app.seed_store(view=default_view)
-        if layouts:
-            app.add(Region.HEADER_RIGHT, app.layout_selector(layouts, value=default_view), order=90)
+        app.add(Region.HEADER_RIGHT, app.layout_selector(layouts, value=default_view), order=90)
+        app.add(Region.HEADER_RIGHT, app.save_layout_button(), order=100)
+        app.add(
+            Region.HEADER_RIGHT,
+            app.download_layout_button(f"{app.settings.API_STR}{self._route}/download-layout"),
+            order=101,
+        )
 
     def run_perspective(self):
         """Launch the perspective threads"""
