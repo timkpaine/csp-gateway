@@ -753,7 +753,7 @@ class MountPerspectiveTables(GatewayModule):
             ),
         )
         default_view = self.default_layout or "__default__"
-        app.seed_store(view=default_view)
+        app.seed_store(view=default_view, layout_view=default_view)
         app.add(Region.HEADER_RIGHT, app.layout_selector(layouts, value=default_view), order=90)
         app.add(Region.HEADER_RIGHT, app.save_layout_button(), order=100)
         app.add(

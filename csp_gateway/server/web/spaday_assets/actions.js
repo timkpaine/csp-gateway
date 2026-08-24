@@ -1,6 +1,8 @@
 import { registerHandler } from "../../js/cdn/index.js";
 
+const CUSTOM_LAYOUT = "Custom Layout";
 const CUSTOM_LAYOUT_STORAGE_KEY = "csp_gateway_demo_config";
+const LAYOUT_SELECTOR_ID = "gateway-layout-selector";
 const WORKSPACE_ID = "gateway-workspace";
 
 function stripTransientFields(layout) {
@@ -27,6 +29,11 @@ registerHandler("csp-gateway:save-layout", (_event, currentTarget) => {
       delete customLayout[key];
     }
     Object.assign(customLayout, layout);
+
+    const selector =
+      currentTarget.ownerDocument.getElementById(LAYOUT_SELECTOR_ID);
+    selector.value = CUSTOM_LAYOUT;
+    selector.dispatchEvent(new Event("input", { bubbles: true }));
   })().catch((error) =>
     console.error("Failed to save Perspective layout:", error),
   );

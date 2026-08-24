@@ -30,6 +30,10 @@ const BUNDLES = [
     alias: REACT_ALIAS,
     publicPath: "static",
   },
+  {
+    entryPoints: ["./src/js/spaday_charts.js"],
+    outfile: "../csp_gateway/server/build/spaday-charts.js",
+  },
 ];
 
 const WASM_ASSETS = [

@@ -47,6 +47,7 @@ from spaday.actions import (
     concat,
     cond,
     eq,
+    event_value,
     field,
     not_,
     obj,
@@ -89,6 +90,11 @@ _GATEWAY_COMPONENT_PACKAGE = ComponentPackage(
     name="csp-gateway",
     assets_dir=Path(__file__).with_name("spaday_assets"),
     assets=(("js", "actions.js"),),
+)
+_PERSPECTIVE_CHARTS_PACKAGE = ComponentPackage(
+    name="csp-gateway-perspective-charts",
+    assets_dir=Path(__file__).parents[1] / "build",
+    assets=(("js", "spaday-charts.js"),),
 )
 
 
@@ -293,7 +299,7 @@ class GatewayUI:
                 parsed = json.loads(layout_json)
             except (TypeError, ValueError):
                 continue
-            layout_expr = cond(eq(field("view"), name), parsed, layout_expr)
+            layout_expr = cond(eq(field("layout_view"), name), parsed, layout_expr)
         fallback = json.dumps(default_layout).replace("<", "\\u003c")
         storage_key = json.dumps(_CUSTOM_LAYOUT_STORAGE_KEY)
         self._store_seeds["custom_layout"] = Js(
@@ -306,7 +312,7 @@ class GatewayUI:
             "catch { return fallback; } "
             "})()"
         )
-        layout_expr = cond(eq(field("view"), _CUSTOM_LAYOUT_NAME), field("custom_layout"), layout_expr)
+        layout_expr = cond(eq(field("layout_view"), _CUSTOM_LAYOUT_NAME), field("custom_layout"), layout_expr)
 
         return (
             PerspectivePanel()
@@ -321,7 +327,13 @@ class GatewayUI:
 
         Add it to `Region.HEADER_RIGHT` (and `seed_store(view=...)`).
         """
-        select = WaSelect(value=value, size="s").bind("value", "view", mode="two-way").style(width="220px")
+        select = (
+            WaSelect(value=value, size="s")
+            .prop("id", "gateway-layout-selector")
+            .bind("value", "view", mode="two-way")
+            .on("change", SetField("layout_view", event_value()))
+            .style(width="220px")
+        )
         select = select.child(WaOption(value="__default__").text("All Tables"))
         for name in layouts:
             select = select.child(WaOption(value=name).text(name))
@@ -754,7 +766,7 @@ class GatewayUI:
             scratch,
             self.build_page,
             # Component libraries ship as their own distributions and are resolved by entry point.
-            packages=["webawesome", "perspective", _GATEWAY_COMPONENT_PACKAGE],
+            packages=["webawesome", "perspective", _GATEWAY_COMPONENT_PACKAGE, _PERSPECTIVE_CHARTS_PACKAGE],
             # spaday infers "source checkout" from a `js/` dir next to itself, which any distribution
             # shipping a top-level `js/` package (plotly does) satisfies -- serving assets we consume
             # from the wheel, never from a spaday checkout.
