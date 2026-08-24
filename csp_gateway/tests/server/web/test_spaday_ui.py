@@ -271,6 +271,8 @@ class TestSpadayPerspectiveLayoutActions:
     def test_layout_actions_are_available_without_server_layouts(self, client: TestClient):
         tree = client.get("/tree.json").text
         assert "Custom Layout" in tree
+        assert "gateway-layout-selector" in tree
+        assert "layout_view" in tree
         assert "Save current layout" in tree
         assert "csp-gateway:save-layout" in tree
         assert "Download layout" in tree
@@ -287,6 +289,8 @@ class TestSpadayPerspectiveLayoutActions:
         assert '"csp-gateway:save-layout"' in script.text
         assert '"csp-gateway:download-layout"' in script.text
         assert '"csp_gateway_demo_config"' in script.text
+        assert '"gateway-layout-selector"' in script.text
+        assert 'new Event("input", { bubbles: true })' in script.text
         assert '"gateway-workspace"' in script.text
         assert client.get("/js/cdn/index.js").status_code == 200
 
