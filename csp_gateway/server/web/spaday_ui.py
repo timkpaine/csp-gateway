@@ -284,15 +284,20 @@ class GatewayUI:
         tables: list[str] | None = None,
         default_tables: list[str] | None = None,
         layouts: dict[str, str] | None = None,
+        schemas: dict[str, dict[str, str]] | None = None,
     ) -> Any:
         """A Perspective workspace panel (the primary data view), bound to the theme + `view` state.
 
         Data rides Perspective's own websocket at ``route``; the panel only carries the workspace
         layout/theme config. ``default_tables`` are the ones the generated layout opens, defaulting
-        to all of ``tables``. Add it to `Region.MAIN`.
+        to all of ``tables``. ``schemas`` (table name -> column name -> type) lets the generated
+        layout apply per-table defaults (timestamp sort, hidden id column). Add it to `Region.MAIN`.
         """
         tables = list(tables or [])
-        default_layout = self._default_layout(list(default_tables) if default_tables is not None else tables)
+        default_layout = self._default_layout(
+            list(default_tables) if default_tables is not None else tables,
+            schemas=schemas,
+        )
         layout_expr: Any = default_layout
         for name, layout_json in (layouts or {}).items():
             try:
@@ -448,13 +453,23 @@ class GatewayUI:
         return result
 
     @staticmethod
-    def _default_layout(tables: list[str]) -> dict[str, Any]:
-        """A perspective workspace config that shows every table in its own datagrid tab."""
+    def _default_layout(tables: list[str], schemas: dict[str, dict[str, str]] | None = None) -> dict[str, Any]:
+        """A perspective workspace config that shows every table in its own datagrid tab.
+
+        With ``schemas`` (table name -> column name -> type), panels match the legacy UI's defaults:
+        sorted by ``timestamp`` descending when the table has one, and the ``id`` column hidden.
+        """
         panels: dict[str, Any] = {}
         panel_ids: list[str] = []
         for i, table in enumerate(tables):
             panel_id = f"CSP_GATEWAY_{i}"
-            panels[panel_id] = {"table": table, "plugin": "Datagrid", "title": table}
+            panel: dict[str, Any] = {"table": table, "plugin": "Datagrid", "title": table}
+            schema = (schemas or {}).get(table) or {}
+            if "timestamp" in schema:
+                panel["sort"] = [["timestamp", "desc"]]
+            if "id" in schema:
+                panel["columns"] = [column for column in schema if column != "id"]
+            panels[panel_id] = panel
             panel_ids.append(panel_id)
         return {
             "layout": {"type": "tab-layout", "tabs": panel_ids, "selected": 0},
@@ -773,7 +788,11 @@ class GatewayUI:
             layout="installed",
             wire=wire,
             routes=routes,
-            store={"dark": False, **self._store_seeds},
+            # `dark` matches the browser preference at boot (client-evaluated, like the legacy UI's
+            # prefers-color-scheme detection), and a manual toggle is persisted per browser and takes
+            # precedence on later loads.
+            store={"dark": Js('matchMedia("(prefers-color-scheme: dark)").matches'), **self._store_seeds},
+            persist={"dark": "csp-gateway:dark"},
             # Emitted after the component packages' own CSS, so a custom stylesheet can override the
             # shell palette, and before `head`, which carries only document resets.
             stylesheets=custom_css,
