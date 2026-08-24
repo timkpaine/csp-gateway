@@ -30,3 +30,12 @@ Upstream action:
 - Bundle and register `@perspective-dev/viewer-charts` with `<perspective-panel>`, or expose a documented package/option that does so.
 - Add a browser test that restores a multi-panel workspace containing Datagrid, `X Bar`, and `Treemap`, then verifies `saveWorkspace()` retains each requested plugin.
 - Keep chart and Perspective viewer versions aligned so plugin registration uses the same Perspective runtime.
+
+## Expose initial Perspective readiness
+
+Applications with branded startup overlays need a stable signal that `<perspective-panel>` has connected, loaded its tables, and applied its initial workspace config. `perspective-config-update` currently works as an indirect signal, but it describes configuration changes rather than lifecycle readiness and may never fire when initialization fails.
+
+Upstream action:
+
+- Emit a one-shot `perspective-ready` event after the initial config has been applied and rendered.
+- Emit or expose initialization failures so hosts can replace a loader with an error state.
