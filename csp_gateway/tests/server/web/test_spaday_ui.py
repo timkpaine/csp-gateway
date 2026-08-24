@@ -1,5 +1,6 @@
 """Tests for the optional spaday UI provider (`Settings.UI_PROVIDER == "spaday"`)."""
 
+import json
 from datetime import timedelta
 from enum import Enum, auto
 
@@ -15,6 +16,7 @@ from csp_gateway import (
     GatewayModule,
     GatewaySettings,
     GatewayStruct,
+    MountPerspectiveTables,
     MountRestRoutes,
     MountSendForm,
 )
@@ -247,3 +249,65 @@ class TestDefaultLayout:
             "CSP_GATEWAY_0": {"table": "orders", "plugin": "Datagrid", "title": "orders"},
             "CSP_GATEWAY_1": {"table": "fills", "plugin": "Datagrid", "title": "fills"},
         }
+
+
+class TestSpadayPerspectiveLayoutActions:
+    @pytest.fixture(scope="class")
+    def gateway(self, free_port):
+        return Gateway(
+            modules=[ExampleModule(), MountPerspectiveTables()],
+            channels=ExampleChannels(),
+            settings=GatewaySettings(PORT=free_port, UI_PROVIDER="spaday"),
+        )
+
+    @pytest.fixture(scope="class")
+    def client(self, gateway):
+        gateway.start(rest=True, ui=True, _in_test=True)
+        try:
+            yield TestClient(gateway.web_app.get_fastapi())
+        finally:
+            gateway.stop()
+
+    def test_layout_actions_are_available_without_server_layouts(self, client: TestClient):
+        tree = client.get("/tree.json").text
+        assert "Custom Layout" in tree
+        assert "Save current layout" in tree
+        assert "csp-gateway:save-layout" in tree
+        assert "Download layout" in tree
+        assert "csp-gateway:download-layout" in tree
+
+    def test_layout_action_script_is_served(self, client: TestClient):
+        page = client.get("/").text
+        assert "/components/csp-gateway/actions.js" in page
+        assert "globalThis.cspGatewayCustomLayout" in page
+        assert '"gateway-workspace"' in client.get("/tree.json").text
+        script = client.get("/components/csp-gateway/actions.js")
+        assert script.status_code == 200
+        assert 'from "../../js/cdn/index.js"' in script.text
+        assert '"csp-gateway:save-layout"' in script.text
+        assert '"csp-gateway:download-layout"' in script.text
+        assert '"csp_gateway_demo_config"' in script.text
+        assert '"gateway-workspace"' in script.text
+        assert client.get("/js/cdn/index.js").status_code == 200
+
+    def test_layout_download_is_a_same_origin_attachment(self, client: TestClient):
+        layout = {"layout": {"type": "tab-layout", "tabs": []}, "panels": {}}
+
+        response = client.post("/api/v1/perspective/download-layout", data={"layout": json.dumps(layout)})
+
+        assert response.status_code == 200
+        assert response.json() == layout
+        assert response.headers["content-disposition"] == 'attachment; filename="layout.json"'
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["x-content-type-options"] == "nosniff"
+
+    def test_layout_download_rejects_invalid_and_oversized_content(self, client: TestClient):
+        invalid = client.post("/api/v1/perspective/download-layout", data={"layout": "1"})
+        oversized = client.post(
+            "/api/v1/perspective/download-layout",
+            content=b"x",
+            headers={"content-length": str(16 * 1024 * 1024 + 1)},
+        )
+
+        assert invalid.status_code == 400
+        assert oversized.status_code == 413

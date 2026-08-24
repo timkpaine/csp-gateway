@@ -30,18 +30,20 @@ export default function App(props) {
     getOpenApi().then(setOpenApi);
   }, []);
 
+  // Workspace ref (for layout and theme operations from the header)
+  const workspaceRef = useRef(null);
+
   // Theme
   const [theme, setTheme] = useState(getInitialTheme);
   const toggleTheme = useCallback(() => {
-    setTheme((prev) => {
-      const next = prev === "dark" ? "light" : "dark";
-      applyTheme(next);
-      return next;
-    });
-  }, []);
-
-  // Workspace ref (for layout operations from header)
-  const workspaceRef = useRef(null);
+    const next = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    const operation =
+      workspaceRef.current?.applyTheme(next) || applyTheme(next);
+    operation.catch((error) =>
+      console.error("Failed to apply Perspective theme:", error),
+    );
+  }, [theme]);
 
   // Loader
   const doHideLoader = hideLoader || hideDefaultLoader;

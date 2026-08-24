@@ -16,7 +16,12 @@ import {
   setUrlLayout,
   stripTransientFields,
 } from "./layout";
-import { getCurrentTheme, getViewerTheme } from "./theme";
+import {
+  applyTheme as applyViewerTheme,
+  applyThemeToLayout as applyViewerThemeToLayout,
+  getCurrentTheme,
+  getViewerTheme,
+} from "./theme";
 
 /**
  * Self-contained Perspective workspace component.
@@ -124,6 +129,24 @@ export const Workspace = forwardRef(function Workspace(
           setActiveLayoutName(name);
           scheduleRestoreLayout(layouts[name], { syncUrl: true });
         }
+      },
+      applyTheme: (theme) => {
+        document.documentElement.setAttribute("data-theme", theme);
+        localStorage.setItem("theme", theme);
+        wsRef.current?.setAttribute("theme", getViewerTheme(theme));
+        restoreQueueRef.current = restoreQueueRef.current
+          .catch(() => {})
+          .then(async () => {
+            const ws = wsRef.current;
+            if (!ws) return;
+            restoringRef.current = true;
+            try {
+              await applyViewerTheme(theme, [ws]);
+            } finally {
+              restoringRef.current = false;
+            }
+          });
+        return restoreQueueRef.current;
       },
       saveLayout: async () => {
         await restoreQueueRef.current.catch(() => {});
@@ -247,20 +270,16 @@ export const Workspace = forwardRef(function Workspace(
     };
   }, []);
 
-  // Theme is element-level in Perspective 5, so panels added later inherit it from the viewer and
-  // no per-panel hook is needed; `applyTheme` restores it across every mounted viewer.
+  // Perspective 5 stores theme on both the element chrome and each workspace panel. The imperative
+  // theme method above joins the restore queue so a toggle cannot race a layout replacement.
   return <perspective-viewer id="workspace" ref={wsRef} />;
 });
 
 /** Clone a layout config and fill in missing panel themes */
 function applyThemeToLayout(layout) {
-  const theme = getCurrentTheme();
-  const cloned = structuredClone(layout);
+  const cloned = applyViewerThemeToLayout(layout);
   if (cloned?.panels) {
     Object.values(cloned.panels).forEach((panel) => {
-      if (!panel.theme) {
-        panel.theme = getViewerTheme(theme);
-      }
       panel.plugin_config = {
         ...panel.plugin_config,
         edit_mode: "SELECT_REGION",

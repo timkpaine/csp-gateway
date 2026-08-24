@@ -10,9 +10,9 @@
   "scripts": {
     "build": "node build.mjs",
     "clean": "rimraf dist lib playwright-report ../csp_gateway/server/build",
-    "lint": "prettier --check \"src/**/*.{js,ts,jsx,tsx,css,html}\" \"*.mjs\" \"*.json\"",
-    "fix": "prettier  --write \"src/**/*.{js,ts,jsx,tsx,css,html}\" \"*.mjs\" \"*.json\"",
-    "test": "echo \"todo\"",
+    "lint": "prettier --check \"src/**/*.{js,ts,jsx,tsx,css,html}\" \"../csp_gateway/server/web/spaday_assets/*.js\" \"*.mjs\" \"*.json\"",
+    "fix": "prettier  --write \"src/**/*.{js,ts,jsx,tsx,css,html}\" \"../csp_gateway/server/web/spaday_assets/*.js\" \"*.mjs\" \"*.json\"",
+    "test": "node --test",
     "preinstall": "npx only-allow pnpm",
     "prepack": "pnpm run build"
   },
