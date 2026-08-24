@@ -750,6 +750,7 @@ class MountPerspectiveTables(GatewayModule):
                 tables=list(tables.keys()),
                 default_tables=self._select_default_layout_tables(tables),
                 layouts=layouts,
+                schemas=tables,
             ),
         )
         default_view = self.default_layout or "__default__"

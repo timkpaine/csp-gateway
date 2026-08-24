@@ -250,6 +250,56 @@ class TestDefaultLayout:
             "CSP_GATEWAY_1": {"table": "fills", "plugin": "Datagrid", "title": "fills"},
         }
 
+    def test_schemas_add_legacy_parity_sort_and_columns(self):
+        # Legacy-UI parity: timestamp sorts descending and the id column is hidden.
+        from csp_gateway.server.web.spaday_ui import GatewayUI
+
+        layout = GatewayUI._default_layout(
+            ["orders"],
+            schemas={"orders": {"id": "string", "timestamp": "datetime", "price": "float"}},
+        )
+        panel = layout["panels"]["CSP_GATEWAY_0"]
+        assert panel["sort"] == [["timestamp", "desc"]]
+        assert panel["columns"] == ["timestamp", "price"]
+
+    def test_schema_without_timestamp_or_id_stays_bare(self):
+        from csp_gateway.server.web.spaday_ui import GatewayUI
+
+        layout = GatewayUI._default_layout(["orders"], schemas={"orders": {"price": "float"}})
+        panel = layout["panels"]["CSP_GATEWAY_0"]
+        assert "sort" not in panel
+        assert "columns" not in panel
+
+
+class TestDarkBoot:
+    """The page seeds `dark` from the browser's prefers-color-scheme, like the legacy UI."""
+
+    @pytest.fixture(scope="class")
+    def gateway(self, free_port):
+        return Gateway(
+            modules=[ExampleModule(), MountRestRoutes(force_mount_all=True)],
+            channels=ExampleChannels(),
+            settings=GatewaySettings(PORT=free_port, UI_PROVIDER="spaday"),
+        )
+
+    @pytest.fixture(scope="class")
+    def client(self, gateway):
+        gateway.start(rest=True, ui=True, _in_test=True)
+        try:
+            yield TestClient(gateway.web_app.get_fastapi())
+        finally:
+            gateway.stop()
+
+    def test_dark_seed_is_client_evaluated(self, client: TestClient):
+        page = client.get("/").text
+        assert '"dark": (matchMedia("(prefers-color-scheme: dark)").matches)' in page
+
+    def test_dark_choice_persists_across_reloads(self, client: TestClient):
+        # A manual toggle is stored and overrides the browser preference on the next load (legacy parity).
+        page = client.get("/").text
+        assert 'localStorage.getItem("csp-gateway:dark")' in page
+        assert 'store.subscribe("dark", (v) => { try { localStorage.setItem("csp-gateway:dark", JSON.stringify(v)); } catch {} });' in page
+
 
 class TestSpadayPerspectiveLayoutActions:
     @pytest.fixture(scope="class")
