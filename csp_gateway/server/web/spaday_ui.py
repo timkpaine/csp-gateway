@@ -91,11 +91,6 @@ _GATEWAY_COMPONENT_PACKAGE = ComponentPackage(
     assets_dir=Path(__file__).with_name("spaday_assets"),
     assets=(("js", "actions.js"),),
 )
-_PERSPECTIVE_CHARTS_PACKAGE = ComponentPackage(
-    name="csp-gateway-perspective-charts",
-    assets_dir=Path(__file__).parents[1] / "build",
-    assets=(("js", "spaday-charts.js"),),
-)
 
 
 # Page-level resets that spaday's document template does not ship. The palette is deliberately absent:
@@ -780,7 +775,7 @@ class GatewayUI:
             scratch,
             self.build_page,
             # Component libraries ship as their own distributions and are resolved by entry point.
-            packages=["webawesome", "perspective", _GATEWAY_COMPONENT_PACKAGE, _PERSPECTIVE_CHARTS_PACKAGE],
+            packages=["webawesome", "perspective", _GATEWAY_COMPONENT_PACKAGE],
             # spaday infers "source checkout" from a `js/` dir next to itself, which any distribution
             # shipping a top-level `js/` package (plotly does) satisfies -- serving assets we consume
             # from the wheel, never from a spaday checkout.
