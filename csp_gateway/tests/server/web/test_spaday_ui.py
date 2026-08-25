@@ -442,6 +442,28 @@ class TestMainTabs:
         # tabs select and close but cannot be drag-rearranged
         assert '"locked": {"Bool": true}' in tree
 
+    def test_workspace_tab_is_not_closeable(self, client: TestClient):
+        tree = json.loads(client.get("/tree.json").text)
+
+        def frames(node):
+            if isinstance(node, dict):
+                if node.get("tag") == "regular-layout-frame":
+                    yield node
+                for value in node.values():
+                    yield from frames(value)
+            elif isinstance(node, list):
+                for value in node:
+                    yield from frames(value)
+
+        # nothing reopens a closed workspace, so its frame hides the close control;
+        # reopenable tabs (graph, send) keep theirs
+        by_name = {frame["props"]["name"]["Str"]: frame["props"] for frame in frames(tree)}
+        assert "data-no-close" in by_name["workspace"]
+        assert "data-no-close" not in by_name["channels-graph"]
+        assert "data-no-close" not in by_name["send"]
+        page = client.get("/").text
+        assert "regular-layout-frame[data-no-close]::part(close) { display: none; }" in page
+
     def test_graph_edge_styles_match_the_classic_page(self, client: TestClient):
         page = client.get("/").text
         assert ".gateway-sets .spaday-dagre-edge-line { stroke: #f66;" in page

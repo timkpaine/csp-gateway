@@ -113,6 +113,10 @@ PAGE_CSS = """<style>
       #gateway-main-layout regular-layout-frame[name="workspace"]::part(container) {
         padding: 0; overflow: hidden;
       }
+      /* Tabs nothing could reopen (the workspace, add_tab(closeable=False)) hide their
+         close control — the engine's close handler lives on the button, so hiding it
+         removes the gesture entirely. */
+      #gateway-main-layout regular-layout-frame[data-no-close]::part(close) { display: none; }
       #gateway-main-layout.spa-solo regular-layout-frame::part(titlebar) { display: none; }
       #gateway-main-layout.spa-solo regular-layout-frame::part(container) {
         margin: 0; border: none; border-radius: 0; box-shadow: none;
@@ -186,7 +190,7 @@ class GatewayUI:
         self._web_app = web_app
         self._settings = settings
         self._regions: dict[Region, list[_Contribution]] = {}
-        self._tabs: list[tuple[int, str, str, Any]] = []
+        self._tabs: list[tuple[int, str, str, Any, bool]] = []
         self._store_seeds: dict[str, Any] = {}
         # Live UI state: namespace -> (model, latest value factory). The hub and its models only exist
         # once a module declares one, so a gateway with no live state serves no websocket.
@@ -244,19 +248,20 @@ class GatewayUI:
         """
         self._regions.setdefault(Region(region), []).append(_Contribution(component=component, order=order, label=label))
 
-    def add_tab(self, name: str, label: str, component: Any, *, order: int = 0) -> None:
-        """Register a closeable tab for the main window's tab layout.
+    def add_tab(self, name: str, label: str, component: Any, *, order: int = 0, closeable: bool = True) -> None:
+        """Register a tab for the main window's tab layout.
 
         The main region always shows the workspace; registered tabs open on demand (via a
-        `tab_button`), get a labelled, closeable tab beside it, and can be rearranged by
-        drag. Tab chrome only appears while more than one tab is open — a lone workspace
-        renders exactly as it did before tabs existed. ``component`` may be a zero-arg
-        callable, re-invoked per page build like region contributions. ``name`` is the
-        frame identity (also what a `tab_button` opens); ``label`` is the tab text.
+        `tab_button`) and get a labelled tab beside it. Tab chrome only appears while more
+        than one tab is open — a lone workspace renders exactly as it did before tabs
+        existed. ``component`` may be a zero-arg callable, re-invoked per page build like
+        region contributions. ``name`` is the frame identity (also what a `tab_button`
+        opens); ``label`` is the tab text. ``closeable=False`` hides the tab's close
+        control for tabs nothing could reopen (the workspace is always non-closeable).
         """
-        if any(existing == name for _, existing, _, _ in self._tabs):
+        if any(existing == name for _, existing, _, _, _ in self._tabs):
             raise ValueError(f"main tab already registered: {name}")
-        self._tabs.append((order, name, label, component))
+        self._tabs.append((order, name, label, component, closeable))
 
     def tab_button(self, label: str, tab: str, *, icon: str | None = None, appearance: str = "outlined") -> Any:
         """A button that opens (or focuses) a registered main tab. Add it to any region."""
@@ -650,7 +655,9 @@ class GatewayUI:
         # solo-mode class. With no tabs registered and no send panel, the main region is exactly
         # the plain workspace it always was.
         registered_tabs = sorted(self._tabs, key=lambda t: t[0])
-        tab_entries: list[tuple[str, str, Any]] = [(name, label, component) for _, name, label, component in registered_tabs]
+        tab_entries: list[tuple[str, str, Any, bool]] = [
+            (name, label, component, closeable) for _, name, label, component, closeable in registered_tabs
+        ]
         if bottom_drawer_items:
             if bottom_tabbed:
                 send_tabs = Tabs()
@@ -659,13 +666,17 @@ class GatewayUI:
                 send_body: Any = send_tabs
             else:
                 send_body = Column(*bottom_drawer_items, gap="1rem")
-            tab_entries.append((_SEND_TAB, bottom_label, send_body.style(max_width="640px", margin="0 auto")))
+            tab_entries.append((_SEND_TAB, bottom_label, send_body.style(max_width="640px", margin="0 auto"), True))
         if tab_entries:
-            frames = [RegularLayoutFrame(workspace, name=_WORKSPACE_TAB)]
+            # Nothing reopens a closed workspace, so its close control is hidden.
+            frames = [RegularLayoutFrame(workspace, name=_WORKSPACE_TAB).prop("data-no-close", "true")]
             titles = [f'--regular-layout-{_WORKSPACE_TAB}--title: "Workspace"']
-            for name, label, component in tab_entries:
+            for name, label, component, closeable in tab_entries:
                 resolved = component() if callable(component) else component
-                frames.append(RegularLayoutFrame(resolved, name=name, style="box-sizing: border-box"))
+                frame = RegularLayoutFrame(resolved, name=name, style="box-sizing: border-box")
+                if not closeable:
+                    frame = frame.prop("data-no-close", "true")
+                frames.append(frame)
                 titles.append(f"--regular-layout-{name}--title: {json.dumps(label)}")
             open_count = cond(event_value("children"), 2, event_value("tabs.length"))
             main_content: Any = (
