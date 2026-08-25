@@ -382,3 +382,97 @@ class TestSpadayPerspectiveLayoutActions:
 
         assert invalid.status_code == 400
         assert oversized.status_code == 413
+
+
+class TestMainTabs:
+    """The main window's tab layout: workspace + on-demand closeable tabs (graph, send)."""
+
+    @pytest.fixture(scope="class")
+    def gateway(self, free_port):
+        from csp_gateway import MountChannelsGraph
+
+        return Gateway(
+            modules=[
+                TwoSendModule(),
+                MountRestRoutes(force_mount_all=True),
+                MountSendForm(),
+                MountChannelsGraph(),
+            ],
+            channels=TwoSendChannels(),
+            settings=GatewaySettings(PORT=free_port, UI_PROVIDER="spaday"),
+        )
+
+    @pytest.fixture(scope="class")
+    def client(self, gateway):
+        gateway.start(rest=True, ui=True, _in_test=True)
+        try:
+            yield TestClient(gateway.web_app.get_fastapi())
+        finally:
+            gateway.stop()
+
+    def test_main_region_is_a_tab_layout(self, client: TestClient):
+        tree = json.loads(client.get("/tree.json").text)
+        text = json.dumps(tree)
+        # the workspace, the graph tab, and the send tab are frames of one regular-layout
+        assert '"spaday-regular-layout"' in text
+        assert '"workspace"' in text and '"channels-graph"' in text and '"send"' in text
+        # the layout opens with just the workspace; other frames wait for their tab_button
+        assert '{"Str": "tab-layout"}' in text
+        assert text.count("regular-layout-frame") >= 3
+
+    def test_tab_chrome_only_with_more_tabs(self, client: TestClient):
+        tree = client.get("/tree.json").text
+        # solo-mode class is computed from main_tabbed, synced from regular-layout-update
+        assert "spa spa-solo" in tree
+        assert "main_tabbed" in tree
+        assert "regular-layout-update" in tree
+
+    def test_graph_tab_renders_the_channels_graph(self, client: TestClient):
+        tree = json.loads(client.get("/tree.json").text)
+        text = json.dumps(tree)
+        assert '"spaday-dagre"' in text
+        # channels and modules become classed nodes with edges between them
+        assert "gateway-channel" in text and "gateway-module" in text
+
+    def test_plus_and_graph_buttons_open_tabs(self, client: TestClient):
+        tree = client.get("/tree.json").text
+        assert '"csp-gateway:open-tab"' in tree
+        assert '"data-tab": {"Str": "send"}' in tree
+        assert '"data-tab": {"Str": "channels-graph"}' in tree
+        # the bottom drawer is gone in the spaday provider (send lives in a tab now)
+        assert "gateway-send" not in tree
+
+    def test_open_tab_handler_is_served(self, client: TestClient):
+        script = client.get("/components/csp-gateway/actions.js").text
+        assert "csp-gateway:open-tab" in script
+        assert "insertPanel" in script and "selectPanel" in script
+
+    def test_dagre_and_layout_packages_are_mounted(self, client: TestClient):
+        page = client.get("/").text
+        assert "/components/dagre/cdn/index.js" in page
+        assert "/components/regular-layout/cdn/index.js" in page
+
+
+class TestMainWithoutTabs:
+    """With no registered tabs and no send panel, the main region stays the plain workspace."""
+
+    @pytest.fixture(scope="class")
+    def gateway(self, free_port):
+        return Gateway(
+            modules=[ExampleModule(), MountRestRoutes(force_mount_all=True)],
+            channels=ExampleChannels(),
+            settings=GatewaySettings(PORT=free_port, UI_PROVIDER="spaday"),
+        )
+
+    @pytest.fixture(scope="class")
+    def client(self, gateway):
+        gateway.start(rest=True, ui=True, _in_test=True)
+        try:
+            yield TestClient(gateway.web_app.get_fastapi())
+        finally:
+            gateway.stop()
+
+    def test_plain_main_without_tabs(self, client: TestClient):
+        tree = client.get("/tree.json").text
+        assert "spaday-regular-layout" not in tree
+        assert "spaday-dagre" not in tree

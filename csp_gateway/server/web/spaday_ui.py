@@ -56,6 +56,7 @@ from spaday.backends.starlette import mount as _spaday_mount
 from spaday.components.shell import AppShell, Column, Region, Row, Show
 from spaday.packages import ComponentPackage
 from spaday_perspective import PerspectivePanel
+from spaday_regular_layout import RegularLayout, RegularLayoutFrame
 from spaday_webawesome import (
     FormField,
     Tabs,
@@ -86,6 +87,10 @@ _CUSTOM_LAYOUT_NAME = "Custom Layout"
 _CUSTOM_LAYOUT_STORAGE_KEY = "csp_gateway_demo_config"
 _SAVE_LAYOUT_HANDLER = "csp-gateway:save-layout"
 _DOWNLOAD_LAYOUT_HANDLER = "csp-gateway:download-layout"
+_OPEN_TAB_HANDLER = "csp-gateway:open-tab"
+_MAIN_LAYOUT_ID = "gateway-main-layout"
+_WORKSPACE_TAB = "workspace"
+_SEND_TAB = "send"
 _GATEWAY_COMPONENT_PACKAGE = ComponentPackage(
     name="csp-gateway",
     assets_dir=Path(__file__).with_name("spaday_assets"),
@@ -101,6 +106,17 @@ PAGE_CSS = """<style>
       html, body { height: 100%; }
       body { margin: 0; font-family: system-ui, sans-serif; }
       spa-app { --spa-gap: 0.75rem; }
+      /* The main region's tab layout: the workspace tab is full-bleed, and with a single open
+         tab the chrome disappears entirely (the "only tab when there are more tabs" rule). */
+      #gateway-main-layout { height: 100%; }
+      #gateway-main-layout regular-layout-frame::part(container) { overflow: auto; }
+      #gateway-main-layout regular-layout-frame[name="workspace"]::part(container) {
+        padding: 0; overflow: hidden;
+      }
+      #gateway-main-layout.spa-solo regular-layout-frame::part(titlebar) { display: none; }
+      #gateway-main-layout.spa-solo regular-layout-frame::part(container) {
+        margin: 0; border: none; border-radius: 0; box-shadow: none;
+      }
     </style>"""
 
 
@@ -165,6 +181,7 @@ class GatewayUI:
         self._web_app = web_app
         self._settings = settings
         self._regions: dict[Region, list[_Contribution]] = {}
+        self._tabs: list[tuple[int, str, str, Any]] = []
         self._store_seeds: dict[str, Any] = {}
         # Live UI state: namespace -> (model, latest value factory). The hub and its models only exist
         # once a module declares one, so a gateway with no live state serves no websocket.
@@ -221,6 +238,26 @@ class GatewayUI:
         labelled -- otherwise an unlabelled panel would get a blank tab.
         """
         self._regions.setdefault(Region(region), []).append(_Contribution(component=component, order=order, label=label))
+
+    def add_tab(self, name: str, label: str, component: Any, *, order: int = 0) -> None:
+        """Register a closeable tab for the main window's tab layout.
+
+        The main region always shows the workspace; registered tabs open on demand (via a
+        `tab_button`), get a labelled, closeable tab beside it, and can be rearranged by
+        drag. Tab chrome only appears while more than one tab is open — a lone workspace
+        renders exactly as it did before tabs existed. ``component`` may be a zero-arg
+        callable, re-invoked per page build like region contributions. ``name`` is the
+        frame identity (also what a `tab_button` opens); ``label`` is the tab text.
+        """
+        if any(existing == name for _, existing, _, _ in self._tabs):
+            raise ValueError(f"main tab already registered: {name}")
+        self._tabs.append((order, name, label, component))
+
+    def tab_button(self, label: str, tab: str, *, icon: str | None = None, appearance: str = "outlined") -> Any:
+        """A button that opens (or focuses) a registered main tab. Add it to any region."""
+        button = WaButton(appearance=appearance, title=label).prop("data-tab", tab).on("click", NamedJs(_OPEN_TAB_HANDLER))
+        button = button.child(WaIcon(name=icon)) if icon else button.text(label).style(width="100%")
+        return button
 
     def seed_store(self, **fields: Any) -> None:
         """Seed initial values into the page's reactive signal store (merged across callers)."""
@@ -538,7 +575,6 @@ class GatewayUI:
         header_logo = ui_config.get("headerLogo") or "/favicon.ico"
         footer_logo = ui_config.get("footerLogo")
         right_drawer_id = "gateway-settings"
-        bottom_drawer_id = "gateway-send"
 
         # Built-in chrome components (shell, not module contributions).
         logo_img = element("img", src=self.url(header_logo), alt=title).style(height="1.8rem")
@@ -579,8 +615,13 @@ class GatewayUI:
             if right_drawer_items
             else None
         )
+        # "+" opens the send panel as a main tab (the drawer it used to toggle is retired here;
+        # the legacy UI provider keeps the old behavior for this release).
         plus_button = (
-            WaButton(appearance="plain", title=bottom_label).on("click", Toggle(by_id(bottom_drawer_id), "open")).child(WaIcon(name="plus"))
+            WaButton(appearance="plain", title=bottom_label)
+            .prop("data-tab", _SEND_TAB)
+            .on("click", NamedJs(_OPEN_TAB_HANDLER))
+            .child(WaIcon(name="plus"))
             if bottom_drawer_items
             else None
         )
@@ -591,11 +632,47 @@ class GatewayUI:
 
         # Main content: the panel(s), full-bleed (the MAIN container is styled padding:0 below).
         if not main_items:
-            main_content: Any = element("div").style(padding="2rem").child(element("p").text("No UI panels are configured."))
+            workspace: Any = element("div").style(padding="2rem").child(element("p").text("No UI panels are configured."))
         elif len(main_items) == 1:
-            main_content = main_items[0]
+            workspace = main_items[0]
         else:
-            main_content = Column(*main_items, gap="1rem").style(height="100%")
+            workspace = Column(*main_items, gap="1rem").style(height="100%")
+
+        # On-demand main tabs: registered tabs (`add_tab`) plus the send panel behind "+". The
+        # workspace sits in a regular-layout whose layout starts as just the workspace tab; opening
+        # a tab inserts its frame (closeable, draggable), and the chrome only exists while more
+        # than one tab is open — `regular-layout-update` keeps `main_tabbed` in sync, driving the
+        # solo-mode class. With no tabs registered and no send panel, the main region is exactly
+        # the plain workspace it always was.
+        registered_tabs = sorted(self._tabs, key=lambda t: t[0])
+        tab_entries: list[tuple[str, str, Any]] = [(name, label, component) for _, name, label, component in registered_tabs]
+        if bottom_drawer_items:
+            if bottom_tabbed:
+                send_tabs = Tabs()
+                for label, component in bottom_drawer_panels:
+                    send_tabs.tab(label, component)
+                send_body: Any = send_tabs
+            else:
+                send_body = Column(*bottom_drawer_items, gap="1rem")
+            tab_entries.append((_SEND_TAB, bottom_label, send_body.style(max_width="640px", margin="0 auto")))
+        if tab_entries:
+            frames = [RegularLayoutFrame(workspace, name=_WORKSPACE_TAB)]
+            titles = [f'--regular-layout-{_WORKSPACE_TAB}--title: "Workspace"']
+            for name, label, component in tab_entries:
+                resolved = component() if callable(component) else component
+                frames.append(RegularLayoutFrame(resolved, name=name, style="box-sizing: border-box"))
+                titles.append(f"--regular-layout-{name}--title: {json.dumps(label)}")
+            open_count = cond(event_value("children"), 2, event_value("tabs.length"))
+            main_content: Any = (
+                RegularLayout(*frames, layout={"type": "tab-layout", "tabs": [_WORKSPACE_TAB]})
+                .prop("id", _MAIN_LAYOUT_ID)
+                .prop("style", "; ".join(titles))
+                .compute("class", cond(field("main_tabbed"), "spa", "spa spa-solo"))
+                .on("regular-layout-update", SetField("main_tabbed", not_(eq(open_count, 1))))
+            )
+            self._store_seeds.setdefault("main_tabbed", False)
+        else:
+            main_content = workspace
 
         footer_logo_el = element("img", src=self.url(footer_logo), alt=title).style(height="1.2rem") if footer_logo else None
         footer_left = self._region(Region.FOOTER_LEFT, (-10, footer_logo_el))
@@ -629,18 +706,6 @@ class GatewayUI:
                 WaDrawer(label="Settings", placement="end", light_dismiss=True)
                 .prop("id", right_drawer_id)
                 .child(Column(*right_drawer_items, gap="0.6rem")),
-            )
-        if bottom_drawer_items:
-            if bottom_tabbed:
-                tabs = Tabs()
-                for label, component in bottom_drawer_panels:
-                    tabs.tab(label, component)
-                bottom_body: Any = tabs
-            else:
-                bottom_body = Column(*bottom_drawer_items, gap="1rem")
-            shell.add(
-                Region.DRAWER_BOTTOM,
-                WaDrawer(label=bottom_label, placement="bottom", light_dismiss=True).prop("id", bottom_drawer_id).css(size="70vh").child(bottom_body),
             )
         if overlay_items:
             shell.add(Region.OVERLAY, *overlay_items)
@@ -775,7 +840,7 @@ class GatewayUI:
             scratch,
             self.build_page,
             # Component libraries ship as their own distributions and are resolved by entry point.
-            packages=["webawesome", "perspective", _GATEWAY_COMPONENT_PACKAGE],
+            packages=["webawesome", "perspective", "regular-layout", "dagre", _GATEWAY_COMPONENT_PACKAGE],
             # spaday infers "source checkout" from a `js/` dir next to itself, which any distribution
             # shipping a top-level `js/` package (plotly does) satisfies -- serving assets we consume
             # from the wheel, never from a spaday checkout.

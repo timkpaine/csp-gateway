@@ -63,3 +63,20 @@ registerHandler("csp-gateway:download-layout", (_event, currentTarget) => {
     console.error("Failed to download Perspective layout:", error),
   );
 });
+
+const MAIN_LAYOUT_ID = "gateway-main-layout";
+
+registerHandler("csp-gateway:open-tab", (_event, currentTarget) => {
+  const name = currentTarget.dataset.tab;
+  const layout = currentTarget.ownerDocument.getElementById(MAIN_LAYOUT_ID);
+  if (!name || !layout) {
+    return;
+  }
+  void (async () => {
+    // already open -> just focus it; otherwise insert its frame beside the workspace
+    if (layout.calculatePath(name) === null) {
+      await layout.insertPanel(name);
+    }
+    await layout.selectPanel(name);
+  })().catch((error) => console.error("Failed to open tab:", name, error));
+});
