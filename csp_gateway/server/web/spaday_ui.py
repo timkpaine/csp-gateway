@@ -117,6 +117,11 @@ PAGE_CSS = """<style>
       #gateway-main-layout.spa-solo regular-layout-frame::part(container) {
         margin: 0; border: none; border-radius: 0; box-shadow: none;
       }
+      /* Channels graph: match the classic dagre-d3 page — red edges into a channel
+         (setters), dashed edges out of a channel (getters). Arrowheads pick up the
+         edge color via context-stroke. */
+      .gateway-sets .spaday-dagre-edge-line { stroke: #f66; stroke-width: 2; }
+      .gateway-gets .spaday-dagre-edge-line { stroke-width: 2; stroke-dasharray: 5 5; }
     </style>"""
 
 
@@ -666,6 +671,9 @@ class GatewayUI:
             main_content: Any = (
                 RegularLayout(*frames, layout={"type": "tab-layout", "tabs": [_WORKSPACE_TAB]})
                 .prop("id", _MAIN_LAYOUT_ID)
+                # Tabs open, select, and close, but drag-rearranging is disabled: the nested
+                # Perspective workspace is itself a regular-layout, which makes drags confusing.
+                .prop("locked", True)
                 .prop("style", "; ".join(titles))
                 .compute("class", cond(field("main_tabbed"), "spa", "spa spa-solo"))
                 .on("regular-layout-update", SetField("main_tabbed", not_(eq(open_count, 1))))

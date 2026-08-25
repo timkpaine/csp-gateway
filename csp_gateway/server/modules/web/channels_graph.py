@@ -75,13 +75,15 @@ class MountChannelsGraph(GatewayModule):
         nodes: dict[str, dict[str, Any]] = {}
         edges: list[dict[str, str]] = []
         for channel, wiring in data.items():
-            nodes[channel] = {"id": channel, "class": "gateway-channel"}
+            # Mirror the classic dagre-d3 page: diamond channels, red edges into a
+            # channel (setters), dashed edges out of a channel (getters).
+            nodes[channel] = {"id": channel, "class": "gateway-channel", "shape": "diamond"}
             for setter in wiring.get("setters", []):
                 nodes.setdefault(setter, {"id": setter, "class": "gateway-module"})
-                edges.append({"source": setter, "target": channel})
+                edges.append({"source": setter, "target": channel, "class": "gateway-sets"})
             for getter in wiring.get("getters", []):
                 nodes.setdefault(getter, {"id": getter, "class": "gateway-module"})
-                edges.append({"source": channel, "target": getter})
+                edges.append({"source": channel, "target": getter, "class": "gateway-gets"})
         return {"nodes": list(nodes.values()), "edges": edges}
 
     def ui(self, app: "GatewayUI") -> None:

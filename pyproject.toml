@@ -101,9 +101,9 @@ server = [
     "pydantic>=2",
     # Default frontend provider (Settings.UI_PROVIDER = "spaday"). 0.4 tracks perspective 5.
     "spaday>=0.7.3",
-    "spaday-dagre>=0.1.0",
+    "spaday-dagre>=0.1.1",
     "spaday-perspective>=0.4.6",
-    "spaday-regular-layout>=0.2.1",
+    "spaday-regular-layout>=0.2.2",
     "spaday-webawesome>=0.2.0",
     "uvicorn>=0.28.1,<0.50",
     "uvloop",

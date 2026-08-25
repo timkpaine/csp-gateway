@@ -433,6 +433,19 @@ class TestMainTabs:
         assert '"spaday-dagre"' in text
         # channels and modules become classed nodes with edges between them
         assert "gateway-channel" in text and "gateway-module" in text
+        # classic dagre-d3 parity: diamond channels, classed setter/getter edges
+        assert '"shape": {"Str": "diamond"}' in text
+        assert "gateway-sets" in text and "gateway-gets" in text
+
+    def test_main_layout_is_locked(self, client: TestClient):
+        tree = client.get("/tree.json").text
+        # tabs select and close but cannot be drag-rearranged
+        assert '"locked": {"Bool": true}' in tree
+
+    def test_graph_edge_styles_match_the_classic_page(self, client: TestClient):
+        page = client.get("/").text
+        assert ".gateway-sets .spaday-dagre-edge-line { stroke: #f66;" in page
+        assert "stroke-dasharray: 5 5" in page
 
     def test_plus_and_graph_buttons_open_tabs(self, client: TestClient):
         tree = client.get("/tree.json").text
