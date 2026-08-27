@@ -341,25 +341,27 @@ class TestSpadayPerspectiveLayoutActions:
         assert "gateway-layout-selector" in tree
         assert "layout_view" in tree
         assert "Save current layout" in tree
-        assert "csp-gateway:save-layout" in tree
+        assert '"method": "saveClean"' in tree
         assert "Download layout" in tree
-        assert "csp-gateway:download-layout" in tree
+        assert '"kind": "download"' in tree
 
-    def test_layout_action_script_is_served(self, client: TestClient):
+    def test_layout_actions_are_declarative(self, client: TestClient):
+        # the handlers formerly shipped in actions.js are serializable actions in the tree now
         page = client.get("/").text
-        assert "/components/csp-gateway/actions.js" in page
-        assert "globalThis.cspGatewayCustomLayout" in page
-        assert '"gateway-workspace"' in client.get("/tree.json").text
-        script = client.get("/components/csp-gateway/actions.js")
-        assert script.status_code == 200
-        assert 'from "../../js/cdn/index.js"' in script.text
-        assert '"csp-gateway:save-layout"' in script.text
-        assert '"csp-gateway:download-layout"' in script.text
-        assert '"csp_gateway_demo_config"' in script.text
-        assert '"gateway-layout-selector"' in script.text
-        assert 'new Event("input", { bubbles: true })' in script.text
-        assert '"gateway-workspace"' in script.text
-        assert client.get("/js/cdn/index.js").status_code == 200
+        assert "actions.js" not in page
+        assert "cspGatewayCustomLayout" not in page
+        assert 'localStorage.getItem("csp_gateway_demo_config")' in page
+        assert client.get("/components/csp-gateway/actions.js").status_code == 404
+        tree = client.get("/tree.json").text
+        # save: clean-save the workspace, persist it, and switch the selector to the custom layout
+        assert '"target": {"ref": "id", "id": "gateway-workspace"}, "method": "saveClean", "result": "custom_layout"' in tree
+        assert '"kind": "set-storage", "key": "csp_gateway_demo_config", "value": {"expr": "field", "name": "custom_layout"}' in tree
+        assert '"kind": "set-field", "field": "layout_view", "value": {"expr": "lit", "value": "Custom Layout"}' in tree
+        # download: clean-save, then offer the result as a client-side file
+        assert '"method": "saveClean", "result": "download_layout"' in tree
+        assert (
+            '"kind": "download", "filename": {"expr": "lit", "value": "layout.json"}, "value": {"expr": "field", "name": "download_layout"}' in tree
+        )
 
     def test_layout_download_is_a_same_origin_attachment(self, client: TestClient):
         layout = {"layout": {"type": "tab-layout", "tabs": []}, "panels": {}}
@@ -471,16 +473,15 @@ class TestMainTabs:
 
     def test_plus_and_graph_buttons_open_tabs(self, client: TestClient):
         tree = client.get("/tree.json").text
-        assert '"csp-gateway:open-tab"' in tree
         assert '"data-tab": {"Str": "send"}' in tree
         assert '"data-tab": {"Str": "channels-graph"}' in tree
         # the bottom drawer is gone in the spaday provider (send lives in a tab now)
         assert "gateway-send" not in tree
-
-    def test_open_tab_handler_is_served(self, client: TestClient):
-        script = client.get("/components/csp-gateway/actions.js").text
-        assert "csp-gateway:open-tab" in script
-        assert "insertPanel" in script and "selectPanel" in script
+        # each button invokes the layout engine's openPanel with its own data-tab
+        assert (
+            '"target": {"ref": "id", "id": "gateway-main-layout"}, "method": "openPanel", '
+            '"args": [{"expr": "event-prop", "path": "currentTarget.dataset.tab"}]'
+        ) in tree
 
     def test_dagre_and_layout_packages_are_mounted(self, client: TestClient):
         page = client.get("/").text

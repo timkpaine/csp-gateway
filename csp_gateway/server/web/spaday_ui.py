@@ -17,7 +17,6 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field as _dc_field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter
@@ -37,9 +36,11 @@ except ImportError as exc:  # pragma: no cover
 from spaday import Js, element
 from spaday.actions import (
     CallEndpoint,
-    NamedJs,
+    Download,
+    Invoke,
     Sequence,
     SetField,
+    SetStorage,
     Toggle,
     ToggleField,
     all_,
@@ -47,6 +48,7 @@ from spaday.actions import (
     concat,
     cond,
     eq,
+    event_prop,
     event_value,
     field,
     not_,
@@ -54,7 +56,6 @@ from spaday.actions import (
 )
 from spaday.backends.starlette import mount as _spaday_mount
 from spaday.components.shell import AppShell, Column, Region, Row, Show
-from spaday.packages import ComponentPackage
 from spaday_perspective import PerspectivePanel
 from spaday_regular_layout import RegularLayout, RegularLayoutFrame
 from spaday_webawesome import (
@@ -85,17 +86,10 @@ log = logging.getLogger(__name__)
 _ANONYMOUS_TENANT = "__anonymous__"
 _CUSTOM_LAYOUT_NAME = "Custom Layout"
 _CUSTOM_LAYOUT_STORAGE_KEY = "csp_gateway_demo_config"
-_SAVE_LAYOUT_HANDLER = "csp-gateway:save-layout"
-_DOWNLOAD_LAYOUT_HANDLER = "csp-gateway:download-layout"
-_OPEN_TAB_HANDLER = "csp-gateway:open-tab"
 _MAIN_LAYOUT_ID = "gateway-main-layout"
+_WORKSPACE_ID = "gateway-workspace"
 _WORKSPACE_TAB = "workspace"
 _SEND_TAB = "send"
-_GATEWAY_COMPONENT_PACKAGE = ComponentPackage(
-    name="csp-gateway",
-    assets_dir=Path(__file__).with_name("spaday_assets"),
-    assets=(("js", "actions.js"),),
-)
 
 
 # Page-level resets that spaday's document template does not ship. The palette is deliberately absent:
@@ -265,7 +259,11 @@ class GatewayUI:
 
     def tab_button(self, label: str, tab: str, *, icon: str | None = None, appearance: str = "outlined") -> Any:
         """A button that opens (or focuses) a registered main tab. Add it to any region."""
-        button = WaButton(appearance=appearance, title=label).prop("data-tab", tab).on("click", NamedJs(_OPEN_TAB_HANDLER))
+        button = (
+            WaButton(appearance=appearance, title=label)
+            .prop("data-tab", tab)
+            .on("click", Invoke(by_id(_MAIN_LAYOUT_ID), "openPanel", event_prop("currentTarget.dataset.tab")))
+        )
         button = button.child(WaIcon(name=icon)) if icon else button.text(label).style(width="100%")
         return button
 
@@ -349,7 +347,7 @@ class GatewayUI:
         fallback = json.dumps(default_layout).replace("<", "\\u003c")
         storage_key = json.dumps(_CUSTOM_LAYOUT_STORAGE_KEY)
         self._store_seeds["custom_layout"] = Js(
-            "globalThis.cspGatewayCustomLayout = (() => { "
+            "(() => { "
             f"const fallback = {fallback}; "
             f'try {{ const value = JSON.parse(localStorage.getItem({storage_key}) ?? "null"); '
             'return value && typeof value === "object" && !Array.isArray(value) '
@@ -362,7 +360,7 @@ class GatewayUI:
 
         return (
             PerspectivePanel()
-            .prop("id", "gateway-workspace")
+            .prop("id", _WORKSPACE_ID)
             .style(height="100%", display="block", overflow="hidden")
             .compute("theme", cond(field("dark"), "dark", "light"))
             .compute("config", obj({"ws_url": self.url(route), "tables": tables, "layout": layout_expr}))
@@ -386,15 +384,40 @@ class GatewayUI:
         return select.child(WaOption(value=_CUSTOM_LAYOUT_NAME).text(_CUSTOM_LAYOUT_NAME))
 
     def save_layout_button(self) -> Any:
-        """A header button that saves the current Perspective workspace in the browser."""
-        return WaButton(appearance="plain", title="Save current layout").on("click", NamedJs(_SAVE_LAYOUT_HANDLER)).child(WaIcon(name="floppy-disk"))
+        """A header button that saves the current Perspective workspace in the browser.
 
-    def download_layout_button(self, url: str) -> Any:
-        """A header button that downloads the current Perspective workspace as JSON."""
+        `saveClean` strips the transient fields (theme, column size overrides) before the layout is
+        persisted to localStorage; writing `result="custom_layout"` updates the store field the
+        workspace's layout expression reads, and selecting the custom layout re-renders it.
+        """
+        return (
+            WaButton(appearance="plain", title="Save current layout")
+            .on(
+                "click",
+                Sequence(
+                    Invoke(by_id(_WORKSPACE_ID), "saveClean", result="custom_layout"),
+                    SetStorage(_CUSTOM_LAYOUT_STORAGE_KEY, field("custom_layout")),
+                    SetField("view", _CUSTOM_LAYOUT_NAME),
+                    SetField("layout_view", _CUSTOM_LAYOUT_NAME),
+                ),
+            )
+            .child(WaIcon(name="floppy-disk"))
+        )
+
+    def download_layout_button(self) -> Any:
+        """A header button that downloads the current Perspective workspace as a JSON file.
+
+        The file is assembled client-side from `saveClean` — no server round-trip.
+        """
         return (
             WaButton(appearance="plain", title="Download layout")
-            .prop("data-download-url", self.url(url))
-            .on("click", NamedJs(_DOWNLOAD_LAYOUT_HANDLER))
+            .on(
+                "click",
+                Sequence(
+                    Invoke(by_id(_WORKSPACE_ID), "saveClean", result="download_layout"),
+                    Download("layout.json", field("download_layout")),
+                ),
+            )
             .child(WaIcon(name="download"))
         )
 
@@ -630,7 +653,7 @@ class GatewayUI:
         plus_button = (
             WaButton(appearance="plain", title=bottom_label)
             .prop("data-tab", _SEND_TAB)
-            .on("click", NamedJs(_OPEN_TAB_HANDLER))
+            .on("click", Invoke(by_id(_MAIN_LAYOUT_ID), "openPanel", event_prop("currentTarget.dataset.tab")))
             .child(WaIcon(name="plus"))
             if bottom_drawer_items
             else None
@@ -859,7 +882,7 @@ class GatewayUI:
             scratch,
             self.build_page,
             # Component libraries ship as their own distributions and are resolved by entry point.
-            packages=["webawesome", "perspective", "regular-layout", "dagre", _GATEWAY_COMPONENT_PACKAGE],
+            packages=["webawesome", "perspective", "regular-layout", "dagre"],
             # spaday infers "source checkout" from a `js/` dir next to itself, which any distribution
             # shipping a top-level `js/` package (plotly does) satisfies -- serving assets we consume
             # from the wheel, never from a spaday checkout.

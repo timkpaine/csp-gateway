@@ -762,11 +762,7 @@ class MountPerspectiveTables(GatewayModule):
         app.seed_store(view=default_view, layout_view=default_view)
         app.add(Region.HEADER_RIGHT, app.layout_selector(layouts, value=default_view), order=90)
         app.add(Region.HEADER_RIGHT, app.save_layout_button(), order=100)
-        app.add(
-            Region.HEADER_RIGHT,
-            app.download_layout_button(f"{app.settings.API_STR}{self._route}/download-layout"),
-            order=101,
-        )
+        app.add(Region.HEADER_RIGHT, app.download_layout_button(), order=101)
 
     def run_perspective(self):
         """Launch the perspective threads"""
