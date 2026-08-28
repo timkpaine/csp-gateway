@@ -141,26 +141,26 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
-  
+
       - name: Install wheels
         run: uv pip install `ls csp_gateway-*.whl`[develop] --target .
-  
+
       - name: Test
         run: make coverage
-  
+
       - name: Upload test results (Python)
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: test-results-${{ matrix.os }}-${{ matrix.python-version }}
           path: junit.xml
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
-  
+
       - name: Publish Unit Test Results
         uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2.24.0
         with:
           files: junit.xml
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
-  
+
       - name: Upload coverage
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
@@ -189,18 +189,18 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
-  
+
       - name: Install wheels
         run: uv pip install `ls csp_gateway_${{ matrix.wheel }}-*.whl`
         if: matrix.wheel != ''
-  
+
       - name: Install wheels
         run: uv pip install `ls csp_gateway-*.whl`
         if: matrix.wheel == ''
-  
+
       - name: Import Client
         run: python -c "import csp_gateway.client"
-  
+
       - name: Import Utils
         run: |
           python -c "import csp_gateway.utils"
@@ -209,11 +209,11 @@ jobs:
           python -c "import csp_gateway.utils.picklable_queue"
           python -c "import csp_gateway.utils.web.filter"
           python -c "import csp_gateway.utils.web.query"
-  
+
       - name: Import Server
         run: python -c "import csp_gateway.server"
         if: matrix.wheel != 'client'
-  
+
       - name: Import Utils
         run: |
           python -c "import csp_gateway.utils"
