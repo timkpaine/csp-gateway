@@ -100,10 +100,13 @@ server = [
     "pyarrow",
     "pydantic>=2",
     # Default frontend provider (Settings.UI_PROVIDER = "spaday"). 0.5 tracks perspective 5.
-    "spaday>=0.7.6",
-    "spaday-dagre>=0.1.1",
+    # 0.7.8 stopped a reactive Toast message enqueueing one notice per field it reads.
+    "spaday>=0.7.9",
+    # 0.1.2 added the channels graph's pan/zoom controls; 0.2.3 fits the graph when its tab opens.
+    "spaday-dagre>=0.2.3",
     "spaday-perspective>=0.5.0",
-    "spaday-regular-layout>=0.2.4",
+    # 0.2.6 documents that frame content fills ::part(container) with height:100%, not flex:1.
+    "spaday-regular-layout>=0.2.6",
     "spaday-webawesome>=0.2.0",
     "uvicorn>=0.28.1,<0.50",
     "uvloop",

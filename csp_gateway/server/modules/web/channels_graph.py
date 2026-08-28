@@ -92,7 +92,18 @@ class MountChannelsGraph(GatewayModule):
         from spaday_dagre import Dagre
 
         def graph_tab():
-            return Dagre().prop("graph", self._graph()).prop("layout", {"rankdir": "LR", "ranksep": 60}).style(padding="0.5rem")
+            # `spaday-dagre` has no intrinsic height (it draws into an absolutely positioned
+            # frame), so it collapses to its padding unless it is given one explicitly.
+            graph = (
+                Dagre()
+                .prop("graph", self._graph())
+                .prop("layout", {"rankdir": "LR", "ranksep": 60, "nodesep": 20})
+                .prop("controls", True)
+                .style(height="100%", box_sizing="border-box", padding="0.5rem")
+            )
+            # Runs at page build, after every module's `ui()`, so the workspace's tables are known.
+            focus = app.focus_table_action()
+            return graph.on("dagre-node-click", focus) if focus else graph
 
         app.add_tab(_GRAPH_TAB, "Channels Graph", graph_tab)
         from csp_gateway.server.web.spaday_ui import Region

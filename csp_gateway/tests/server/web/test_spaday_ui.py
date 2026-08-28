@@ -282,10 +282,185 @@ class TestDefaultLayout:
         }
 
         panel = ui.perspective_panel(route="/perspective", tables=["orders"], default_layout=custom)
-        node = panel.to_node()
+        layout = panel.to_node()["bindings"]["config"]["compute"]["fields"]["layout"]
 
-        assert "X Bar" in json.dumps(node)
-        assert "CSP_GATEWAY_0" not in json.dumps(node)
+        # The layout is a cond chain (focus branches, then the saved layout); the final `else` is
+        # the default, and it is the supplied one rather than a generated CSP_GATEWAY_* layout.
+        while layout.get("expr") == "cond":
+            layout = layout["else"]
+        assert layout["value"] == custom
+
+
+class TestTableOptions:
+    """Per-table `architecture`/`index`/`limit` reach the panel, which is what mirrors a
+    `client-server` table into a local worker instead of reading it off the websocket."""
+
+    @staticmethod
+    def _bare_ui():
+        from csp_gateway.server.web.spaday_ui import GatewayUI
+
+        ui = object.__new__(GatewayUI)
+        ui._store_seeds = {}
+        ui._settings = GatewaySettings()
+        ui._workspace_tables = []
+        return ui
+
+    @staticmethod
+    def _table_specs(panel):
+        return panel.to_node()["bindings"]["config"]["compute"]["fields"]["tables"]["value"]
+
+    def test_tables_without_options_stay_plain_names(self):
+        panel = self._bare_ui().perspective_panel(route="/perspective", tables=["orders"])
+        assert self._table_specs(panel) == ["orders"]
+
+    def test_options_are_merged_into_the_table_spec(self):
+        panel = self._bare_ui().perspective_panel(
+            route="/perspective",
+            tables=["orders", "fills"],
+            table_options={"orders": {"architecture": "client-server", "index": "id", "limit": 20}},
+        )
+
+        # A table with no options is still sent as a bare name.
+        assert self._table_specs(panel) == [
+            {"name": "orders", "architecture": "client-server", "index": "id", "limit": 20},
+            "fills",
+        ]
+
+    def test_module_reports_effective_architecture_index_and_limit(self):
+        module = MountPerspectiveTables(
+            channel_selection=["example"],
+            default_architecture="server",
+            architectures={"example": "client-server"},
+            indexes={"example": "id"},
+            limits={"example": 5},
+        )
+        assert module._ui_table_options("example") == {"architecture": "client-server", "index": "id", "limit": 5}
+
+    def test_multi_index_table_reports_the_computed_index(self):
+        module = MountPerspectiveTables(channel_selection=["example"], indexes={"example": ["a", "b"]})
+        module._computed_indexes["example"] = ("a-b", ["a", "b"])
+
+        assert module._ui_table_options("example")["index"] == "a-b"
+
+
+class TestActionFailureToast:
+    """`post_button`/`confirm_button` POSTs are otherwise fire-and-forget, so a rejection has to
+    reach the user somehow."""
+
+    @pytest.fixture(scope="class")
+    def gateway(self, free_port):
+        return Gateway(
+            modules=[ExampleModule(), MountRestRoutes(force_mount_all=True)],
+            channels=ExampleChannels(),
+            settings=GatewaySettings(PORT=free_port, UI_PROVIDER="spaday"),
+        )
+
+    @pytest.fixture(scope="class")
+    def client(self, gateway):
+        gateway.start(rest=True, ui=True, _in_test=True)
+        try:
+            yield TestClient(gateway.web_app.get_fastapi())
+        finally:
+            gateway.stop()
+
+    @staticmethod
+    def _bare_ui():
+        from csp_gateway.server.web.spaday_ui import GatewayUI
+
+        ui = object.__new__(GatewayUI)
+        ui._store_seeds = {}
+        ui._settings = GatewaySettings()
+        ui._workspace_tables = []
+        return ui
+
+    def test_post_button_captures_the_result(self):
+        node = json.dumps(self._bare_ui().post_button("Go", "/api/v1/go").to_node())
+        assert '"result": "action_result"' in node
+
+    def test_confirm_button_captures_the_result(self):
+        node = json.dumps(self._bare_ui().confirm_button("Shutdown", "/api/v1/controls/shutdown").to_node())
+        assert '"result": "action_result"' in node
+
+    def test_page_has_a_toast_that_only_fires_on_failure(self, client: TestClient):
+        tree = client.get("/tree.json").text
+
+        assert '"spa-toast"' in tree
+        assert "Request failed (HTTP " in tree
+        # `action_result` is unset until the first call, so the guard keeps the toast quiet on load.
+        assert "action_result.ok" in tree and "action_result.status" in tree
+
+
+class TestWorkspaceSignals:
+    """`perspective-error` reaches a toast, and `perspective-ready` gates the layout buttons."""
+
+    @staticmethod
+    def _bare_ui():
+        from csp_gateway.server.web.spaday_ui import GatewayUI
+
+        ui = object.__new__(GatewayUI)
+        ui._store_seeds = {}
+        ui._settings = GatewaySettings()
+        ui._workspace_tables = []
+        return ui
+
+    def test_errors_are_reported_in_a_toast(self):
+        node = json.dumps(self._bare_ui().perspective_panel(route="/perspective", tables=["orders"]).to_node())
+
+        assert "perspective-error" in node and '"notify"' in node
+        # The detail is an Error for JS failures and a bare string from Perspective itself.
+        assert "detail.message" in node and '"path": "detail"' in node
+
+    def test_ready_is_recorded_and_seeded_false(self):
+        ui = self._bare_ui()
+        node = json.dumps(ui.perspective_panel(route="/perspective", tables=["orders"]).to_node())
+
+        assert "perspective-ready" in node
+        assert ui._store_seeds["perspective_ready"] is False
+
+    def test_layout_buttons_wait_for_the_workspace(self):
+        ui = self._bare_ui()
+        for button in (ui.save_layout_button(), ui.download_layout_button()):
+            assert "perspective_ready" in json.dumps(button.to_node()["bindings"]["disabled"])
+
+
+class TestGraphFocus:
+    """Clicking a channel in the graph shows that one table in the workspace."""
+
+    @staticmethod
+    def _bare_ui():
+        from csp_gateway.server.web.spaday_ui import GatewayUI
+
+        ui = object.__new__(GatewayUI)
+        ui._store_seeds = {}
+        ui._settings = GatewaySettings()
+        ui._workspace_tables = []
+        return ui
+
+    def test_no_action_without_a_workspace(self):
+        assert self._bare_ui().focus_table_action() is None
+
+    def test_action_is_guarded_by_the_workspace_tables(self):
+        ui = self._bare_ui()
+        ui.perspective_panel(route="/perspective", tables=["orders", "fills"])
+        action = ui.focus_table_action().to_dict()
+
+        # Only the workspace's own tables focus anything, so clicking a module node is a no-op.
+        assert [branch["b"]["value"] for branch in action["cond"]["of"]] == ["orders", "fills"]
+        assert action["cond"]["expr"] == "any"
+        # Focusing also brings the workspace back to the front.
+        assert '"openPanel"' in json.dumps(action["then"]) and '"workspace"' in json.dumps(action["then"])
+
+    def test_layout_has_a_focus_branch_per_table(self):
+        ui = self._bare_ui()
+        node = json.dumps(ui.perspective_panel(route="/perspective", tables=["orders", "fills"]).to_node())
+
+        assert node.count('"name": "graph_focus"') == 2
+        assert ui._store_seeds["graph_focus"] == ""
+
+    def test_selecting_a_layout_clears_the_focus(self):
+        node = json.dumps(self._bare_ui().layout_selector({}).to_node())
+
+        assert "graph_focus" in node
 
 
 class TestDarkBoot:

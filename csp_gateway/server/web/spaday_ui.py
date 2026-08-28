@@ -37,6 +37,7 @@ from spaday import Js, element
 from spaday.actions import (
     CallEndpoint,
     Download,
+    If,
     Invoke,
     Sequence,
     SetField,
@@ -44,6 +45,7 @@ from spaday.actions import (
     Toggle,
     ToggleField,
     all_,
+    any_,
     by_id,
     concat,
     cond,
@@ -55,7 +57,7 @@ from spaday.actions import (
     obj,
 )
 from spaday.backends.starlette import mount as _spaday_mount
-from spaday.components.shell import AppShell, Column, Region, Row, Show
+from spaday.components.shell import AppShell, Column, Region, Row, Show, Toast
 from spaday_perspective import PerspectivePanel
 from spaday_regular_layout import RegularLayout, RegularLayoutFrame
 from spaday_webawesome import (
@@ -90,16 +92,37 @@ _MAIN_LAYOUT_ID = "gateway-main-layout"
 _WORKSPACE_ID = "gateway-workspace"
 _WORKSPACE_TAB = "workspace"
 _SEND_TAB = "send"
+_TOAST_ID = "gateway-toasts"
+_ACTION_RESULT = "action_result"
+_GRAPH_FOCUS = "graph_focus"
+_PERSPECTIVE_READY = "perspective_ready"
 
 
-# Page-level resets that spaday's document template does not ship. The palette is deliberately absent:
-# the shell supplies its own light and dark values for the ``spa-*`` tokens, keyed off the ``wa-dark``
-# class that ``App().bind_root_class("wa-dark", "dark")`` toggles, and WebAwesome sets the matching
-# ``color-scheme`` so the page canvas follows.
+# Page-level resets that spaday's document template does not ship. The shell supplies its own light
+# and dark values for the ``spa-*`` tokens, keyed off the ``wa-dark`` class that
+# ``App().bind_root_class("wa-dark", "dark")`` toggles, and WebAwesome sets the matching
+# ``color-scheme`` so the page canvas follows. Only the few tokens below are restated, to take the
+# blue out of the chrome; ``:where()`` gives the shell's own values zero specificity, so a plain
+# class selector wins.
 PAGE_CSS = """<style>
       html, body { height: 100%; }
       body { margin: 0; font-family: system-ui, sans-serif; }
       spa-app { --spa-gap: 0.75rem; }
+      /* Perspective's Pro themes are near-neutral greys (its surface is #242526), so the shell's
+         blue-leaning neutrals read as a colour clash against the data. These keep each token's
+         lightness and drop the hue, leaving the chrome a shade darker than the tables. Light is
+         the unclassed default -- only ``wa-dark`` is toggled on the root -- so the base values go
+         on ``:root`` and the dark block must follow it to win on source order. */
+      :root {
+        --spa-border: #e5e6e7;
+        --spa-muted: #58595b;
+      }
+      .wa-dark {
+        --spa-surface: #121314;
+        --spa-surface-2: color-mix(in oklab, #121314, black 20%);
+        --spa-border: #313234;
+        --spa-muted: #949597;
+      }
       /* The main region's tab layout: the workspace tab is full-bleed, and with a single open
          tab the chrome disappears entirely (the "only tab when there are more tabs" rule). */
       #gateway-main-layout { height: 100%; }
@@ -186,6 +209,9 @@ class GatewayUI:
         self._regions: dict[Region, list[_Contribution]] = {}
         self._tabs: list[tuple[int, str, str, Any, bool]] = []
         self._store_seeds: dict[str, Any] = {}
+        # Tables the workspace can show, recorded by `perspective_panel` so later contributions
+        # (the channels graph) can drive it without knowing how it was configured.
+        self._workspace_tables: list[str] = []
         # Live UI state: namespace -> (model, latest value factory). The hub and its models only exist
         # once a module declares one, so a gateway with no live state serves no websocket.
         self._models: dict[str, Any] = {}
@@ -326,6 +352,7 @@ class GatewayUI:
         layouts: dict[str, str] | None = None,
         schemas: dict[str, dict[str, str]] | None = None,
         default_layout: dict[str, Any] | None = None,
+        table_options: dict[str, dict[str, Any]] | None = None,
     ) -> Any:
         """A Perspective workspace panel (the primary data view), bound to the theme + `view` state.
 
@@ -333,9 +360,14 @@ class GatewayUI:
         layout/theme config. ``default_layout`` replaces the generated initial layout when supplied.
         Otherwise ``default_tables`` are the ones the generated layout opens, defaulting to all of
         ``tables``. ``schemas`` (table name -> column name -> type) lets the generated layout apply
-        per-table defaults (timestamp sort, hidden id column). Add it to `Region.MAIN`.
+        per-table defaults (timestamp sort, hidden id column). ``table_options`` carries each table's
+        ``architecture``/``index``/``limit``, which is what puts a ``client-server`` table in a local
+        worker rather than reading it off the websocket. Add it to `Region.MAIN`.
         """
         tables = list(tables or [])
+        self._workspace_tables = list(tables)
+        options = table_options or {}
+        table_specs: list[Any] = [{"name": name, **options[name]} if options.get(name) else name for name in tables]
         default_layout = default_layout or self._default_layout(list(default_tables) if default_tables is not None else tables, schemas=schemas)
         layout_expr: Any = default_layout
         for name, layout_json in (layouts or {}).items():
@@ -358,12 +390,54 @@ class GatewayUI:
         )
         layout_expr = cond(eq(field("layout_view"), _CUSTOM_LAYOUT_NAME), field("custom_layout"), layout_expr)
 
+        # Focusing a table (from a channels-graph node) wins over the selected layout until the
+        # selector or a save clears it, so these branches wrap the others.
+        for name in tables:
+            layout_expr = cond(eq(field(_GRAPH_FOCUS), name), self._default_layout([name], schemas=schemas), layout_expr)
+        self._store_seeds.setdefault(_GRAPH_FOCUS, "")
+        self._store_seeds.setdefault(_PERSPECTIVE_READY, False)
+
         return (
             PerspectivePanel()
             .prop("id", _WORKSPACE_ID)
             .style(height="100%", display="block", overflow="hidden")
             .compute("theme", cond(field("dark"), "dark", "light"))
-            .compute("config", obj({"ws_url": self.url(route), "tables": tables, "layout": layout_expr}))
+            .compute("config", obj({"ws_url": self.url(route), "tables": table_specs, "layout": layout_expr}))
+            # Applying a config can fail (a saved layout that no longer matches the tables); the
+            # panel reports it and otherwise nothing would. The detail is whatever was thrown --
+            # an Error for JS failures, a bare string for the ones raised inside Perspective.
+            .on(
+                "perspective-error",
+                Invoke(
+                    by_id(_TOAST_ID),
+                    "notify",
+                    obj(
+                        {
+                            "message": concat(
+                                "Perspective error: ",
+                                cond(event_prop("detail.message"), event_prop("detail.message"), event_prop("detail")),
+                            ),
+                            "tone": "danger",
+                        }
+                    ),
+                ),
+            )
+            .on("perspective-ready", SetField(_PERSPECTIVE_READY, True))
+        )
+
+    def focus_table_action(self, *, event_path: str = "detail.id") -> Any:
+        """An action that shows one table in the workspace, named by ``event_path`` on the event.
+
+        For components that identify a channel (the channels graph's node clicks). Names that are
+        not workspace tables are ignored, so clicking a module does nothing. Returns ``None`` when
+        no workspace has been registered, so callers can skip binding it.
+        """
+        if not self._workspace_tables:
+            return None
+        name = event_prop(event_path)
+        return If(
+            any_(*[eq(name, table) for table in self._workspace_tables]),
+            Sequence(SetField(_GRAPH_FOCUS, name), Invoke(by_id(_MAIN_LAYOUT_ID), "openPanel", _WORKSPACE_TAB)),
         )
 
     def layout_selector(self, layouts: dict[str, str], *, value: str | None = None) -> Any:
@@ -375,7 +449,7 @@ class GatewayUI:
             WaSelect(value=value, size="s")
             .prop("id", "gateway-layout-selector")
             .bind("value", "view", mode="two-way")
-            .on("change", SetField("layout_view", event_value()))
+            .on("change", Sequence(SetField("layout_view", event_value()), SetField(_GRAPH_FOCUS, "")))
             .style(width="220px")
         )
         select = select.child(WaOption(value="__default__").text("All Tables"))
@@ -392,11 +466,13 @@ class GatewayUI:
         """
         return (
             WaButton(appearance="plain", title="Save current layout")
+            .compute("disabled", not_(field(_PERSPECTIVE_READY)))
             .on(
                 "click",
                 Sequence(
                     Invoke(by_id(_WORKSPACE_ID), "saveClean", result="custom_layout"),
                     SetStorage(_CUSTOM_LAYOUT_STORAGE_KEY, field("custom_layout")),
+                    SetField(_GRAPH_FOCUS, ""),
                     SetField("view", _CUSTOM_LAYOUT_NAME),
                     SetField("layout_view", _CUSTOM_LAYOUT_NAME),
                 ),
@@ -411,6 +487,7 @@ class GatewayUI:
         """
         return (
             WaButton(appearance="plain", title="Download layout")
+            .compute("disabled", not_(field(_PERSPECTIVE_READY)))
             .on(
                 "click",
                 Sequence(
@@ -426,8 +503,9 @@ class GatewayUI:
         return WaButton(appearance="outlined", variant=variant).text(label).prop("href", self.url(href)).prop("target", target).style(width="100%")
 
     def post_button(self, label: str, url: str, *, variant: str = "neutral") -> Any:
-        """A full-width button that POSTs to `url` (fire-and-forget). Add it to a region."""
-        return WaButton(variant=variant).text(label).on("click", CallEndpoint("POST", self.url(url))).style(width="100%")
+        """A full-width button that POSTs to `url`, reporting a rejection in a toast. Add it to a region."""
+        action = CallEndpoint("POST", self.url(url), result=_ACTION_RESULT)
+        return WaButton(variant=variant).text(label).on("click", action).style(width="100%")
 
     def confirm_button(self, label: str, url: str, *, variant: str = "danger") -> Any:
         """A full-width button that POSTs to `url` behind a modal confirm dialog.
@@ -448,7 +526,13 @@ class GatewayUI:
                 .child(
                     WaButton(variant="danger")
                     .text(label)
-                    .on("click", Sequence(CallEndpoint("POST", self.url(url)), Toggle(by_id(dialog_id), "open")))
+                    .on(
+                        "click",
+                        Sequence(
+                            CallEndpoint("POST", self.url(url), result=_ACTION_RESULT),
+                            Toggle(by_id(dialog_id), "open"),
+                        ),
+                    )
                 )
             )
         )
@@ -751,6 +835,23 @@ class GatewayUI:
             )
         if overlay_items:
             shell.add(Region.OVERLAY, *overlay_items)
+
+        # `post_button`/`confirm_button` are otherwise fire-and-forget, so a rejected POST looks
+        # exactly like a successful one. The result field is unset until the first call, and an
+        # empty message enqueues nothing, so this stays quiet until something actually fails.
+        shell.add(
+            Region.OVERLAY,
+            Toast(tone="danger")
+            .prop("id", _TOAST_ID)
+            .compute(
+                "message",
+                cond(
+                    all_(field(_ACTION_RESULT), not_(field(f"{_ACTION_RESULT}.ok"))),
+                    concat("Request failed (HTTP ", field(f"{_ACTION_RESULT}.status"), ")."),
+                    "",
+                ),
+            ),
+        )
 
         return shell.build().style(height="100vh").bind_root_class("wa-dark", "dark")
 

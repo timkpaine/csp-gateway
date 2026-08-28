@@ -735,6 +735,21 @@ class MountPerspectiveTables(GatewayModule):
             return [name for name in self.default_layout_tables if name in known]
         return sorted(names)[: self.default_layout_max_tables]
 
+    def _ui_table_options(self, table_name: str) -> dict[str, Any]:
+        """The per-table `architecture`/`index`/`limit` the Spaday Perspective panel needs.
+
+        A multi-index table is indexed client-side by the computed field, not the fields it is
+        computed from, so those tables report the computed name here.
+        """
+        config = self._get_effective_config(table_name)
+        index = self._computed_indexes[table_name][0] if table_name in self._computed_indexes else config.index
+        options: dict[str, Any] = {"architecture": config.architecture}
+        if isinstance(index, str):
+            options["index"] = index
+        if config.limit is not None:
+            options["limit"] = config.limit
+        return options
+
     def build_default_ui_layout(self, tables: dict[str, dict[str, str]]) -> dict[str, Any] | None:
         """Return a custom default Spaday workspace layout, or `None` to use the generated layout."""
         return None
@@ -756,6 +771,7 @@ class MountPerspectiveTables(GatewayModule):
                 layouts=layouts,
                 schemas=tables,
                 default_layout=self.build_default_ui_layout(tables),
+                table_options={name: self._ui_table_options(name) for name in tables},
             ),
         )
         default_view = self.default_layout or "__default__"
