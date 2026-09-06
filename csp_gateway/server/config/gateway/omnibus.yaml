@@ -15,6 +15,8 @@ modules:
     _target_: csp_gateway.MountChannelsGraph
   mount_controls:
     _target_: csp_gateway.MountControls
+  mount_process_monitor:
+    _target_: csp_gateway.MountProcessMonitor
   mount_outputs:
     _target_: csp_gateway.MountOutputsFolder
   mount_perspective_tables:
@@ -61,6 +63,7 @@ gateway:
     - /modules/example_custom_table
     - /modules/mount_channels_graph
     - /modules/mount_controls
+    - /modules/mount_process_monitor
     - /modules/mount_outputs
     - /modules/mount_perspective_tables
     - /modules/mount_rest_routes
