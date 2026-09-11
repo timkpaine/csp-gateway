@@ -79,6 +79,15 @@ class Settings(BaseSettings):
         "*.js and *.css files are additionally auto-injected into the UI in sorted filename order. Do "
         "not point this at a directory containing private files.",
     )
+    UI_PACKAGES: list[str] = Field(
+        default_factory=list,
+        description="Extra spaday component packages to load into the UI, on top of the ones the "
+        "gateway ships. Each entry is either the name a package registers under its spaday entry "
+        "point (e.g. 'webawesome'), or a dotted path to a ComponentPackage or to a zero-argument "
+        "callable returning one (e.g. 'my_library.ui:PACKAGE'). Loading a package makes its elements "
+        "available to components a module contributes, and serves its assets alongside the built-in "
+        "ones. Only applies to the spaday UI provider.",
+    )
 
     # DEPRECATED auth settings
     # Historically (csp-gateway <2.5), auth was configured via these two fields

@@ -59,6 +59,7 @@ from spaday.actions import (
 )
 from spaday.backends.starlette import mount as _spaday_mount
 from spaday.components.shell import AppShell, Column, Region, Row, Show, Toast
+from spaday.packages import ComponentPackage
 from spaday_perspective import PerspectivePanel
 from spaday_regular_layout import RegularLayout, RegularLayoutFrame
 from spaday_webawesome import (
@@ -97,6 +98,48 @@ _TOAST_ID = "gateway-toasts"
 _ACTION_RESULT = "action_result"
 _GRAPH_FOCUS = "graph_focus"
 _PERSPECTIVE_READY = "perspective_ready"
+
+# The component packages every gateway page loads. Deployments extend this rather than replace it:
+# the shell is authored against WebAwesome, the Perspective panel is the primary data view, and the
+# workspace and channels graph need their layout and graph packages, so a page without them is not
+# a gateway page.
+_BUILTIN_COMPONENT_PACKAGES: tuple[Any, ...] = ("webawesome", "perspective", "regular-layout", "dagre", "trees")
+
+
+def _resolve_component_package(value: Any) -> Any:
+    """Coerce one configured package reference into something spaday's ``packages=`` accepts.
+
+    A `ComponentPackage` passes through. A string is either the name a distribution registers under
+    its spaday entry point (``"webawesome"``), or a dotted path to a `ComponentPackage` -- or to a
+    zero-argument callable returning one -- resolved through `ccflow.PyObjectPath` so the same value
+    works from YAML, an environment variable, or code.
+
+    A name is told from a path by the separators a dotted path needs, so a plain name is never
+    import-resolved, and a path that does not import raises rather than quietly degrading into a
+    lookup for an entry point of that name. The ``module:attr`` spelling entry points use is
+    accepted too, since it is the one people reach for, and normalised to the dotted form.
+    """
+    if isinstance(value, ComponentPackage):
+        return value
+    if not isinstance(value, str) or not value.strip():
+        raise TypeError(f"A UI component package must be a name, a dotted path, or a ComponentPackage, got {value!r}")
+    reference = value.strip()
+    if "." not in reference and ":" not in reference:
+        return reference
+
+    from ccflow import PyObjectPath
+
+    try:
+        resolved = PyObjectPath(reference.replace(":", ".")).object
+    except Exception as exc:
+        raise ValueError(f"Could not import the UI component package {reference!r}: {exc}") from exc
+    # A module-level factory is as reasonable as a module-level instance, and lets a library build its
+    # package lazily -- reading its own settings, say -- rather than at import time.
+    if callable(resolved) and not isinstance(resolved, ComponentPackage):
+        resolved = resolved()
+    if not isinstance(resolved, ComponentPackage):
+        raise TypeError(f"{reference!r} is not a ComponentPackage (got {type(resolved).__name__})")
+    return resolved
 
 
 # Page-level resets that spaday's document template does not ship. The shell supplies its own light
@@ -218,6 +261,8 @@ class GatewayUI:
         # Tables the workspace can show, recorded by `perspective_panel` so later contributions
         # (the channels graph) can drive it without knowing how it was configured.
         self._workspace_tables: list[str] = []
+        # Component packages contributed by modules, loaded on top of `Settings.UI_PACKAGES`.
+        self._packages: list[Any] = []
         # Live UI state: namespace -> (model, latest value factory). The hub and its models only exist
         # once a module declares one, so a gateway with no live state serves no websocket.
         self._models: dict[str, Any] = {}
@@ -309,6 +354,40 @@ class GatewayUI:
     def seed_store(self, **fields: Any) -> None:
         """Seed initial values into the page's reactive signal store (merged across callers)."""
         self._store_seeds.update(fields)
+
+    def package(self, package: Any) -> None:
+        """Load an extra spaday component package into the page.
+
+        The counterpart to `Settings.UI_PACKAGES` for modules that ship their own element library:
+        call this from the module's `ui()` hook and the package's assets are served with the
+        built-in ones, so components the module contributes through `add()` can use its elements.
+        Without it those elements are never registered, and the browser renders the unknown tags
+        inert -- nothing throws, the panel is simply empty.
+
+        `package` is a `spaday.packages.ComponentPackage`, the name a distribution registers under
+        its spaday entry point, or a dotted path to either. Loading the same package twice is
+        harmless; it is de-duplicated at page build.
+        """
+        self._packages.append(_resolve_component_package(package))
+
+    def _page_packages(self) -> list[Any]:
+        """Every component package the page loads: built-in, then configured, then module-contributed.
+
+        Order is the precedence a deployment would expect -- the gateway's own packages first, so a
+        configured one can rely on them being present. Duplicates are dropped, keyed by package name
+        where there is one, since loading a package's assets twice registers its elements twice and
+        the second registration is what throws.
+        """
+        configured = [_resolve_component_package(ref) for ref in getattr(self._settings, "UI_PACKAGES", None) or []]
+        seen: set = set()
+        packages: list[Any] = []
+        for package in (*_BUILTIN_COMPONENT_PACKAGES, *configured, *self._packages):
+            key = package if isinstance(package, str) else getattr(package, "name", None) or id(package)
+            if key in seen:
+                continue
+            seen.add(key)
+            packages.append(package)
+        return packages
 
     def url(self, path: str | None) -> str | None:
         """Prefix a root-relative URL with the gateway's ``ROOT_PATH`` (for reverse-proxy sub-paths).
@@ -1000,7 +1079,9 @@ class GatewayUI:
             scratch,
             self.build_page,
             # Component libraries ship as their own distributions and are resolved by entry point.
-            packages=["webawesome", "perspective", "regular-layout", "dagre", "trees"],
+            # The gateway's own are always loaded; `Settings.UI_PACKAGES` and `GatewayUI.package()`
+            # add to them, so a deployment can bring its own element library.
+            packages=self._page_packages(),
             # spaday infers "source checkout" from a `js/` dir next to itself, which any distribution
             # shipping a top-level `js/` package (plotly does) satisfies -- serving assets we consume
             # from the wheel, never from a spaday checkout.
