@@ -3,6 +3,7 @@
 import json
 from datetime import timedelta
 from enum import Enum, auto
+from pathlib import Path
 
 import csp
 import pytest
@@ -24,6 +25,11 @@ from csp_gateway.server.middleware.api_key_external import MountExternalAPIKeyMi
 from csp_gateway.testing.mock_validators import mock_api_key_validator_by_user
 
 pytest.importorskip("spaday")
+
+# Imported below the skip: both of these pull in spaday, which is an optional dependency.
+from spaday.packages import ComponentPackage
+
+from csp_gateway.server.web import spaday_ui
 
 
 def _bare_ui():
@@ -671,3 +677,120 @@ class TestMainWithoutTabs:
         tree = client.get("/tree.json").text
         assert "spaday-regular-layout" not in tree
         assert "spaday-dagre" not in tree
+
+
+# A stand-in for a deployment's own element library: a real package, with a real asset to serve.
+_EXTRA_PACKAGE = ComponentPackage(
+    name="csp-gateway-test-extra",
+    assets_dir=Path(__file__).with_name("spaday_test_assets"),
+    assets=(("js", "extra.js"),),
+)
+
+_EXTRA_PACKAGE_PATH = f"{__name__}._EXTRA_PACKAGE"
+
+
+def _extra_package_factory() -> ComponentPackage:
+    return _EXTRA_PACKAGE
+
+
+class TestComponentPackageReferences:
+    """`Settings.UI_PACKAGES` accepts what a YAML config or a caller would plausibly write."""
+
+    def test_a_registered_name_is_passed_through_untouched(self):
+        # Entry-point names are spaday's own currency, so they must not be import-resolved.
+        assert spaday_ui._resolve_component_package("webawesome") == "webawesome"
+
+    def test_a_dotted_path_resolves_to_the_package_it_names(self):
+        assert spaday_ui._resolve_component_package(_EXTRA_PACKAGE_PATH) is _EXTRA_PACKAGE
+
+    def test_the_entry_point_colon_spelling_is_accepted(self):
+        module, _, attr = _EXTRA_PACKAGE_PATH.rpartition(".")
+        assert spaday_ui._resolve_component_package(f"{module}:{attr}") is _EXTRA_PACKAGE
+
+    def test_a_callable_is_invoked_so_a_package_can_be_built_lazily(self):
+        assert spaday_ui._resolve_component_package(f"{__name__}._extra_package_factory") is _EXTRA_PACKAGE
+
+    def test_an_instance_is_passed_through(self):
+        assert spaday_ui._resolve_component_package(_EXTRA_PACKAGE) is _EXTRA_PACKAGE
+
+    @pytest.mark.parametrize("value", ["", "   ", None, 123])
+    def test_a_value_that_is_not_a_reference_is_rejected(self, value):
+        with pytest.raises(TypeError):
+            spaday_ui._resolve_component_package(value)
+
+    def test_a_path_that_does_not_import_raises_rather_than_being_read_as_a_name(self):
+        # The dangerous failure is the quiet one: treating a typo'd path as an entry-point name
+        # would render the elements inert instead of reporting anything.
+        with pytest.raises(ValueError, match="Could not import"):
+            spaday_ui._resolve_component_package("csp_gateway.not_a_real_module.package")
+
+    def test_a_path_to_something_that_is_not_a_package_is_rejected(self):
+        with pytest.raises(TypeError, match="not a ComponentPackage"):
+            spaday_ui._resolve_component_package(f"{__name__}._EXTRA_PACKAGE_PATH")
+
+
+class TestConfiguredComponentPackages:
+    """Extra packages reach the page, from settings and from a module's `ui()` hook alike."""
+
+    @staticmethod
+    def _ui(**settings_kwargs) -> spaday_ui.GatewayUI:
+        settings = GatewaySettings(PORT=0, UI_PROVIDER="spaday", **settings_kwargs)
+        return spaday_ui.GatewayUI(web_app=None, settings=settings)
+
+    def test_the_builtin_packages_are_always_loaded(self):
+        assert self._ui()._page_packages() == list(spaday_ui._BUILTIN_COMPONENT_PACKAGES)
+
+    def test_a_configured_package_is_added_after_the_builtin_ones(self):
+        packages = self._ui(UI_PACKAGES=[_EXTRA_PACKAGE_PATH])._page_packages()
+
+        assert packages[: len(spaday_ui._BUILTIN_COMPONENT_PACKAGES)] == list(spaday_ui._BUILTIN_COMPONENT_PACKAGES)
+        assert packages[-1] is _EXTRA_PACKAGE
+
+    def test_a_module_can_contribute_a_package(self):
+        ui = self._ui()
+        ui.package(_EXTRA_PACKAGE)
+
+        assert ui._page_packages()[-1] is _EXTRA_PACKAGE
+
+    def test_the_same_package_is_only_loaded_once(self):
+        # Two registrations of one element throws, so a package named twice -- by settings and by a
+        # module, say -- has to collapse to one.
+        ui = self._ui(UI_PACKAGES=[_EXTRA_PACKAGE_PATH, "webawesome"])
+        ui.package(_EXTRA_PACKAGE)
+        packages = ui._page_packages()
+
+        assert [p for p in packages if p is _EXTRA_PACKAGE] == [_EXTRA_PACKAGE]
+        assert packages.count("webawesome") == 1
+
+    def test_a_bad_reference_fails_at_build_rather_than_serving_a_broken_page(self):
+        with pytest.raises(ValueError, match="Could not import"):
+            self._ui(UI_PACKAGES=["csp_gateway.not_a_real_module.package"])._page_packages()
+
+
+class TestConfiguredPackagesAreServed:
+    """The configured package's assets are actually served to the browser."""
+
+    @pytest.fixture(scope="class")
+    def client(self, free_port):
+        gateway = Gateway(
+            modules=[ExampleModule(), MountRestRoutes(force_mount_all=True)],
+            channels=ExampleChannels(),
+            settings=GatewaySettings(PORT=free_port, UI_PROVIDER="spaday", UI_PACKAGES=[_EXTRA_PACKAGE_PATH]),
+        )
+        gateway.start(rest=True, ui=True, _in_test=True)
+        try:
+            yield TestClient(gateway.web_app.get_fastapi())
+        finally:
+            gateway.stop()
+
+    def test_the_page_loads_the_configured_package(self, client: TestClient):
+        assert f"/components/{_EXTRA_PACKAGE.name}/extra.js" in client.get("/").text
+
+    def test_the_configured_package_assets_are_fetchable(self, client: TestClient):
+        assert client.get(f"/components/{_EXTRA_PACKAGE.name}/extra.js").status_code == 200
+
+    def test_the_builtin_packages_still_load(self, client: TestClient):
+        page = client.get("/").text
+
+        assert "/components/webawesome/" in page
+        assert "/components/perspective/" in page
