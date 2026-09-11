@@ -103,7 +103,7 @@ _PERSPECTIVE_READY = "perspective_ready"
 # the shell is authored against WebAwesome, the Perspective panel is the primary data view, and the
 # workspace and channels graph need their layout and graph packages, so a page without them is not
 # a gateway page.
-_BUILTIN_COMPONENT_PACKAGES: tuple[Any, ...] = ("webawesome", "perspective", "regular-layout", "dagre")
+_BUILTIN_COMPONENT_PACKAGES: tuple[Any, ...] = ("webawesome", "perspective", "regular-layout", "dagre", "trees")
 
 
 def _resolve_component_package(value: Any) -> Any:
@@ -182,6 +182,11 @@ PAGE_CSS = """<style>
       #gateway-main-layout.spa-solo regular-layout-frame::part(container) {
         margin: 0; border: none; border-radius: 0; box-shadow: none;
       }
+      /* `confirm_button` wraps its button and dialog in a display:contents span, so both are flex
+         items of whatever region they land in. Opening the dialog turns its host from display:none
+         to display:block, which adds the region's row gap after the button and shifts everything
+         below it. The dialog paints in the top layer, so the host needs no space of its own. */
+      .gateway-confirm > wa-dialog { position: absolute; }
       /* Channels graph: match the classic dagre-d3 page — red edges into a channel
          (setters), dashed edges out of a channel (getters). Arrowheads pick up the
          edge color via context-stroke. */
@@ -329,12 +334,19 @@ class GatewayUI:
             raise ValueError(f"main tab already registered: {name}")
         self._tabs.append((order, name, label, component, closeable))
 
-    def tab_button(self, label: str, tab: str, *, icon: str | None = None, appearance: str = "outlined") -> Any:
-        """A button that opens (or focuses) a registered main tab. Add it to any region."""
+    def tab_button(self, label: str, tab: str, *, icon: str | None = None, appearance: str = "outlined", action: Any = None) -> Any:
+        """A button that opens (or focuses) a registered main tab. Add it to any region.
+
+        ``action`` runs after the tab opens -- the place to load a panel's data on demand. A tab's
+        frame is not laid out while it is closed, so a component that measures itself (a virtualized
+        list) renders nothing if its data arrives before it is on screen; fetching here rather than
+        on page load keeps that ordering right, and keeps a closed tab off the wire entirely.
+        """
+        open_tab = Invoke(by_id(_MAIN_LAYOUT_ID), "openPanel", event_prop("currentTarget.dataset.tab"))
         button = (
             WaButton(appearance=appearance, title=label)
             .prop("data-tab", tab)
-            .on("click", Invoke(by_id(_MAIN_LAYOUT_ID), "openPanel", event_prop("currentTarget.dataset.tab")))
+            .on("click", Sequence(open_tab, action) if action is not None else open_tab)
         )
         button = button.child(WaIcon(name=icon)) if icon else button.text(label).style(width="100%")
         return button
@@ -618,7 +630,7 @@ class GatewayUI:
                 )
             )
         )
-        return element("span").style(display="contents").child(button).child(dialog)
+        return element("span", class_="gateway-confirm").style(display="contents").child(button).child(dialog)
 
     @staticmethod
     def _schema_props(model: Any) -> dict[str, Any]:

@@ -107,6 +107,8 @@ server = [
     "spaday-perspective>=0.5.0",
     # 0.2.6 documents that frame content fills ::part(container) with height:100%, not flex:1.
     "spaday-regular-layout>=0.2.6",
+    # The log viewer's file tree: takes a flat path list and renders the hierarchy itself.
+    "spaday-trees>=0.2.3",
     "spaday-webawesome>=0.2.0",
     "uvicorn>=0.28.1,<0.53",
     "uvloop",

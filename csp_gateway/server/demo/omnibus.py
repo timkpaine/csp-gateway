@@ -31,6 +31,7 @@ from csp_gateway import (
     MountControls,
     MountOutputsFolder,
     MountPerspectiveTables,
+    MountProcessMonitor,
     MountRestRoutes,
     MountWebSocketRoutes,
     Stage,
@@ -314,6 +315,7 @@ if __name__ == "__main__":
             MountChannelsGraph(),
             MountControls(),
             MountOutputsFolder(),
+            MountProcessMonitor(),
             MountPerspectiveTables(
                 perspective_field="perspective",
                 layouts={

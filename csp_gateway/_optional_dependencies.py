@@ -41,6 +41,7 @@ SERVER_OPTIONAL_IMPORTS = frozenset(
         "spaday_dagre",
         "spaday_perspective",
         "spaday_regular_layout",
+        "spaday_trees",
         "spaday_webawesome",
         "uvicorn",
         "uvloop",

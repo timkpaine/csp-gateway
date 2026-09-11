@@ -48,3 +48,16 @@ def test_legacy_demo_config_loads():
     demo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../server/demo"))
     g = csp_gateway.server.config.load_gateway(overwrite=True, config_dir=demo_dir, overrides=["+config=omnibus_legacy"])
     assert isinstance(g, Gateway)
+
+
+def test_demo_config_loads_with_the_process_monitor():
+    """The shipped spaday demo config composes, and carries the Process tab beside the controls."""
+    from csp_gateway import MountControls, MountProcessMonitor
+
+    demo_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../server/demo"))
+    g = csp_gateway.server.config.load_gateway(overwrite=True, config_dir=demo_dir, overrides=["+config=omnibus"])
+    assert isinstance(g, Gateway)
+    mounted = {type(module) for module in g.modules}
+    # The monitor renders what the controls module reports, so it is only useful alongside it.
+    assert MountProcessMonitor in mounted
+    assert MountControls in mounted
