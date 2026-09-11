@@ -61,3 +61,27 @@ html.wa-dark spa-app { --spa-surface: #222b39; --spa-border: #3b4860; }
 ```
 
 Component internals are shadow DOM and cannot be selected from an external stylesheet, so restyling those means setting the WebAwesome custom properties they document rather than writing rules against their markup.
+
+### Bringing your own components
+
+Restyling only goes as far as the elements the page already loads. A deployment with its own element library adds it with `UI_PACKAGES`, which takes either the name a distribution registers under its `spaday.components` entry point, or a dotted path to a `ComponentPackage` (or to a callable returning one):
+
+```yaml
+gateway:
+  settings:
+    UI_PACKAGES:
+      - my_component_library
+      - my_app.ui.PACKAGE
+```
+
+A module that ships its own elements can load them from its `ui()` hook instead, which keeps the module self-contained rather than requiring every config that uses it to remember the setting:
+
+```python
+def ui(self, app: GatewayUI) -> None:
+    app.package(my_app.ui.PACKAGE)
+    app.add(Region.MAIN, MyElement())
+```
+
+Either way the package's assets are served alongside the built-in ones, and the gateway's own packages are always loaded, so a contributed package can rely on them. Loading the same package twice is de-duplicated.
+
+Loading the package is what makes its elements *work*: the browser treats an unregistered tag as an inert unknown element, so a component built from an unloaded package renders an empty panel without raising anything. If a contributed panel is blank, check that its package is loaded before looking anywhere else.

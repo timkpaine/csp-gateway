@@ -74,6 +74,9 @@ which the default frontend reads on load.
   public static content (useful for assets like logos, e.g. `/custom/logo.svg`); its top-level `*.js`
   and `*.css` files are additionally auto-injected into the UI in sorted filename order. Do not point
   this at a directory containing private files.
+- `UI_PACKAGES`: Extra spaday component packages to load, each given as the name a package registers
+  under its spaday entry point or a dotted path to a `ComponentPackage` (or a callable returning
+  one). Adds to the packages the gateway ships rather than replacing them. Spaday provider only.
 - `ROOT_PATH`: URL path prefix the app is served under when behind a reverse proxy that strips the
   prefix (e.g. `/watchtower`). It is passed to the ASGI server as `root_path` and used to prefix all
   server-rendered asset and API URLs (static bundle, logos, custom JS/CSS, `/ui-config`, docs) so the
