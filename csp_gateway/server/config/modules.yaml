@@ -10,6 +10,10 @@ example_custom_table:
 mount_controls:
   _target_: csp_gateway.MountControls
 
+# Renders what mount_controls' `stats` reports; needs it mounted to have anything to show.
+mount_process_monitor:
+  _target_: csp_gateway.MountProcessMonitor
+
 
 # Web Extras
 mount_outputs:
