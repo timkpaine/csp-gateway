@@ -1,6 +1,7 @@
 from datetime import timedelta
 from secrets import token_urlsafe
 from socket import gethostname
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Security
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -24,7 +25,10 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
         token_urlsafe(32),
         description="The API key(s) for access. Can be a single string or a list of valid keys. The default is auto-generated, but user-provided value(s) can be used.",
     )
-    domain: str = gethostname()
+    domain: str | None = Field(
+        default=None,
+        description="Domain for the authentication cookie. Defaults to unset, which scopes the cookie to the host that served it.",
+    )
 
     api_key_name: str = "token"
     api_key_timeout: timedelta = Field(description="Cookie timeout for API Key authentication", default=timedelta(hours=12))
@@ -34,7 +38,10 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
     def info(self, settings: GatewaySettings) -> str:
         url = f"http://{gethostname()}:{settings.PORT}"
         if settings.UI:
-            return f"\tUI: {url}?token={self.api_key}"
+            # The login route trades the key for a session cookie before handing over to the UI.
+            # Landing on "/" with a key authenticates that one request, leaving the page unable to
+            # authenticate the tree and data it goes on to fetch for itself.
+            return f"\tUI: {url}/login?token={self.api_key}"
         return f"\tAPI: {url}/openapi.json?token={self.api_key}"
 
     def validate(self):
@@ -73,8 +80,7 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
                 value=api_key,
                 domain=self.domain,
                 httponly=True,
-                max_age=self.api_key_timeout.total_seconds(),
-                expires=self.api_key_timeout.total_seconds(),
+                max_age=int(self.api_key_timeout.total_seconds()),
             )
             return response
 
@@ -87,21 +93,25 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
         self._setup_public_routes(app)
 
     def _setup_public_routes(self, app: GatewayWebApp) -> None:
-        """Setup public routes, middleware, and exception handler. Shared by subclasses.""" ""
+        """Setup public routes, middleware, and exception handler. Shared by subclasses."""
         public_router: APIRouter = app.get_router("public")
+        login_page, logout_page = self._auth_pages(app)
+
+        def _login_html(request: Request) -> HTMLResponse:
+            if login_page is not None:
+                return HTMLResponse(login_page)
+            return app.templates.TemplateResponse(request, "login.html.j2", context={"api_key_name": self.api_key_name})
 
         @public_router.get("/login", response_class=HTMLResponse, include_in_schema=False)
         async def get_login_page(token: str = "", request: Request = None):
             if token and token != "":
                 return RedirectResponse(url=app.root_path_url(request, f"{app.settings.API_STR}/auth/login?token={token}"))
-            return app.templates.TemplateResponse(
-                request,
-                "login.html.j2",
-                context={"api_key_name": self.api_key_name},
-            )
+            return _login_html(request)
 
         @public_router.get("/logout", response_class=HTMLResponse, include_in_schema=False)
         async def get_logout_page(request: Request = None):
+            if logout_page is not None:
+                return HTMLResponse(logout_page)
             return app.templates.TemplateResponse(request, "logout.html.j2")
 
         # add auth to all other routes
@@ -118,6 +128,10 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
                     },
                     status_code=403,
                 )
+            if login_page is not None:
+                # Sent to the login page rather than rendered in place, so the reason rides the query
+                # string the page reads it from.
+                return RedirectResponse(url=app.root_path_url(request, f"/login?error={quote(self.unauthorized_status_message)}"))
             return app.templates.TemplateResponse(
                 request,
                 "login.html.j2",
@@ -127,3 +141,20 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
                     "detail": self.unauthorized_status_message,
                 },
             )
+
+    def _auth_pages(self, app: GatewayWebApp) -> tuple[str | None, str | None]:
+        """The spaday login and logout markup, or a pair of Nones when the legacy templates are in play."""
+        if app.ui is None:
+            return None, None
+        api = app.settings.API_STR
+        login = app.ui.mount_auth_page(
+            title="Login",
+            action=f"{api}/auth/login",
+            fields=[{"name": self.api_key_name, "type": "password", "placeholder": "API Key..."}],
+        )
+        logout = app.ui.mount_auth_page(
+            title="Logout",
+            action=f"{api}/auth/logout",
+            submit="Logout",
+        )
+        return login, logout

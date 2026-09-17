@@ -397,3 +397,48 @@ class TestMountAPIKeyMiddlewareScopeUnit:
         assert middleware._matches_scope("/api/v1/last") is True
         assert middleware._matches_scope("/admin/users") is True
         assert middleware._matches_scope("/public/page") is False
+
+
+class TestExternalAPIKeyCookieSession:
+    """The cookie handed out at login has to authenticate the requests that follow it.
+
+    The UI depends on this: the browser authenticates the page it is served, then fetches the
+    component tree and opens the data websocket off its own back, carrying only the cookie.
+    """
+
+    @pytest.fixture(scope="class")
+    def cookie_gateway(self, free_port):
+        return Gateway(
+            modules=[
+                ExampleModule(),
+                MountRestRoutes(force_mount_all=True),
+                MountExternalAPIKeyMiddleware(external_validator=mock_api_key_validator_valid),
+            ],
+            channels=ExampleGatewayChannels(),
+            settings=GatewaySettings(PORT=free_port),
+        )
+
+    @pytest.fixture(scope="class")
+    def cookie_webserver(self, cookie_gateway):
+        cookie_gateway.start(rest=True, _in_test=True)
+        yield cookie_gateway
+        cookie_gateway.stop()
+
+    def test_login_cookie_is_host_scoped_with_an_integer_max_age(self, cookie_webserver):
+        client = TestClient(cookie_webserver.web_app.get_fastapi())
+        response = client.get("/api/v1/auth/login?token=valid_key_1", follow_redirects=False)
+        cookie = response.headers["set-cookie"]
+        # Pinning Domain to the server's own hostname means a client that reached the gateway by any
+        # other name discards the cookie, so leave it unset and let the cookie bind to that host.
+        assert "Domain=" not in cookie
+        # Max-Age has to be an integer; a float is not a valid value, so the whole attribute is
+        # dropped and the session quietly lasts only until the browser closes.
+        assert "Max-Age=43200" in cookie
+
+    def test_session_cookie_authenticates_later_requests(self, cookie_webserver):
+        client = TestClient(cookie_webserver.web_app.get_fastapi())
+        client.get("/api/v1/auth/login?token=valid_key_1")
+        assert client.cookies.get("token"), "login should leave a session cookie behind"
+        # No token in the query or headers this time. The cookie carries the session id minted at
+        # login rather than the key itself, so it resolves against the identity store.
+        assert client.get("/api/v1/last").status_code == 200

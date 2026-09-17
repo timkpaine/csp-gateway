@@ -1,6 +1,7 @@
 """Tests for MountSimpleAuthMiddleware."""
 
 import base64
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -23,6 +24,28 @@ from csp_gateway.server.middleware.simple import (
     _validate_host_windows,
 )
 from csp_gateway.testing.mock_validators import mock_simple_auth_validator_valid
+
+
+def _form_action(client: TestClient, path: str) -> str | None:
+    """The ``action`` of the form in a spaday auth page, whose tree is inlined in its markup."""
+    markup = client.get(path).text
+    marker = "const node = "
+    tree, _ = json.JSONDecoder().raw_decode(markup, markup.index(marker) + len(marker))
+
+    def find(node):
+        if isinstance(node, dict):
+            if node.get("tag") == "form":
+                return node.get("props", {}).get("action", {}).get("Str")
+            for value in node.values():
+                if (found := find(value)) is not None:
+                    return found
+        elif isinstance(node, list):
+            for item in node:
+                if (found := find(item)) is not None:
+                    return found
+        return None
+
+    return find(tree)
 
 
 class TestMountSimpleAuthMiddlewareValidation:
@@ -218,9 +241,14 @@ class TestSimpleAuthRootPath:
         return TestClient(root_path_webserver.web_app.get_fastapi())
 
     def test_login_form_action_is_prefixed(self, root_path_rest_client: TestClient):
-        response = root_path_rest_client.get("/login")
-        assert response.status_code == 200
-        assert 'action="/watchtower/api/v1/auth/login"' in response.text
+        assert root_path_rest_client.get("/login").status_code == 200
+        # The form is part of the page's tree rather than its markup, and posts the credentials
+        # back to the prefixed route that validates them.
+        assert _form_action(root_path_rest_client, "/login") == "/watchtower/login"
+
+    def test_logout_form_action_is_prefixed(self, root_path_rest_client: TestClient):
+        assert root_path_rest_client.get("/logout").status_code == 200
+        assert _form_action(root_path_rest_client, "/logout") == "/watchtower/api/v1/auth/logout"
 
     def test_form_login_redirect_is_prefixed(self, root_path_rest_client: TestClient):
         response = root_path_rest_client.post(
@@ -240,12 +268,9 @@ class TestSimpleAuthRootPath:
         assert response.status_code == 303
         assert response.headers.get("location", "").startswith("/watchtower/login")
 
-    def test_logout_form_action_is_prefixed(self, root_path_rest_client: TestClient):
-        response = root_path_rest_client.get("/logout")
-        assert response.status_code == 200
-        assert 'action="/watchtower/api/v1/auth/logout"' in response.text
-
     def test_unauthenticated_ui_redirect_is_prefixed(self, root_path_rest_client: TestClient):
+        # The client is class-scoped, so drop the session the login tests above established.
+        root_path_rest_client.cookies.clear()
         response = root_path_rest_client.get("/", follow_redirects=False)
         assert response.status_code == 307
         assert response.headers.get("location") == "/watchtower/login"
