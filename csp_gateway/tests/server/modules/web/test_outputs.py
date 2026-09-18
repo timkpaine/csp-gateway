@@ -48,6 +48,8 @@ def outputs_dir(tmp_path_factory):
     sibling = root / "outputs-evil"
     sibling.mkdir()
     (sibling / "secret.txt").write_text("do not serve me")
+    # A symlink *inside* the tree pointing out of it: abspath() keeps it under `dir`, realpath() does not.
+    (outputs / "escape").symlink_to(sibling, target_is_directory=True)
     return outputs
 
 
@@ -98,6 +100,13 @@ class TestOutputsApi:
     def test_rejects_escaping_paths(self, client):
         for path in ("../outputs-evil/secret.txt", "/etc/passwd", "run/../../outputs-evil/secret.txt"):
             assert client.get(f"/outputs/_chunk?path={path}").status_code == 404
+
+    def test_rejects_symlinks_out_of_the_tree(self, client):
+        assert client.get("/outputs/_chunk?path=escape/secret.txt").status_code == 404
+
+    def test_legacy_browser_rejects_escaping_paths(self, client):
+        for path in ("../outputs-evil/secret.txt", "escape/secret.txt"):
+            assert client.get(f"/outputs/{path}").status_code == 404
 
     def test_missing_file(self, client):
         assert client.get("/outputs/_chunk?path=run/nope.log").status_code == 404

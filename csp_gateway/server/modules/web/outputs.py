@@ -57,11 +57,13 @@ class MountOutputsFolder(GatewayModule):
     def _resolve(self, relative: str) -> str:
         """The absolute path for a request-supplied relative path, or a 404 if it is not under `dir`.
 
-        ``commonpath`` rather than ``startswith``: the latter also accepts a sibling whose name merely
-        begins with the output directory's (``/tmp/outputs-elsewhere`` for ``/tmp/outputs``).
+        ``realpath`` rather than ``abspath``: the latter does not resolve symlinks, so a link under
+        the output directory could otherwise point anywhere. ``commonpath`` rather than
+        ``startswith``: the latter also accepts a sibling whose name merely begins with the output
+        directory's (``/tmp/outputs-elsewhere`` for ``/tmp/outputs``).
         """
-        root = os.path.abspath(self.dir)
-        target = os.path.abspath(os.path.join(root, relative)) if relative else root
+        root = os.path.realpath(self.dir)
+        target = os.path.realpath(os.path.join(root, relative)) if relative else root
         try:
             contained = os.path.commonpath([root, target]) == root
         except ValueError:
@@ -161,38 +163,34 @@ class MountOutputsFolder(GatewayModule):
             This endpoint is a small webpage for browsing the [hydra](https://github.com/facebookresearch/hydra)
             output logs and configuration settings of the running application.
             """
-            file_or_dir = self.dir
-            if full_path:
-                file_or_dir = os.path.join(file_or_dir, full_path)
-            if os.path.abspath(file_or_dir).startswith(self.dir) and os.path.exists(file_or_dir):
-                if os.path.isdir(file_or_dir):
-                    files = os.listdir(file_or_dir)
-                    # Build file URLs using path only, then append query string if present
-                    base_path = str(request.url.path).rstrip("/")
-                    query_suffix = f"?{request.url.query}" if request.url.query else ""
-                    files_paths = sorted([f"{base_path}/{f}{query_suffix}".replace("outputs//", "outputs/") for f in files])
-                    # The spaday UI browses these through `_tree` and reads them through `_chunk`,
-                    # so the directory page is only rendered for the legacy frontend.
-                    if app.ui is not None:
-                        return JSONResponse({"files": files_paths})
-                    return app.templates.TemplateResponse(
-                        request, "files.html.j2", context={"files": files_paths, "pid": os.getpid()}, media_type="text/html"
-                    )
+            file_or_dir = self._resolve(full_path)
+            if os.path.isdir(file_or_dir):
+                files = os.listdir(file_or_dir)
+                # Build file URLs using path only, then append query string if present
+                base_path = str(request.url.path).rstrip("/")
+                query_suffix = f"?{request.url.query}" if request.url.query else ""
+                files_paths = sorted([f"{base_path}/{f}{query_suffix}".replace("outputs//", "outputs/") for f in files])
+                # The spaday UI browses these through `_tree` and reads them through `_chunk`,
+                # so the directory page is only rendered for the legacy frontend.
+                if app.ui is not None:
+                    return JSONResponse({"files": files_paths})
+                return app.templates.TemplateResponse(
+                    request, "files.html.j2", context={"files": files_paths, "pid": os.getpid()}, media_type="text/html"
+                )
 
-                def iterfile():
-                    with open(file_or_dir, "rb") as fp:
-                        yield from fp
+            def iterfile():
+                with open(file_or_dir, "rb") as fp:
+                    yield from fp
 
-                if file_or_dir.endswith((".log", ".txt")):
-                    # NOTE: so viewable in browser, magic is guessing wrong type
-                    media_type = "text/plain; charset=utf-8"
-                elif mime:
-                    media_type = mime.from_file(file_or_dir)
-                else:
-                    media_type = None
+            if file_or_dir.endswith((".log", ".txt")):
+                # NOTE: so viewable in browser, magic is guessing wrong type
+                media_type = "text/plain; charset=utf-8"
+            elif mime:
+                media_type = mime.from_file(file_or_dir)
+            else:
+                media_type = None
 
-                return StreamingResponse(iterfile(), media_type=media_type)
-            raise HTTPException(status_code=404, detail=f"Not found: {request.url._url}")
+            return StreamingResponse(iterfile(), media_type=media_type)
 
     def ui(self, app: "GatewayUI") -> None:
         """Contribute the in-page log viewer: a file tree beside a chunked reader.
