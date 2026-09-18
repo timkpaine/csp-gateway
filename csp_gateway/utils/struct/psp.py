@@ -4,6 +4,7 @@ import types
 from collections.abc import Callable
 from datetime import date, datetime
 from enum import Enum as PyEnum
+from functools import cache
 from logging import getLogger
 from typing import Annotated, Any, Optional, Union, get_args, get_origin
 
@@ -192,6 +193,21 @@ def psp_schema(cls, excluded_columns: ExcludedColumns | None = None) -> dict[str
     Args:
         excluded_columns: Columns to exclude from the schema.
     """
+    return _psp_schema(cls, excluded_columns)[0]
+
+
+@cache
+def psp_enum_columns(cls) -> dict[str, type]:
+    """The enum behind each column `psp_schema` promotes to str, by column name.
+
+    `psp_flatten` needs these to name the members csp serialises as their values.
+    """
+    return _psp_schema(cls, None)[1]
+
+
+def _psp_schema(cls, excluded_columns: ExcludedColumns | None = None) -> tuple[dict[str, type], dict[str, type]]:
+    """The perspective schema, and the enum each of its str-promoted columns came from."""
+    enum_columns: dict[str, type] = {}
 
     # Pydantic doesn't support fields that start with underscore
     schema = {k: v for k, v in model_metadata(cls, typed=False).items() if not k.startswith("_")}
@@ -259,6 +275,7 @@ def psp_schema(cls, excluded_columns: ExcludedColumns | None = None) -> dict[str
         # If its an enum, promote to str
         if issubclass(value, (PyEnum, CspEnum)):
             schema[field] = str
+            enum_columns[field] = value
             continue
 
         # Otherwise if its not a handled type
@@ -294,6 +311,9 @@ def psp_schema(cls, excluded_columns: ExcludedColumns | None = None) -> dict[str
                 # add subschema
                 for subkey, subvalue in struct_items:
                     add[f"{field}.{subkey}"] = subvalue
+                # A nested struct's columns are flattened under its own name, and so are its enums.
+                for subkey, subenum in psp_enum_columns(value).items():
+                    enum_columns[f"{field}.{subkey}"] = subenum
             else:
                 # TODO deal with dropped
                 log.warning(f"Type {value} on has no perspective conversion, ignoring in perspective tables: {cls.__name__}.{field}")
@@ -307,7 +327,7 @@ def psp_schema(cls, excluded_columns: ExcludedColumns | None = None) -> dict[str
             schema[key] = _get_type_from_optional(schema_annotated[key])
 
     schema.update(add)
-    return schema
+    return schema, enum_columns
 
 
 class PerspectiveUtilityMixin:
@@ -330,6 +350,18 @@ class PerspectiveUtilityMixin:
 
         json_obj = orjson.loads(self.to_json(_callback))
         flat_obj = psp_flatten(json_obj)
+        # csp enums subclass int, so `to_json` renders the members of an object array as their
+        # values, never offering them to the callback above. The schema calls those columns str.
+        enum_columns = psp_enum_columns(type(self))
+        if enum_columns:
+            for row in flat_obj:
+                for column, enum_cls in enum_columns.items():
+                    value = row.get(column)
+                    if isinstance(value, int) and not isinstance(value, bool):
+                        try:
+                            row[column] = enum_cls(value).name
+                        except ValueError:
+                            log.warning(f"{value} is not a {enum_cls.__name__}, leaving it as is")
         return flat_obj
 
     @classmethod

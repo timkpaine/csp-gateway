@@ -124,6 +124,9 @@ class MountExternalAPIKeyMiddleware(MountAPIKeyMiddleware, IdentityAwareMiddlewa
             api_key_cookie: str = api_key_cookie_security,
         ) -> str:
             """Validate API key using external validator and return a session UUID."""
+            # A cookie holds a session UUID minted below, not a key the external validator knows.
+            if api_key_cookie and api_key_cookie in self._identity_store:
+                return api_key_cookie
             try:
                 for provided_key in (api_key_query, api_key_header, api_key_cookie):
                     identity = self._invoke_external(provided_key, self._app_settings, self._app_module)
@@ -150,7 +153,7 @@ class MountExternalAPIKeyMiddleware(MountAPIKeyMiddleware, IdentityAwareMiddlewa
         self._app_settings = app.settings
         self._app_module = app
 
-        auth_router: APIRouter = app.get_router("auth")
+        auth_router: APIRouter = app.get_router("auth", self.api_version)
         check = self.get_check_dependency()
 
         @auth_router.get("/login")
@@ -162,8 +165,7 @@ class MountExternalAPIKeyMiddleware(MountAPIKeyMiddleware, IdentityAwareMiddlewa
                     value=api_key,
                     domain=self.domain,
                     httponly=True,
-                    max_age=self.api_key_timeout.total_seconds(),
-                    expires=self.api_key_timeout.total_seconds(),
+                    max_age=int(self.api_key_timeout.total_seconds()),
                 )
             return response
 

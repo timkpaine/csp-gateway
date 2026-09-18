@@ -16,12 +16,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass, field as _dc_field
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any
 
 from pydantic import TypeAdapter
-from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.routing import Mount, WebSocketRoute
 from starlette.websockets import WebSocket
@@ -57,7 +57,8 @@ from spaday.actions import (
     not_,
     obj,
 )
-from spaday.backends.starlette import mount as _spaday_mount
+from spaday.backends.starlette import build_routes as _spaday_build_routes
+from spaday.bootstrap import bootstrap
 from spaday.components.shell import AppShell, Column, Region, Row, Show, Toast
 from spaday.packages import ComponentPackage
 from spaday_perspective import PerspectivePanel
@@ -70,6 +71,7 @@ from spaday_webawesome import (
     WaDialog,
     WaDrawer,
     WaIcon,
+    WaInput,
     WaOption,
     WaSelect,
     form,
@@ -98,6 +100,8 @@ _TOAST_ID = "gateway-toasts"
 _ACTION_RESULT = "action_result"
 _GRAPH_FOCUS = "graph_focus"
 _PERSPECTIVE_READY = "perspective_ready"
+# Seeded from `?error=` so the auth middleware can say why it turned a request away.
+_AUTH_ERROR = "auth_error"
 
 # The component packages every gateway page loads. Deployments extend this rather than replace it:
 # the shell is authored against WebAwesome, the Perspective panel is the primary data view, and the
@@ -151,7 +155,6 @@ def _resolve_component_package(value: Any) -> Any:
 PAGE_CSS = """<style>
       html, body { height: 100%; }
       body { margin: 0; font-family: system-ui, sans-serif; }
-      spa-app { --spa-gap: 0.75rem; }
       /* Perspective's Pro themes are near-neutral greys (its surface is #242526), so the shell's
          blue-leaning neutrals read as a colour clash against the data. These keep each token's
          lightness and drop the hue, leaving the chrome a shade darker than the tables. Light is
@@ -167,6 +170,11 @@ PAGE_CSS = """<style>
         --spa-border: #313234;
         --spa-muted: #949597;
       }
+    </style>"""
+
+# Only the main page: the auth pages share the palette above but none of this.
+MAIN_PAGE_CSS = """<style>
+      spa-app { --spa-gap: 0.75rem; }
       /* The main region's tab layout: the workspace tab is full-bleed, and with a single open
          tab the chrome disappears entirely (the "only tab when there are more tabs" rule). */
       #gateway-main-layout { height: 100%; }
@@ -193,6 +201,16 @@ PAGE_CSS = """<style>
       .gateway-sets .spaday-dagre-edge-line { stroke: #f66; stroke-width: 2; }
       .gateway-gets .spaday-dagre-edge-line { stroke-width: 2; stroke-dasharray: 5 5; }
     </style>"""
+
+# The login and logout pages: one centred card on the page canvas.
+AUTH_PAGE_CSS = (
+    PAGE_CSS
+    + """<style>
+      body { display: grid; place-items: center; background: var(--spa-surface, #fff); }
+      .gateway-auth { min-width: 18rem; padding: 2rem; }
+      .gateway-auth form { display: flex; flex-direction: column; gap: 0.75rem; }
+    </style>"""
+)
 
 
 @dataclass
@@ -400,6 +418,13 @@ class GatewayUI:
         if root and path and path.startswith("/"):
             return f"{root}{path}"
         return path
+
+    def api_url(self, path: str = "", version: str | None = None) -> str:
+        """A ``ROOT_PATH``-prefixed URL for a route under an API version, e.g. ``/api/v1/send/x``.
+
+        Pass the contributing module's ``api_version`` so UI links follow the routes it mounted.
+        """
+        return self.url(f"{self._settings.api(version)}{path}")
 
     def _custom_assets(self) -> tuple[list[str], list[str]]:
         """The configured `Settings.CUSTOM_CSS` / `CUSTOM_JS` as stylesheet and script URLs.
@@ -1049,6 +1074,79 @@ class GatewayUI:
 
         return endpoint
 
+    def mount_auth_page(
+        self,
+        *,
+        title: str,
+        action: str,
+        fields: Iterable[dict[str, str]] = (),
+        method: str = "get",
+        submit: str = "Login",
+    ) -> str:
+        """The markup for a public auth page -- a login or logout form.
+
+        These pages render before the caller has authenticated, so they load the WebAwesome package
+        alone and carry none of the data components. The form is a plain ``<form>`` around
+        WebAwesome inputs, so submitting it is an ordinary navigation: the browser applies the
+        ``Set-Cookie`` and follows the redirect the auth route answers with, exactly as the
+        server-rendered form it replaces did, and the page needs no websocket and no scripted submit
+        of its own.
+
+        The tree is inlined, so the page is one self-contained response over the main page's own
+        asset mounts -- it adds no route of its own, and nothing it needs has to be readable before
+        the caller has authenticated. That also lets the middleware own ``/login``, where it answers
+        the ``?token=`` hand-off, and lets a 403 reply with this markup at whatever path was asked
+        for, since every URL in it is absolute.
+
+        The middlewares describe their form rather than building it, so they stay free of any
+        spaday import: `fields` entries are `WaInput` props (``name``, and optionally ``type``,
+        ``placeholder``, ``label``, ``autocomplete``).
+        """
+        root = getattr(self._settings, "ROOT_PATH", "") or ""
+        inputs: list[Any] = []
+        for spec in fields:
+            entry = WaInput().prop("name", spec["name"]).prop("type", spec.get("type", "text"))
+            for prop in ("placeholder", "label", "autocomplete"):
+                if spec.get(prop):
+                    entry = entry.prop(prop, spec[prop])
+            inputs.append(entry)
+
+        card = (
+            Column(
+                # Only rendered once the middleware has actually turned a request away; `?error=` seeds it.
+                Show(
+                    WaCallout(variant="danger").child(element("span").text(field(_AUTH_ERROR))),
+                    field=_AUTH_ERROR,
+                ),
+                element("h1", title).style(margin="0 0 0.5rem", font_size="1.4rem"),
+                element(
+                    "form",
+                    *inputs,
+                    WaButton(submit).prop("type", "submit").prop("variant", "brand"),
+                    method=method,
+                    # Carries ROOT_PATH like every other link the UI emits, for a gateway behind a proxy.
+                    action=f"{root}{action}",
+                ),
+                gap="0.75rem",
+            )
+            .classes("gateway-auth")
+            .bind_root_class("wa-dark", "dark")
+        )
+
+        return bootstrap(
+            page=card,
+            tree="inline",
+            # The main page's `/js` and `/components` mounts, rather than a second copy per page.
+            base=root,
+            packages=("webawesome",),
+            layout="installed",
+            store={"dark": Js('matchMedia("(prefers-color-scheme: dark)").matches'), _AUTH_ERROR: ""},
+            persist={"dark": "csp-gateway:dark"},
+            url={_AUTH_ERROR: "error"},
+            head=AUTH_PAGE_CSS,
+            title=title,
+        )
+
     def mount(self) -> None:
         """Build the spaday page and register its routes on the gateway app.
 
@@ -1061,13 +1159,6 @@ class GatewayUI:
         title = getattr(self._settings, "TITLE", "Gateway")
         root = getattr(self._settings, "ROOT_PATH", "") or ""
         custom_css, custom_scripts = self._custom_assets()
-        # spaday's mount() appends plain Starlette routes, which do not carry the FastAPI auth
-        # dependencies. Build them on a scratch app under the ROOT_PATH prefix (so the emitted page URLs
-        # — /js runtime, wasm — resolve under a proxied sub-path), then re-register with the prefix
-        # stripped: the routes themselves stay unprefixed (the app's root_path handles the proxy strip),
-        # like every other gateway route. The dynamic page/tree go on the authenticated app router; the
-        # static /js mount stays public, like other UI assets.
-        scratch = Starlette()
         # Only wire a transports model when a module actually declared live state; otherwise the page is a
         # static tree and no websocket is served.
         wire: Any = None
@@ -1075,8 +1166,12 @@ class GatewayUI:
         if self._models:
             wire = [Wire("/ws", namespace=namespace) for namespace in self._models]
             routes = [WebSocketRoute("/ws", self._ws_endpoint())]
-        _spaday_mount(
-            scratch,
+        # Built rather than mounted, so each route can be registered where it belongs: spaday's own
+        # routes carry no FastAPI dependencies, and the page and tree have to. The ROOT_PATH prefix
+        # is for the URLs the page emits (/js runtime, wasm) so they resolve under a proxied
+        # sub-path; it is stripped off the routes themselves below, since the app's root_path
+        # handles that strip for every other gateway route.
+        built = _spaday_build_routes(
             self.build_page,
             # Component libraries ship as their own distributions and are resolved by entry point.
             # The gateway's own are always loaded; `Settings.UI_PACKAGES` and `GatewayUI.package()`
@@ -1097,7 +1192,7 @@ class GatewayUI:
             # shell palette, and before `head`, which carries only document resets.
             stylesheets=custom_css,
             scripts=custom_scripts,
-            head=PAGE_CSS,
+            head=PAGE_CSS + MAIN_PAGE_CSS,
             title=title,
             prefix=root,
         )
@@ -1109,7 +1204,7 @@ class GatewayUI:
 
             return _serve
 
-        for route in scratch.routes:
+        for route in built:
             path = route.path
             if root and path.startswith(root):
                 path = path[len(root) :] or "/"

@@ -21,7 +21,7 @@ class MountFieldRestRoutes(GatewayModule):
 
     def rest(self, app: GatewayWebApp) -> None:
         # Get API Router
-        api_router: APIRouter = app.get_router("api")
+        api_router: APIRouter = app.get_router("api", self.api_version)
 
         for field in self.fields:
             model = app.gateway.channels_model.get_outer_type(field)

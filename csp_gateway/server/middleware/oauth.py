@@ -59,7 +59,10 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
     audience: str | None = Field(default=None, description="Expected audience claim for JWT validation")
     verify_ssl: bool = Field(default=True, description="Verify SSL certificates")
 
-    domain: str = Field(default_factory=gethostname)
+    domain: str | None = Field(
+        default=None,
+        description="Domain for the session cookie. Defaults to unset, which scopes the cookie to the host that served it.",
+    )
     cookie_name: str = Field(default="oauth_session", description="Cookie name for session")
     session_timeout: timedelta = Field(default=timedelta(hours=12), description="Session timeout")
 
@@ -259,7 +262,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
     def rest(self, app: GatewayWebApp) -> None:
         self._app_settings = app.settings
 
-        auth_router: APIRouter = app.get_router("auth")
+        auth_router: APIRouter = app.get_router("auth", self.api_version)
         public_router: APIRouter = app.get_router("public")
         check = self.get_check_dependency()
 
@@ -318,7 +321,6 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
                     domain=self.domain,
                     httponly=True,
                     max_age=int(self.session_timeout.total_seconds()),
-                    expires=int(self.session_timeout.total_seconds()),
                 )
                 return response
 

@@ -102,6 +102,38 @@ class TestSpadayAuth:
         assert tree.status_code == 200
         assert tree.headers["content-type"].startswith("application/json")
 
+    def test_session_cookie_serves_the_tree(self, client: TestClient):
+        # The browser only carries a token on the request that logs it in. Every fetch the page then
+        # makes for itself -- the tree above all -- goes out with just the session cookie, so a
+        # cookie the gateway will not take back leaves the page shell up and the app dead.
+        client.cookies.clear()
+        client.get("/login?token=alice_key")
+        assert client.cookies.get("token"), "login should leave a session cookie behind"
+        tree = client.get("/tree.json")
+        assert tree.status_code == 200
+        assert tree.headers["content-type"].startswith("application/json")
+        client.cookies.clear()
+
+    def test_auth_pages_are_spaday_pages(self, client: TestClient):
+        # With the spaday provider the login and logout pages are spaday pages too, so nothing on
+        # the UI path is rendered from the Jinja templates the legacy frontend still uses.
+        for path in ("/login", "/logout"):
+            page = client.get(path)
+            assert page.status_code == 200
+            assert "<form" not in page.text, f"{path} should not be a server-rendered form"
+            # The tree is inlined, so the page is a single response over the main page's own asset
+            # mounts: it adds no route, and nothing it needs is readable before authenticating.
+            assert "const node = " in page.text, f"{path} should carry its tree inline"
+            assert "tree.json" not in page.text, f"{path} should not fetch a tree"
+            assert "/js/cdn/index.js" in page.text, f"{path} should load the shared runtime"
+
+    def test_unauthenticated_request_is_sent_to_the_login_page(self, client: TestClient):
+        client.cookies.clear()
+        response = client.get("/", follow_redirects=False)
+        assert response.status_code == 307
+        # The reason rides the query string, which the login page reads into its callout.
+        assert response.headers["location"].startswith("/login?error=")
+
 
 class TwoSendChannels(GatewayChannels):
     alpha: ts[Example] = None
@@ -593,6 +625,12 @@ class TestMainTabs:
         assert "spa spa-solo" in tree
         assert "main_tabbed" in tree
         assert "regular-layout-update" in tree
+
+    def test_legacy_graph_page_is_not_mounted(self, client: TestClient):
+        # The graph has a tab of its own above, so the standalone Jinja page is left to the legacy
+        # frontend. Its JSON endpoint is the data behind both and stays.
+        assert client.get("/channels_graph").status_code == 404
+        assert client.get("/api/v1/channels_graph").status_code == 200
 
     def test_graph_tab_renders_the_channels_graph(self, client: TestClient):
         tree = json.loads(client.get("/tree.json").text)

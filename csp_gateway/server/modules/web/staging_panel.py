@@ -174,7 +174,7 @@ class MountStagingPanel(GatewayModule):
         return "" if value is None else str(value)
 
     def _stage_url(self, channel: str, staging_id: str) -> str:
-        return self.app.url(f"{self.app.web_app.settings.API_STR}/stage/{channel}?id={staging_id}")
+        return self.app.api_url(f"/stage/{channel}?id={staging_id}", self.api_version)
 
     def _panel(self) -> Any:
         """The reactive tree: an empty-state callout, or one block per pending staging area."""

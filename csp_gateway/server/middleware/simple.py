@@ -173,7 +173,10 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
         description="Use host/system authentication (PAM on Unix, Windows auth on Windows).",
     )
 
-    domain: str = Field(default_factory=gethostname)
+    domain: str | None = Field(
+        default=None,
+        description="Domain for the session cookie. Defaults to unset, which scopes the cookie to the host that served it.",
+    )
     cookie_name: str = Field(default="session", description="Cookie name for session")
     session_timeout: timedelta = Field(default=timedelta(hours=12), description="Session timeout")
 
@@ -359,15 +362,35 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
         self._app_settings = app.settings
         self._app_module = app
 
-        auth_router: APIRouter = app.get_router("auth")
+        auth_router: APIRouter = app.get_router("auth", self.api_version)
         public_router: APIRouter = app.get_router("public")
         check = self.get_check_dependency()
+        logout_page = (
+            app.ui.mount_auth_page(title="Logout", action=app.api_path("/auth/logout", self.api_version), submit="Logout")
+            if app.ui is not None
+            else None
+        )
 
         if self.enable_form_login:
+            login_page = (
+                app.ui.mount_auth_page(
+                    title="Login",
+                    action="/login",
+                    method="post",
+                    fields=[
+                        {"name": "username", "placeholder": "Username", "autocomplete": "username"},
+                        {"name": "password", "type": "password", "placeholder": "Password", "autocomplete": "current-password"},
+                    ],
+                )
+                if app.ui is not None
+                else None
+            )
 
             @public_router.get("/login", response_class=HTMLResponse, include_in_schema=False)
             async def get_login_page(request: Request, error: str = ""):
                 """Render login form."""
+                if login_page is not None:
+                    return HTMLResponse(login_page)
                 return app.templates.TemplateResponse(
                     request,
                     "login.html.j2",
@@ -398,7 +421,6 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
                         domain=self.domain,
                         httponly=True,
                         max_age=int(self.session_timeout.total_seconds()),
-                        expires=int(self.session_timeout.total_seconds()),
                     )
                     return response
 
@@ -414,7 +436,6 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
                 domain=self.domain,
                 httponly=True,
                 max_age=int(self.session_timeout.total_seconds()),
-                expires=int(self.session_timeout.total_seconds()),
             )
             return response
 
@@ -438,6 +459,8 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
 
         @public_router.get("/logout", response_class=HTMLResponse, include_in_schema=False)
         async def get_logout_page(request: Request):
+            if logout_page is not None:
+                return HTMLResponse(logout_page)
             return app.templates.TemplateResponse(request, "logout.html.j2")
 
         # Add auth middleware to all routes

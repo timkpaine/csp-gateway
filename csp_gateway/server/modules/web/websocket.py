@@ -383,7 +383,7 @@ class MountWebSocketRoutes(GatewayModule):
         # Store app reference for auth filtering
         self._app = app
 
-        api_router = app.get_router("api")
+        api_router = app.get_router("api", self.api_version)
 
         # add websocket handler
         api_router.add_api_websocket_route(path=self.prefix, endpoint=self.websocket_handler, name="streaming")

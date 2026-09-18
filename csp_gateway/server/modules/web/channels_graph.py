@@ -26,7 +26,7 @@ class MountChannelsGraph(GatewayModule):
         self._channels = channels
 
     def rest(self, app: GatewayWebApp) -> None:
-        api_router = app.get_router("api")
+        api_router = app.get_router("api", self.api_version)
         app_router = app.get_router("app")
 
         # TODO subselect
@@ -53,6 +53,11 @@ class MountChannelsGraph(GatewayModule):
             ```
             """
             return request.app.gateway.channels.graph()
+
+        # The spaday UI draws this graph in a tab of its own (see `ui` below), so the standalone
+        # page is only mounted for the legacy frontend that has nowhere else to show it.
+        if app.ui is not None:
+            return
 
         @app_router.get("/channels_graph", response_class=HTMLResponse, tags=["Utility"])
         def browse_channels_graph(request: Request):
