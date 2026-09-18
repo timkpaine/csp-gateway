@@ -1,6 +1,7 @@
+import warnings
 from typing import Literal
 
-from pydantic import AnyHttpUrl, Field
+from pydantic import AnyHttpUrl, Field, field_validator, model_validator
 
 from csp_gateway import __version__
 
@@ -24,9 +25,29 @@ class Settings(BaseSettings):
     API_PREFIX: str = Field("api", description="Top level path segment under which all versioned API routes are mounted.")
     API_VERSION_DEFAULT: str = Field("v1", description="API version used by routes that do not ask for a specific one.")
 
+    @field_validator("API_PREFIX", "API_VERSION_DEFAULT", mode="after")
+    @classmethod
+    def _strip_slashes(cls, value: str) -> str:
+        # Normalized once, so these are also safe to use as router registry keys.
+        return value.strip("/")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _split_legacy_api_str(cls, values):
+        if isinstance(values, dict) and (api_str := values.pop("API_STR", None)) is not None:
+            warnings.warn(
+                "API_STR is deprecated, use API_PREFIX and API_VERSION_DEFAULT instead",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            prefix, _, version = str(api_str).strip("/").rpartition("/")
+            values.setdefault("API_PREFIX", prefix or "api")
+            values.setdefault("API_VERSION_DEFAULT", version)
+        return values
+
     def api(self, version: str | None = None) -> str:
         """The URL path prefix for an API version, e.g. ``/api/v1``."""
-        return f"/{self.API_PREFIX.strip('/')}/{(version or self.API_VERSION_DEFAULT).strip('/')}"
+        return f"/{self.API_PREFIX}/{(version or self.API_VERSION_DEFAULT).strip('/')}"
 
     @property
     def API_STR(self) -> str:

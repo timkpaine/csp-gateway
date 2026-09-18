@@ -20,6 +20,22 @@ You can also pass string values (e.g., `return_type="wrapper"`) which will be au
 
 The `ResponseWrapper` object contains additional type information which will create column names and utilize the correct data type for the constructed dataframes. It also provides an `as_struct()` method to convert JSON back to the original struct types.
 
+### API version
+
+Requests go to `/{api_prefix}/{api_version}`, `/api/v1` by default. Point the client at a different
+version with `api_version`:
+
+```python
+config = GatewayClientConfig(host="localhost", port=8000, api_version="v2")
+```
+
+`GET /api` on the server lists the versions it serves and where each is mounted.
+
+`api_route` is deprecated in favour of `api_prefix` / `api_version`. Passing it to the constructor
+still works — it is split into the two fields with a warning — and it remains readable as a derived
+property. It is no longer a field, so it cannot be assigned, does not appear in `model_dump()`, and
+is ignored by `model_copy(update=...)`; set `api_version` instead.
+
 ## Client Methods
 
 A client as a small number of general-purpose methods. In alphabetical order:

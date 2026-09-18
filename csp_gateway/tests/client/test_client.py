@@ -205,6 +205,24 @@ def test_host_parsing():
     assert _host(cfg) == "https://my.host"
 
 
+def test_api_route_defaults():
+    assert ClientConfig().api_route == "/api/v1"
+
+
+def test_api_route_follows_version_and_prefix():
+    assert ClientConfig(api_version="v2").api_route == "/api/v2"
+    assert ClientConfig(api_prefix="rest", api_version="v2").api_route == "/rest/v2"
+
+
+def test_deprecated_api_route_is_split(caplog):
+    with caplog.at_level(logging.WARNING):
+        cfg = ClientConfig(api_route="/api/v2")
+
+    assert (cfg.api_prefix, cfg.api_version) == ("api", "v2")
+    assert cfg.api_route == "/api/v2"
+    assert "api_route is deprecated" in caplog.text
+
+
 def test_return_type_enum():
     """Test that ReturnType enum values are correct."""
     assert ReturnType.Raw == "raw"

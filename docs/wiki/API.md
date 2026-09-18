@@ -26,6 +26,21 @@ As described in [Overview#Channels](Overview#Channels), the `csp-gateway` REST A
 > Channels are included in the REST API by using a `GatewayModule`.
 > Most commonly, this is [`MountRestRoutes`](MountRestRoutes).
 
+## Versions
+
+Routes are mounted under a version prefix, `/api/v1` by default. `GET /api` lists the versions a
+gateway serves:
+
+```json
+{
+  "default": "v1",
+  "versions": [{ "version": "v1", "path": "/api/v1" }]
+}
+```
+
+Login and logout always live on the default version. See [Develop#API versions](Develop#api-versions)
+for serving a module on a different version.
+
 > [!IMPORTANT]
 >
 > `lookup` has substantial memory overhead, as we cache a copy of every instance of every datum.

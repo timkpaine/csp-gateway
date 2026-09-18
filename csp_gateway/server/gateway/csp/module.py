@@ -25,7 +25,8 @@ class Module(BaseModel, ABC, Generic[ChannelsType]):
         description="""
         API version under which this module's REST routes are mounted, e.g. 'v2'.
         Defaults to `Settings.API_VERSION_DEFAULT`. Subclasses that own a versioned
-        surface can pin it by redeclaring the field with a default.
+        surface can pin it by redeclaring the field with a default. Auth middleware
+        ignores this: login and logout always live on the default version.
         """,
     )
     block_set_channels_until: datetime | None = Field(
@@ -44,10 +45,11 @@ class Module(BaseModel, ABC, Generic[ChannelsType]):
     def ui(self, app: "GatewayUI") -> None:
         """Contribute to the spaday-based UI.
 
-        Only invoked when `Settings.UI_PROVIDER == "spaday"`, after `rest`. Modules use the
-        `GatewayUI` handle to register the main panel (e.g. a Perspective workspace) or add
-        navigation actions (links/buttons in the header). Modules that have no UI contribution
-        leave this as a no-op, exactly like `rest`.
+        Only invoked when `Settings.UI_PROVIDER == "spaday"`, after every module's `rest`, so a
+        hook here can link to routes any module mounted. Modules use the `GatewayUI` handle to
+        register the main panel (e.g. a Perspective workspace) or add navigation actions
+        (links/buttons in the header). Modules that have no UI contribution leave this as a
+        no-op, exactly like `rest`.
         """
 
     def info(self, settings: "GatewaySettings") -> str | None: ...

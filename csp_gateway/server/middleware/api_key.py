@@ -69,7 +69,7 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
 
     def rest(self, app: GatewayWebApp) -> None:
         # routers
-        auth_router: APIRouter = app.get_router("auth", self.api_version)
+        auth_router: APIRouter = app.get_router("auth")
         check = self.get_check_dependency()
 
         @auth_router.get("/login")
@@ -105,7 +105,7 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
         @public_router.get("/login", response_class=HTMLResponse, include_in_schema=False)
         async def get_login_page(token: str = "", request: Request = None):
             if token and token != "":
-                return RedirectResponse(url=app.root_path_url(request, app.api_path(f"/auth/login?token={token}", self.api_version)))
+                return RedirectResponse(url=app.root_path_url(request, app.api_path(f"/auth/login?token={token}")))
             return _login_html(request)
 
         @public_router.get("/logout", response_class=HTMLResponse, include_in_schema=False)
@@ -119,7 +119,7 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
 
         @app.app.exception_handler(403)
         async def custom_403_handler(request: Request = None, *args):
-            if "/api" in request.url.path:
+            if app.is_api_request(request):
                 # programmatic api access, return json
                 return JSONResponse(
                     {
@@ -148,12 +148,12 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
             return None, None
         login = app.ui.mount_auth_page(
             title="Login",
-            action=app.api_path("/auth/login", self.api_version),
+            action=app.api_path("/auth/login"),
             fields=[{"name": self.api_key_name, "type": "password", "placeholder": "API Key..."}],
         )
         logout = app.ui.mount_auth_page(
             title="Logout",
-            action=app.api_path("/auth/logout", self.api_version),
+            action=app.api_path("/auth/logout"),
             submit="Logout",
         )
         return login, logout
