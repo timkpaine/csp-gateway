@@ -39,7 +39,7 @@ class ExampleModule(GatewayModule):
 
     def rest(self, app: GatewayWebApp) -> None:
         # Get API Router
-        api_router: APIRouter = app.get_router("api")
+        api_router: APIRouter = app.get_router("api", self.api_version)
 
         # add route to return "hello world"
         @api_router.get("hello", responses=get_default_responses(), response_model=str, tags=["Utility"])
@@ -47,6 +47,62 @@ class ExampleModule(GatewayModule):
             return "hello world!"
 
 ```
+
+## API versions
+
+Routes are served under `/{API_PREFIX}/{version}`, `/api/v1` by default. `GatewaySettings.API_PREFIX`
+and `GatewaySettings.API_VERSION_DEFAULT` change the default for the whole gateway. The old
+`API_STR` setting is deprecated: pass it and it is split into those two fields with a warning, and it
+remains readable as a derived property.
+
+Every `GatewayModule` has an `api_version` field. Leave it `None` to follow the gateway default, or
+set it to mount that module's routes somewhere else:
+
+```python
+Gateway(
+    modules=[
+        MountRestRoutes(mount_last=["example"]),                     # /api/v1/last/example
+        MountRestRoutes(mount_last=["example"], api_version="v2"),   # /api/v2/last/example
+    ],
+    ...
+)
+```
+
+Versions are created on demand — asking for a router under a version that does not exist yet
+registers it, and it is mounted when the app is finalized. The `app` and `public` routers hold
+routes outside the API prefix and are shared by every version.
+
+`GET /api` (or `/{API_PREFIX}`) lists the versions the gateway serves and where each is mounted, so
+clients can discover them rather than guess.
+
+Auth is the exception: login and logout always live on the default version, so there is a single
+login path no matter which versions the rest of the gateway serves. Setting `api_version` on an auth
+middleware has no effect.
+
+A subclass that owns a versioned surface can pin the version rather than leaving it to configuration:
+
+```python
+class MyV2Routes(MountRestRoutes):
+    api_version: str = "v2"
+```
+
+To serve the same routes on more than one version, add the module more than once with different
+`api_version` values.
+
+Build URLs with `app.api_path(path, self.api_version)` (or `app.api_url(...)` from a `ui()` hook,
+which additionally applies `ROOT_PATH`) instead of interpolating `settings.API_STR`, so links follow
+the routes the module actually mounted.
+
+A module whose UI links to routes *another* module mounted — `MountSendForm` posting to the send
+routes, say — should resolve the version rather than assume its own:
+
+```python
+version = app.web_app.api_version_for("send", self.api_version)
+```
+
+That returns `self.api_version` when it is set, and otherwise the version those routes were actually
+mounted under. Every module's `rest()` runs before any module's `ui()`, so the answer is complete by
+the time a `ui()` hook asks.
 
 ## Extending the UI
 

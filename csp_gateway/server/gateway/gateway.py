@@ -422,12 +422,15 @@ class Gateway(ChannelsFactory[GatewayChannels]):
             raise RuntimeError("Graph start failure")
 
         # Revisit each module and connect to rest, if necessary
-        for module in self.modules:
-            if not module.disable:
-                module.rest(web_app)
-                # When the spaday UI provider is active, let modules contribute to the UI too.
-                if web_app.ui is not None:
-                    module.ui(web_app.ui)
+        active = [module for module in self.modules if not module.disable]
+        for module in active:
+            module.rest(web_app)
+
+        # When the spaday UI provider is active, let modules contribute to the UI too. This is a
+        # second pass so a module's `ui` can link to routes that any module mounted in `rest`.
+        if web_app.ui is not None:
+            for module in active:
+                module.ui(web_app.ui)
 
         web_app._finalize()
 

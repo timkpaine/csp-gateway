@@ -57,7 +57,11 @@ if typing.TYPE_CHECKING:
     from csp_gateway.server.gateway import Gateway
 
 
-__all__ = ("GatewayWebApp",)
+__all__ = (
+    "ApiVersion",
+    "ApiVersions",
+    "GatewayWebApp",
+)
 
 build_files_dir = path.abspath(path.join(path.dirname(__file__), "..", "build"))
 static_files_dir = build_files_dir
@@ -78,6 +82,20 @@ API_ROUTER_KINDS: dict[str, tuple[str, str]] = {
     "stage": ("/stage", "Stage"),
     "state": ("/state", "State"),
 }
+
+
+class ApiVersion(BaseModel):
+    """One API version served by the gateway."""
+
+    version: str
+    path: str
+
+
+class ApiVersions(BaseModel):
+    """The response of the API discovery route mounted at the API prefix."""
+
+    default: str
+    versions: list[ApiVersion]
 
 
 class GatewayWebApp:
@@ -195,8 +213,8 @@ class GatewayWebApp:
         return key in self._controls and self._controls[key](value)
 
     def api_version(self, version: str | None = None) -> str:
-        """Resolve ``version`` against the configured default."""
-        return version or self.settings.API_VERSION_DEFAULT
+        """Resolve ``version`` against the configured default, normalizing surrounding slashes."""
+        return (version or self.settings.API_VERSION_DEFAULT).strip("/")
 
     @property
     def api_versions(self) -> list[str]:
@@ -210,6 +228,40 @@ class GatewayWebApp:
         pointing at them stay on the same version.
         """
         return f"{self.settings.api(self.api_version(version))}{path}"
+
+    def api_version_for(self, kind: str, version: str | None = None, path: str | None = None) -> str:
+        """The API version to address ``kind``'s routes under.
+
+        ``version`` wins when given. Otherwise this is the version carrying ``path`` — a route path
+        relative to the kind's own prefix, such as ``/example`` for ``send`` — or any route of that
+        kind when ``path`` is None, preferring the default version. Lets a module that links to
+        routes another module mounted follow them without being told where they went.
+        """
+        if version:
+            return self.api_version(version)
+        default = self.api_version()
+        mounted = [candidate for candidate in self.api_versions if self._has_api_route(kind, candidate, path)]
+        return default if not mounted or default in mounted else mounted[0]
+
+    def _has_api_route(self, kind: str, version: str, path: str | None) -> bool:
+        routes = self.get_router(kind, version).routes
+        if path is None:
+            return bool(routes)
+        # A dict basket channel only has the keyed route, so `/example` matches `/example/{key:path}`.
+        return any(route.path == path or route.path.startswith(f"{path}/") for route in routes)
+
+    def is_api_request(self, request: Request) -> bool:
+        """Whether a request targets the API rather than a browser page.
+
+        Matched on whole path segments against the configured prefix, so a page whose URL merely
+        contains it as a substring is not mistaken for programmatic access.
+        """
+        prefix = f"/{self.settings.API_PREFIX}"
+        path = request.url.path
+        root_path = request.scope.get("root_path", "")
+        if root_path and path.startswith(root_path):
+            path = path[len(root_path) :] or "/"
+        return path == prefix or path.startswith(f"{prefix}/")
 
     def _api_routers(self, version: str | None = None) -> dict[str, APIRouter]:
         """The API routers for ``version``, created on first use."""
@@ -456,6 +508,22 @@ class GatewayWebApp:
         """Mount every API version's routers onto the FastAPI app."""
         for version in self.api_versions:
             self.add_api_version(version)
+        self.add_api_index()
+
+    def add_api_index(self) -> None:
+        """Mount a discovery route at the API prefix listing the versions this gateway serves."""
+        app_router: APIRouter = self.get_router("app")
+        versions = self.api_versions
+        default = self.api_version()
+
+        @app_router.get(f"/{self.settings.API_PREFIX.strip('/')}", response_model=ApiVersions, tags=["Utility"])
+        async def get_api_versions(request: Request) -> ApiVersions:
+            """List the API versions served by this gateway, and where each one is mounted."""
+            root_path = request.scope.get("root_path", "")
+            return ApiVersions(
+                default=default,
+                versions=[ApiVersion(version=version, path=f"{root_path}{self.settings.api(version)}") for version in versions],
+            )
 
     def add_api_version(self, version: str) -> None:
         """Mount the routers of a single API version at ``settings.api(version)``."""

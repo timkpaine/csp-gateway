@@ -48,7 +48,7 @@ class MountProcessMonitor(GatewayModule):
 
         from csp_gateway.server.web.spaday_ui import Region
 
-        stats_url = app.api_url("/controls/stats", self.api_version)
+        stats_url = app.api_url("/controls/stats", app.web_app.api_version_for("controls", self.api_version, "/stats"))
         # Seeded ok so the "no stats" callout stays hidden until a call has actually failed. The
         # seeded entry carries an `id` because the table repeats over this list and a repeater key
         # that is missing on any entry fails the whole page render, not just this panel.

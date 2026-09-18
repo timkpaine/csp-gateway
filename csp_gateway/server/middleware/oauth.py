@@ -262,7 +262,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
     def rest(self, app: GatewayWebApp) -> None:
         self._app_settings = app.settings
 
-        auth_router: APIRouter = app.get_router("auth", self.api_version)
+        auth_router: APIRouter = app.get_router("auth")
         public_router: APIRouter = app.get_router("public")
         check = self.get_check_dependency()
 
@@ -352,7 +352,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
         @app.app.exception_handler(401)
         @app.app.exception_handler(403)
         async def auth_error_handler(request: Request, exc):
-            if "/api" in request.url.path:
+            if app.is_api_request(request):
                 return JSONResponse(
                     {"detail": self.unauthorized_status_message, "status_code": exc.status_code},
                     status_code=exc.status_code,

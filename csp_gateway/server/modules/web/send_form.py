@@ -70,10 +70,11 @@ class MountSendForm(GatewayModule):
             channel = descriptor.channel
             if channel not in allowed:
                 continue
+            version = web_app.api_version_for("send", self.api_version, f"/{channel}")
             forms.append(
                 SendSpec(
                     channel=channel,
-                    url=web_app.api_path(f"/send/{channel}", self.api_version),
+                    url=web_app.api_path(f"/send/{channel}", version),
                     model=descriptor.model,
                     keys=descriptor.keys,
                     overrides=self._overrides_for(channel),

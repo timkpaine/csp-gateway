@@ -228,13 +228,32 @@ class GatewayClientConfig(BaseModel):
     protocol: Literal["http", "https"] = "http"
     host: str = "localhost"
     port: int | None = Field(default=8000, ge=1, le=65535, description="Port number for the gateway server")
-    api_route: str = "/api/v1"
+    api_prefix: str = Field(default="api", description="Top level path segment the gateway serves its API under.")
+    api_version: str = Field(
+        default="v1",
+        description="API version to talk to. `GET /{api_prefix}` on the gateway lists the versions it serves.",
+    )
     api_key: str = ""
     bearer_token: str | None = None
     return_type: ReturnType = Field(
         default=ReturnType.Raw,
         description="Determines how REST request responses should be returned. Options: 'raw' (JSON dict), 'pandas' (DataFrame), 'polars' (DataFrame), 'struct' (original type), 'wrapper' (ResponseWrapper object).",
     )
+
+    @property
+    def api_route(self) -> str:
+        """The path prefix requests are issued under, e.g. ``/api/v1``."""
+        return f"/{self.api_prefix.strip('/')}/{self.api_version.strip('/')}"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _split_api_route(cls, values):
+        if isinstance(values, dict) and (api_route := values.pop("api_route", None)) is not None:
+            log.warning("api_route is deprecated, please use api_prefix and api_version instead")
+            prefix, _, version = api_route.strip("/").rpartition("/")
+            values.setdefault("api_prefix", prefix or "api")
+            values.setdefault("api_version", version)
+        return values
 
     @field_validator("return_type", mode="before")
     @classmethod

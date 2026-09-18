@@ -362,14 +362,10 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
         self._app_settings = app.settings
         self._app_module = app
 
-        auth_router: APIRouter = app.get_router("auth", self.api_version)
+        auth_router: APIRouter = app.get_router("auth")
         public_router: APIRouter = app.get_router("public")
         check = self.get_check_dependency()
-        logout_page = (
-            app.ui.mount_auth_page(title="Logout", action=app.api_path("/auth/logout", self.api_version), submit="Logout")
-            if app.ui is not None
-            else None
-        )
+        logout_page = app.ui.mount_auth_page(title="Logout", action=app.api_path("/auth/logout"), submit="Logout") if app.ui is not None else None
 
         if self.enable_form_login:
             login_page = (
@@ -469,7 +465,7 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
         @app.app.exception_handler(401)
         @app.app.exception_handler(403)
         async def auth_error_handler(request: Request, exc):
-            if "/api" in request.url.path:
+            if app.is_api_request(request):
                 return JSONResponse(
                     {"detail": self.unauthorized_status_message, "status_code": exc.status_code},
                     status_code=exc.status_code,
