@@ -20,6 +20,14 @@ class Module(BaseModel, ABC, Generic[ChannelsType]):
 
     requires: ChannelSelection | None = None
     disable: bool = False
+    api_version: str | None = Field(
+        default=None,
+        description="""
+        API version under which this module's REST routes are mounted, e.g. 'v2'.
+        Defaults to `Settings.API_VERSION_DEFAULT`. Subclasses that own a versioned
+        surface can pin it by redeclaring the field with a default.
+        """,
+    )
     block_set_channels_until: datetime | None = Field(
         default=None,
         description="""

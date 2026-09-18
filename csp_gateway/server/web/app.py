@@ -63,6 +63,22 @@ build_files_dir = path.abspath(path.join(path.dirname(__file__), "..", "build"))
 static_files_dir = build_files_dir
 images_files_dir = path.join(build_files_dir, "img")
 
+# Routers that live outside the versioned API prefix and are therefore shared by all versions.
+GLOBAL_ROUTER_KINDS = ("app", "public")
+
+# Routers mounted underneath the versioned API prefix, mapped to their sub-prefix and OpenAPI tag.
+# Every API version gets its own instance of each of these, created on first use.
+API_ROUTER_KINDS: dict[str, tuple[str, str]] = {
+    "auth": ("/auth", "Auth"),
+    "controls": ("/controls", "Controls"),
+    "last": ("/last", "Last"),
+    "lookup": ("/lookup", "Lookup"),
+    "next": ("/next", "Next"),
+    "send": ("/send", "Requests"),
+    "stage": ("/stage", "Stage"),
+    "state": ("/state", "State"),
+}
+
 
 class GatewayWebApp:
     # Public
@@ -135,23 +151,12 @@ class GatewayWebApp:
         self._in_test = _in_test
 
         # Construct routers
-        # These correspond to the various channel
-        # types in `Channels`
-        self._routers = {
-            "api": APIRouter(),  # top level
-            # HTML Routes
-            "app": APIRouter(),
-            "public": APIRouter(),
-            # API Routes
-            "auth": APIRouter(),
-            "controls": APIRouter(),
-            "last": APIRouter(),
-            "lookup": APIRouter(),
-            "next": APIRouter(),
-            "send": APIRouter(),
-            "stage": APIRouter(),
-            "state": APIRouter(),
-        }
+        # The API routers correspond to the various channel types in `Channels`, and exist
+        # once per API version; "app" and "public" are outside the API prefix and shared.
+        self._global_routers: dict[str, APIRouter] = {kind: APIRouter() for kind in GLOBAL_ROUTER_KINDS}
+        self._versioned_routers: dict[str, dict[str, APIRouter]] = {}
+        # The default version always exists, even if no module mounts anything into it.
+        self._api_routers()
 
         # middlewares
         self._middlewares = []
@@ -189,11 +194,48 @@ class GatewayWebApp:
     def check_control(self, key, value=None):
         return key in self._controls and self._controls[key](value)
 
-    def get_routers(self) -> dict[str, APIRouter]:
-        return self._routers
+    def api_version(self, version: str | None = None) -> str:
+        """Resolve ``version`` against the configured default."""
+        return version or self.settings.API_VERSION_DEFAULT
 
-    def get_router(self, kind: str = "api"):
-        return self.get_routers()[kind]
+    @property
+    def api_versions(self) -> list[str]:
+        """The API versions that have routers, in mount order (default version first)."""
+        return list(self._versioned_routers)
+
+    def api_path(self, path: str = "", version: str | None = None) -> str:
+        """Build a root-relative URL path under an API version, e.g. ``/api/v1/controls/stats``.
+
+        Prefer this over interpolating ``settings.API_STR`` so that routes and the links
+        pointing at them stay on the same version.
+        """
+        return f"{self.settings.api(self.api_version(version))}{path}"
+
+    def _api_routers(self, version: str | None = None) -> dict[str, APIRouter]:
+        """The API routers for ``version``, created on first use."""
+        version = self.api_version(version)
+        routers = self._versioned_routers.get(version)
+        if routers is None:
+            routers = {"api": APIRouter(), **{kind: APIRouter() for kind in API_ROUTER_KINDS}}
+            self._versioned_routers[version] = routers
+        return routers
+
+    def get_routers(self, version: str | None = None) -> dict[str, APIRouter]:
+        return {**self._api_routers(version), **self._global_routers}
+
+    def get_router(self, kind: str = "api", version: str | None = None) -> APIRouter:
+        """The router for ``kind``, under API version ``version``.
+
+        ``version`` is ignored for the version-independent ``app`` and ``public`` routers.
+        Asking for a version that does not exist yet creates it; it is mounted at
+        ``settings.api(version)`` when the app is finalized.
+        """
+        if kind in self._global_routers:
+            return self._global_routers[kind]
+        routers = self._api_routers(version)
+        if kind not in routers:
+            raise KeyError(f"Unknown router kind: {kind!r}. Expected one of {sorted((*routers, *self._global_routers))}")
+        return routers[kind]
 
     def add_middleware(self, middleware) -> None:
         self._middlewares.append(middleware)
@@ -411,60 +453,27 @@ class GatewayWebApp:
                 return RedirectResponse(f"{root_path}/redoc")
 
     def add_api(self) -> None:
-        """Add API handlers to FastAPI app"""
-        api_router = self.get_router("api")
-        api_router.include_router(
-            self.get_router("auth"),
-            prefix="/auth",
-            tags=["Auth"],
-            dependencies=self._middlewares,
-        )
-        api_router.include_router(
-            self.get_router("controls"),
-            prefix="/controls",
-            tags=["Controls"],
-            dependencies=self._middlewares,
-        )
-        api_router.include_router(
-            self.get_router("last"),
-            prefix="/last",
-            tags=["Last"],
-            dependencies=self._middlewares,
-        )
-        api_router.include_router(
-            self.get_router("lookup"),
-            prefix="/lookup",
-            tags=["Lookup"],
-            dependencies=self._middlewares,
-        )
-        api_router.include_router(
-            self.get_router("next"),
-            prefix="/next",
-            tags=["Next"],
-            dependencies=self._middlewares,
-        )
-        api_router.include_router(
-            self.get_router("send"),
-            prefix="/send",
-            tags=["Requests"],
-            dependencies=self._middlewares,
-        )
-        api_router.include_router(
-            self.get_router("stage"),
-            prefix="/stage",
-            tags=["Stage"],
-            dependencies=self._middlewares,
-        )
-        api_router.include_router(
-            self.get_router("state"),
-            prefix="/state",
-            tags=["State"],
-            dependencies=self._middlewares,
-        )
+        """Mount every API version's routers onto the FastAPI app."""
+        for version in self.api_versions:
+            self.add_api_version(version)
+
+    def add_api_version(self, version: str) -> None:
+        """Mount the routers of a single API version at ``settings.api(version)``."""
+        routers = self._api_routers(version)
+        api_router = routers["api"]
+        default = self.api_version()
+        for kind, (prefix, tag) in API_ROUTER_KINDS.items():
+            api_router.include_router(
+                routers[kind],
+                prefix=prefix,
+                # Non-default versions get their own OpenAPI tag so the docs do not merge versions.
+                tags=[tag if version == default else f"{tag} ({version})"],
+                dependencies=self._middlewares,
+            )
 
         self.app.include_router(
             api_router,
-            prefix=self.settings.API_STR,
+            prefix=self.settings.api(version),
             dependencies=self._middlewares,
         )
 
@@ -492,8 +501,8 @@ class GatewayWebApp:
             return list[get_args(typ)[0]]
         return typ
 
-    def add_last_api(self, field: str) -> None:
-        api_router = self.get_router("last")
+    def add_last_api(self, field: str, version: str | None = None) -> None:
+        api_router = self.get_router("last", version)
         dict_basket = self._is_dict_basket_field(field=field)
 
         if dict_basket:
@@ -505,12 +514,12 @@ class GatewayWebApp:
 
         add_last_routes(api_router=api_router, field=field, model=model, subroute_key=subroute_key)
 
-    def add_last_available_channels(self, fields: set[str] | None = None) -> None:
-        api_router = self.get_router("last")
+    def add_last_available_channels(self, fields: set[str] | None = None, version: str | None = None) -> None:
+        api_router = self.get_router("last", version)
         add_last_available_channels(api_router=api_router, fields=fields)
 
-    def add_next_api(self, field: str) -> None:
-        api_router = self.get_router("next")
+    def add_next_api(self, field: str, version: str | None = None) -> None:
+        api_router = self.get_router("next", version)
 
         if dict_basket := self._is_dict_basket_field(field=field):
             dict_basket_key_type, model = dict_basket
@@ -521,12 +530,12 @@ class GatewayWebApp:
 
         add_next_routes(api_router=api_router, field=field, model=model, subroute_key=subroute_key)
 
-    def add_next_available_channels(self, fields: set[str] | None = None) -> None:
-        api_router = self.get_router("next")
+    def add_next_available_channels(self, fields: set[str] | None = None, version: str | None = None) -> None:
+        api_router = self.get_router("next", version)
         add_next_available_channels(api_router=api_router, fields=fields)
 
-    def add_lookup_api(self, field: str) -> None:
-        api_router = self.get_router("lookup")
+    def add_lookup_api(self, field: str, version: str | None = None) -> None:
+        api_router = self.get_router("lookup", version)
         dict_basket = self._is_dict_basket_field(field=field)
 
         if dict_basket:
@@ -536,12 +545,12 @@ class GatewayWebApp:
 
         add_lookup_routes(api_router=api_router, field=field, model=model)
 
-    def add_lookup_available_channels(self, fields: set[str] | None = None) -> None:
-        api_router = self.get_router("lookup")
+    def add_lookup_available_channels(self, fields: set[str] | None = None, version: str | None = None) -> None:
+        api_router = self.get_router("lookup", version)
         add_lookup_available_channels(api_router=api_router, fields=fields)
 
-    def add_send_api(self, field: str) -> None:
-        api_router = self.get_router("send")
+    def add_send_api(self, field: str, version: str | None = None) -> None:
+        api_router = self.get_router("send", version)
         dict_basket = self._is_dict_basket_field(field=field)
 
         if dict_basket:
@@ -553,18 +562,18 @@ class GatewayWebApp:
 
         add_send_routes(api_router=api_router, field=field, model=model, subroute_key=subroute_key)
 
-    def add_send_available_channels(self, fields: set[str] | None = None) -> None:
-        api_router = self.get_router("send")
+    def add_send_available_channels(self, fields: set[str] | None = None, version: str | None = None) -> None:
+        api_router = self.get_router("send", version)
         add_send_available_channels(api_router=api_router, fields=fields)
 
-    def add_state_api(self, field: str) -> None:
+    def add_state_api(self, field: str, version: str | None = None) -> None:
         """Mount REST routes for the given state ``field``.
 
         ``field`` must be a known state name on the gateway's channels — either
         declared via ``Annotated[..., State(...)]`` or registered dynamically
         via ``set_state`` during a module's ``connect``.
         """
-        api_router = self.get_router("state")
+        api_router = self.get_router("state", version)
 
         spec = self.gateway.channels._states.get(field) or self.gateway.channels_model._declared_states.get(field)
         if spec is None:
@@ -598,26 +607,26 @@ class GatewayWebApp:
             indexer=spec.indexer,
         )
 
-    def add_state_available_channels(self, fields: set[str] | None = None) -> None:
-        api_router = self.get_router("state")
+    def add_state_available_channels(self, fields: set[str] | None = None, version: str | None = None) -> None:
+        api_router = self.get_router("state", version)
         add_state_available_channels(api_router=api_router, fields=fields)
 
-    def add_stage_api(self, field: str) -> None:
+    def add_stage_api(self, field: str, version: str | None = None) -> None:
         """Mount REST routes for staging on a channel."""
-        api_router = self.get_router("stage")
+        api_router = self.get_router("stage", version)
         model = self._get_field_pydantic_type(field)
         add_stage_routes(api_router=api_router, field=field, model=model)
 
-    def add_stage_available_channels(self, fields: set[str] | None = None) -> None:
-        api_router = self.get_router("stage")
+    def add_stage_available_channels(self, fields: set[str] | None = None, version: str | None = None) -> None:
+        api_router = self.get_router("stage", version)
         add_stage_available_channels(api_router=api_router, fields=fields)
 
-    def add_controls_api(self, field: str) -> None:
-        api_router = self.get_router("controls")
+    def add_controls_api(self, field: str, version: str | None = None) -> None:
+        api_router = self.get_router("controls", version)
         add_controls_routes(api_router, field=field)
 
-    def add_controls_available_channels(self, fields: set[str] | None = None) -> None:
-        api_router = self.get_router("controls")
+    def add_controls_available_channels(self, fields: set[str] | None = None, version: str | None = None) -> None:
+        api_router = self.get_router("controls", version)
         add_controls_available_channels(api_router=api_router, fields=fields)
 
     def _finalize(self) -> None:

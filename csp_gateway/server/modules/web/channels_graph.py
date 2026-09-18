@@ -26,7 +26,7 @@ class MountChannelsGraph(GatewayModule):
         self._channels = channels
 
     def rest(self, app: GatewayWebApp) -> None:
-        api_router = app.get_router("api")
+        api_router = app.get_router("api", self.api_version)
         app_router = app.get_router("app")
 
         # TODO subselect

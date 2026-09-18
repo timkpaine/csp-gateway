@@ -262,7 +262,7 @@ class MountOAuth2Middleware(AuthenticationMiddleware, IdentityAwareMiddlewareMix
     def rest(self, app: GatewayWebApp) -> None:
         self._app_settings = app.settings
 
-        auth_router: APIRouter = app.get_router("auth")
+        auth_router: APIRouter = app.get_router("auth", self.api_version)
         public_router: APIRouter = app.get_router("public")
         check = self.get_check_dependency()
 

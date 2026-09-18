@@ -69,7 +69,7 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
 
     def rest(self, app: GatewayWebApp) -> None:
         # routers
-        auth_router: APIRouter = app.get_router("auth")
+        auth_router: APIRouter = app.get_router("auth", self.api_version)
         check = self.get_check_dependency()
 
         @auth_router.get("/login")
@@ -105,7 +105,7 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
         @public_router.get("/login", response_class=HTMLResponse, include_in_schema=False)
         async def get_login_page(token: str = "", request: Request = None):
             if token and token != "":
-                return RedirectResponse(url=app.root_path_url(request, f"{app.settings.API_STR}/auth/login?token={token}"))
+                return RedirectResponse(url=app.root_path_url(request, app.api_path(f"/auth/login?token={token}", self.api_version)))
             return _login_html(request)
 
         @public_router.get("/logout", response_class=HTMLResponse, include_in_schema=False)
@@ -146,15 +146,14 @@ class MountAPIKeyMiddleware(AuthenticationMiddleware):
         """The spaday login and logout markup, or a pair of Nones when the legacy templates are in play."""
         if app.ui is None:
             return None, None
-        api = app.settings.API_STR
         login = app.ui.mount_auth_page(
             title="Login",
-            action=f"{api}/auth/login",
+            action=app.api_path("/auth/login", self.api_version),
             fields=[{"name": self.api_key_name, "type": "password", "placeholder": "API Key..."}],
         )
         logout = app.ui.mount_auth_page(
             title="Logout",
-            action=f"{api}/auth/logout",
+            action=app.api_path("/auth/logout", self.api_version),
             submit="Logout",
         )
         return login, logout

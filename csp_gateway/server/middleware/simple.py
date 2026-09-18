@@ -362,11 +362,13 @@ class MountSimpleAuthMiddleware(AuthenticationMiddleware, IdentityAwareMiddlewar
         self._app_settings = app.settings
         self._app_module = app
 
-        auth_router: APIRouter = app.get_router("auth")
+        auth_router: APIRouter = app.get_router("auth", self.api_version)
         public_router: APIRouter = app.get_router("public")
         check = self.get_check_dependency()
         logout_page = (
-            app.ui.mount_auth_page(title="Logout", action=f"{app.settings.API_STR}/auth/logout", submit="Logout") if app.ui is not None else None
+            app.ui.mount_auth_page(title="Logout", action=app.api_path("/auth/logout", self.api_version), submit="Logout")
+            if app.ui is not None
+            else None
         )
 
         if self.enable_form_login:

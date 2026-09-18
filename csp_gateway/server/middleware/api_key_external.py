@@ -153,7 +153,7 @@ class MountExternalAPIKeyMiddleware(MountAPIKeyMiddleware, IdentityAwareMiddlewa
         self._app_settings = app.settings
         self._app_module = app
 
-        auth_router: APIRouter = app.get_router("auth")
+        auth_router: APIRouter = app.get_router("auth", self.api_version)
         check = self.get_check_dependency()
 
         @auth_router.get("/login")

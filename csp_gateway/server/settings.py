@@ -21,7 +21,18 @@ class Settings(BaseSettings):
 
     model_config = {"case_sensitive": True}
 
-    API_STR: str = "/api/v1"
+    API_PREFIX: str = Field("api", description="Top level path segment under which all versioned API routes are mounted.")
+    API_VERSION_DEFAULT: str = Field("v1", description="API version used by routes that do not ask for a specific one.")
+
+    def api(self, version: str | None = None) -> str:
+        """The URL path prefix for an API version, e.g. ``/api/v1``."""
+        return f"/{self.API_PREFIX.strip('/')}/{(version or self.API_VERSION_DEFAULT).strip('/')}"
+
+    @property
+    def API_STR(self) -> str:
+        """The URL path prefix for the default API version."""
+        return self.api()
+
     BACKEND_CORS_ORIGINS: list[AnyHttpUrl] = []
 
     TITLE: str = "Gateway"

@@ -40,16 +40,16 @@ class MountControls(GatewayModule):
     def rest(self, app: GatewayWebApp) -> None:
         available = []
         if self.mount_heartbeat:
-            app.add_controls_api(field="heartbeat")
+            app.add_controls_api(field="heartbeat", version=self.api_version)
             available.append("heartbeat")
         if self.mount_stats:
-            app.add_controls_api(field="stats")
+            app.add_controls_api(field="stats", version=self.api_version)
             available.append("stats")
         if self.mount_shutdown:
-            app.add_controls_api(field="shutdown")
+            app.add_controls_api(field="shutdown", version=self.api_version)
             available.append("shutdown")
 
-        app.add_controls_available_channels(fields=set(available))
+        app.add_controls_available_channels(fields=set(available), version=self.api_version)
 
     def ui(self, app: "GatewayUI") -> None:
         # Add a guarded shutdown ("kill switch") to the spaday settings drawer, matching the
@@ -59,7 +59,7 @@ class MountControls(GatewayModule):
         if self.mount_shutdown:
             app.add(
                 Region.DRAWER_RIGHT,
-                app.confirm_button("Shutdown", f"{app.settings.API_STR}/controls/shutdown", variant="danger"),
+                app.confirm_button("Shutdown", app.web_app.api_path("/controls/shutdown", self.api_version), variant="danger"),
             )
 
     @csp.node

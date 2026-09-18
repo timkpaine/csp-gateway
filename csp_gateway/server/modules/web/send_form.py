@@ -73,7 +73,7 @@ class MountSendForm(GatewayModule):
             forms.append(
                 SendSpec(
                     channel=channel,
-                    url=f"{web_app.settings.API_STR}/send/{channel}",
+                    url=web_app.api_path(f"/send/{channel}", self.api_version),
                     model=descriptor.model,
                     keys=descriptor.keys,
                     overrides=self._overrides_for(channel),

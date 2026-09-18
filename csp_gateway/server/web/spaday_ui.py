@@ -419,6 +419,13 @@ class GatewayUI:
             return f"{root}{path}"
         return path
 
+    def api_url(self, path: str = "", version: str | None = None) -> str:
+        """A ``ROOT_PATH``-prefixed URL for a route under an API version, e.g. ``/api/v1/send/x``.
+
+        Pass the contributing module's ``api_version`` so UI links follow the routes it mounted.
+        """
+        return self.url(f"{self._settings.api(version)}{path}")
+
     def _custom_assets(self) -> tuple[list[str], list[str]]:
         """The configured `Settings.CUSTOM_CSS` / `CUSTOM_JS` as stylesheet and script URLs.
 

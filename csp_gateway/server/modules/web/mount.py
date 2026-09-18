@@ -52,9 +52,9 @@ class MountRestRoutes(GatewayModule):
         # Bind every wire
         for name in channels_set:
             # Install on router
-            app.add_last_api(name)
+            app.add_last_api(name, version=self.api_version)
 
-        app.add_last_available_channels(channels_set)
+        app.add_last_available_channels(channels_set, version=self.api_version)
 
     def _mount_next(self, app: GatewayWebApp) -> None:
         selection = ChannelSelection() if self.force_mount_all else self.mount_next
@@ -63,9 +63,9 @@ class MountRestRoutes(GatewayModule):
         # Bind every wire
         for name in channels_set:
             # Install on router
-            app.add_next_api(name)
+            app.add_next_api(name, version=self.api_version)
 
-        app.add_next_available_channels(channels_set)
+        app.add_next_available_channels(channels_set, version=self.api_version)
 
     def _mount_send(self, app: GatewayWebApp) -> None:
         selection = ChannelSelection() if self.force_mount_all else self.mount_send
@@ -75,7 +75,7 @@ class MountRestRoutes(GatewayModule):
         # Bind every wire
         if self.force_mount_all:
             for channel in channels_set:
-                app.add_send_api(channel)
+                app.add_send_api(channel, version=self.api_version)
             seen_channels = channels_set
 
         else:
@@ -84,13 +84,13 @@ class MountRestRoutes(GatewayModule):
                     continue
                 seen_channels.add(channel)
                 # Install on router
-                app.add_send_api(channel)
+                app.add_send_api(channel, version=self.api_version)
 
             missing_channels = channels_set - seen_channels
             if missing_channels:
                 log.info(f"Requested channels missing send routes are: {list(missing_channels)}")
 
-        app.add_send_available_channels(seen_channels)
+        app.add_send_available_channels(seen_channels, version=self.api_version)
 
     def _mount_stage(self, app: GatewayWebApp) -> None:
         staged_channels = set(app.gateway.channels.staged_channels())
@@ -101,9 +101,9 @@ class MountRestRoutes(GatewayModule):
         for channel in staged_channels:
             if channel not in seen_channels:
                 seen_channels.add(channel)
-                app.add_stage_api(channel)
+                app.add_stage_api(channel, version=self.api_version)
 
-        app.add_stage_available_channels(seen_channels)
+        app.add_stage_available_channels(seen_channels, version=self.api_version)
 
     def _mount_state(self, app: GatewayWebApp) -> None:
         selection = ChannelSelection() if self.force_mount_all else self.mount_state
@@ -114,7 +114,7 @@ class MountRestRoutes(GatewayModule):
         # Bind every wire
         if self.force_mount_all:
             for state_channel in channels_set:
-                app.add_state_api(state_channel)
+                app.add_state_api(state_channel, version=self.api_version)
             seen_channels = channels_set
 
         else:
@@ -123,13 +123,13 @@ class MountRestRoutes(GatewayModule):
                     continue
                 seen_channels.add(state_channel)
                 # Install on router
-                app.add_state_api(state_channel)
+                app.add_state_api(state_channel, version=self.api_version)
 
             missing_channels = channels_set - seen_channels
             if missing_channels:
                 log.info(f"Requested channels missing state routes: {list(missing_channels)}")
 
-        app.add_state_available_channels(seen_channels)
+        app.add_state_available_channels(seen_channels, version=self.api_version)
 
     def _mount_lookup(self, app: GatewayWebApp) -> None:
         selection = ChannelSelection() if self.force_mount_all else self.mount_lookup
@@ -138,6 +138,6 @@ class MountRestRoutes(GatewayModule):
         # Bind every wire
         for name in selection.select_from(app.gateway.channels_model):
             # Install on router
-            app.add_lookup_api(name)
+            app.add_lookup_api(name, version=self.api_version)
 
-        app.add_lookup_available_channels(channels_set)
+        app.add_lookup_available_channels(channels_set, version=self.api_version)

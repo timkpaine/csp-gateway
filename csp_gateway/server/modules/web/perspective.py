@@ -594,7 +594,7 @@ class MountPerspectiveTables(GatewayModule):
                 ...
 
         # Get API Router
-        api_router: APIRouter = app.get_router("api")
+        api_router: APIRouter = app.get_router("api", self.api_version)
 
         # Mount the perspective websocket handler
         api_router.add_api_websocket_route(self._route, websocket_handler)
@@ -729,8 +729,8 @@ class MountPerspectiveTables(GatewayModule):
 
     def ui(self, app: "GatewayUI") -> None:
         # Register the Perspective workspace as the main panel of the spaday UI. Data rides
-        # Perspective's own websocket (mounted by rest() at {API_STR}/perspective); the spaday
-        # page only carries the workspace layout/theme config.
+        # Perspective's own websocket (mounted by rest() under the module's API version); the
+        # spaday page only carries the workspace layout/theme config.
         from csp_gateway.server.web.spaday_ui import Region
 
         layouts = dict(self._layouts)
@@ -738,7 +738,7 @@ class MountPerspectiveTables(GatewayModule):
         app.add(
             Region.MAIN,
             app.perspective_panel(
-                route=f"{app.settings.API_STR}{self._route}",
+                route=app.web_app.api_path(self._route, self.api_version),
                 tables=list(tables.keys()),
                 default_tables=self._select_default_layout_tables(tables),
                 layouts=layouts,
