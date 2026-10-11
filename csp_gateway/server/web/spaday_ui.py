@@ -1210,37 +1210,80 @@ class GatewayUI:
         title = getattr(self._settings, "TITLE", "Gateway")
         root = getattr(self._settings, "ROOT_PATH", "") or ""
         custom_css, custom_scripts = self._custom_assets()
-        error_head = """<script>
+        error_head = """<style>
+        #gateway-startup-error:not(.gateway-startup) {
+            position: fixed; bottom: 0; left: 0; right: 0; z-index: 100000;
+            padding: 0.75rem 1rem; box-sizing: border-box; max-height: 30vh; overflow: auto;
+            background: var(--spa-surface, #fff); color: var(--spa-text, #161616);
+            border-top: 1px solid var(--spa-border, #ccc);
+        }
+        </style><script>
     (() => {
-    let shellReady = false, workspaceReady = false;
-    const finish = () => {
-      const tab = document.getElementById('gateway-main-layout')?.dataset.activeTab;
-      if (!shellReady || (!workspaceReady && document.querySelector('perspective-panel') && (!tab || tab === 'workspace'))) return;
-      document.getElementById('gateway-startup-loader')?.remove();
-      document.getElementById('gateway-startup-error')?.remove();
-    };
-    const fail = event => {
-      if (event.detail?.target != null || document.getElementById('gateway-startup-error')) return;
-      const loader = document.getElementById('gateway-startup-loader');
-      const panel = document.createElement('section');
-      panel.id = 'gateway-startup-error'; panel.setAttribute('role', 'alert');
-      if (loader) panel.className = 'gateway-startup';
-      const message = document.createElement('p');
-      message.textContent = 'The interface could not finish loading. Reload to try again.';
-      const reload = document.createElement('a');
-      reload.href = ''; reload.textContent = 'Reload page';
-      panel.append(message, reload); document.body.append(panel);
-      loader?.remove();
-    };
-    document.addEventListener('spaday:error', fail);
-    document.addEventListener('spaday:ready', event => {
-      if (event.detail.target != null) return;
-      shellReady = true; finish();
-    });
-    document.addEventListener('perspective-ready', () => { workspaceReady = true; finish(); }, true);
-    document.addEventListener('perspective-error', event => {
-      if (document.getElementById('gateway-startup-loader')) fail(event);
-    }, true);
+            let shellReady = false, workspaceReady = false, workspaceTimer, monitorWorkspace = false;
+            const tabObserver = new MutationObserver(() => finish());
+            const cleanup = () => {
+                clearTimeout(workspaceTimer);
+                workspaceTimer = undefined;
+                tabObserver.disconnect();
+            };
+            const finish = () => {
+                if (!shellReady) return;
+                const layout = document.getElementById('gateway-main-layout');
+                const tab = layout?.dataset.activeTab;
+                const tabs = layout ? [...layout.children].map(frame => frame.getAttribute('name')) : [];
+                const otherTab = tab && tab !== 'workspace' && tabs.includes(tab);
+                const error = document.getElementById('gateway-startup-error');
+                if (workspaceReady || !document.querySelector('perspective-panel')) {
+                    cleanup();
+                    document.getElementById('gateway-startup-loader')?.remove();
+                    error?.remove();
+                } else if (otherTab) {
+                    clearTimeout(workspaceTimer);
+                    workspaceTimer = undefined;
+                    document.getElementById('gateway-startup-loader')?.remove();
+                    if (error) error.hidden = true;
+                } else if (error) {
+                    error.hidden = false;
+                } else if (monitorWorkspace && workspaceTimer === undefined) {
+                    workspaceTimer = setTimeout(() => {
+                        workspaceTimer = undefined;
+                        if (!workspaceReady) fail({detail: null}, false);
+                    }, 10000);
+                }
+            };
+            const fail = (event, blocking = true) => {
+                if (event.detail?.target != null || document.getElementById('gateway-startup-error')) return;
+                clearTimeout(workspaceTimer);
+                const loader = document.getElementById('gateway-startup-loader');
+                const panel = document.createElement('section');
+                panel.id = 'gateway-startup-error'; panel.setAttribute('role', 'alert');
+        if (loader && blocking) panel.className = 'gateway-startup';
+                const message = document.createElement('p');
+                message.textContent = 'The interface could not finish loading. Reload to try again.';
+                const reload = document.createElement('a');
+                reload.href = ''; reload.textContent = 'Reload page';
+                panel.append(message, reload); document.body.append(panel);
+                loader?.remove();
+            };
+            document.addEventListener('spaday:error', fail);
+            document.addEventListener('spaday:ready', event => {
+                if (event.detail.target != null) return;
+                shellReady = true;
+                monitorWorkspace ||= !!document.getElementById('gateway-startup-loader');
+                const layout = document.getElementById('gateway-main-layout');
+                if (layout) tabObserver.observe(layout, {attributes: true, attributeFilter: ['data-active-tab']});
+                clearTimeout(workspaceTimer);
+                workspaceTimer = undefined;
+                finish();
+            });
+            document.addEventListener('perspective-ready', () => { workspaceReady = true; finish(); }, true);
+            document.addEventListener('perspective-error', event => {
+        monitorWorkspace ||= !!document.getElementById('gateway-startup-loader');
+        if (monitorWorkspace && !workspaceReady) {
+                    fail(event, false);
+                    finish();
+        }
+            }, true);
     })();
     </script>"""
         loading_image = self.url(getattr(self._settings, "LOADING_IMAGE", None))

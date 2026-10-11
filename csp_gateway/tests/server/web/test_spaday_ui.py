@@ -117,7 +117,22 @@ def test_spaday_lifecycle_boot_and_error_recovery_in_chromium(failed_asset, cust
             browser.close()
 
 
-@pytest.mark.parametrize("case", ["workspace", "early-ready", "error", "logs"])
+@pytest.mark.parametrize(
+    "case",
+    [
+        "workspace",
+        "early-ready",
+        "early-error",
+        "error",
+        "logs",
+        "logs-after-ready",
+        "logs-return",
+        "unknown-tab",
+        "timeout",
+        "timeout-recovery",
+        "duplicate-ready",
+    ],
+)
 def test_startup_loader_waits_for_workspace_only_in_chromium(case):
     from types import SimpleNamespace
 
@@ -129,7 +144,9 @@ def test_startup_loader_waits_for_workspace_only_in_chromium(case):
     playwright = pytest.importorskip("playwright.sync_api")
     settings = GatewaySettings(UI=True, LOADING_IMAGE="/loader.svg", ROOT_PATH="/prefix", TITLE='A "B" <C>')
     web = GatewayWebApp(SimpleNamespace(modules=[]), None, settings, ui=True)
-    web.ui.add(Region.MAIN, element("perspective-panel"))
+    stalled_workspace = case in {"logs-after-ready", "logs-return", "unknown-tab", "duplicate-ready"} or case.startswith("timeout")
+    panel = web.ui.perspective_panel(route="/perspective", tables=["orders"]) if stalled_workspace else element("perspective-panel")
+    web.ui.add(Region.MAIN, panel)
     web.ui.add_tab("logs", "Logs", element("p").text("Log contents"))
     web._finalize()
     client = TestClient(web.app)
@@ -144,6 +161,10 @@ def test_startup_loader_waits_for_workspace_only_in_chromium(case):
         page.add_init_script(
             "localStorage.setItem('csp-gateway:dark', 'true'); window.shellReady = false; document.addEventListener('spaday:ready', () => shellReady = true)"
         )
+        if case.startswith("timeout") or case in {"duplicate-ready", "logs", "logs-after-ready", "logs-return"}:
+            page.clock.install()
+        if stalled_workspace:
+            page.route_web_socket("**/perspective", lambda socket: socket.on_message(lambda message: None))
         pending = []
 
         def respond(route):
@@ -158,7 +179,8 @@ def test_startup_loader_waits_for_workspace_only_in_chromium(case):
 
         page.route("http://csp-review.test/**", serve)
         try:
-            page.goto(f"http://csp-review.test/prefix/?tab={'logs' if case == 'logs' else ''}", wait_until="commit")
+            initial_tab = "logs" if case in {"logs", "logs-return"} else "unknown" if case == "unknown-tab" else ""
+            page.goto(f"http://csp-review.test/prefix/?tab={initial_tab}", wait_until="commit")
             loader = page.locator("#gateway-startup-loader")
             playwright.expect(loader).to_be_visible()
             playwright.expect(loader).to_have_attribute("aria-label", 'Loading A "B" <C>')
@@ -169,12 +191,59 @@ def test_startup_loader_waits_for_workspace_only_in_chromium(case):
             if case == "early-ready":
                 page.evaluate("document.dispatchEvent(new CustomEvent('perspective-ready'))")
                 playwright.expect(loader).to_be_visible()
+            if case == "early-error":
+                page.evaluate("document.dispatchEvent(new CustomEvent('perspective-error', {detail: new Error('Early config failure')}))")
+                playwright.expect(loader).to_have_count(0)
+                playwright.expect(page.locator("#gateway-startup-error")).to_be_in_viewport()
+                assert page.evaluate("shellReady") is False
             assert pending
             for route in pending:
                 respond(route)
             page.wait_for_function("shellReady")
-            if case in {"workspace", "error"}:
+            if stalled_workspace:
+                page.wait_for_function("!!document.querySelector('perspective-panel').viewer")
+            if case == "unknown-tab":
+                page.wait_for_function("!document.querySelector('#gateway-main-layout').dataset.activeTab")
                 playwright.expect(loader).to_be_visible()
+                page.evaluate("document.querySelector('perspective-panel').dispatchEvent(new CustomEvent('perspective-ready', {bubbles: true}))")
+            if case == "duplicate-ready":
+                page.evaluate("document.dispatchEvent(new CustomEvent('spaday:ready', {detail: {}}))")
+                page.evaluate("document.querySelector('perspective-panel').dispatchEvent(new CustomEvent('perspective-ready', {bubbles: true}))")
+                page.clock.fast_forward(10001)
+            if case == "logs-return":
+                playwright.expect(loader).to_have_count(0)
+                page.locator("#gateway-main-layout").evaluate("layout => layout.openPanel('workspace')")
+                page.wait_for_function("!document.querySelector('#gateway-main-layout').dataset.activeTab")
+                page.clock.fast_forward(10001)
+                playwright.expect(page.locator("#gateway-startup-error")).to_be_in_viewport()
+                page.evaluate("document.querySelector('perspective-panel').dispatchEvent(new CustomEvent('perspective-ready', {bubbles: true}))")
+            if case == "logs-after-ready":
+                playwright.expect(loader).to_be_visible()
+                page.locator("#gateway-main-layout").evaluate("layout => layout.openPanel('logs')")
+                page.wait_for_function("document.querySelector('#gateway-main-layout').dataset.activeTab === 'logs'")
+            if case in {"logs", "logs-after-ready"}:
+                page.clock.fast_forward(10001)
+                playwright.expect(page.locator("#gateway-startup-error")).to_have_count(0)
+            if case.startswith("timeout"):
+                playwright.expect(loader).to_be_visible()
+                page.clock.fast_forward(10001)
+                playwright.expect(loader).to_have_count(0)
+                playwright.expect(page.get_by_role("link", name="Reload page")).to_be_visible()
+                playwright.expect(page.locator("#gateway-startup-error")).to_be_in_viewport()
+                assert "gateway-startup" not in (page.locator("#gateway-startup-error").get_attribute("class") or "").split()
+                if case == "timeout":
+                    page.locator("#gateway-main-layout").evaluate("layout => layout.openPanel('logs')")
+                    page.wait_for_function("document.querySelector('#gateway-main-layout').dataset.activeTab === 'logs'")
+                    playwright.expect(page.locator("#gateway-startup-error")).to_be_hidden()
+                    page.locator("#gateway-main-layout").evaluate("layout => layout.openPanel('workspace')")
+                    page.wait_for_function("!document.querySelector('#gateway-main-layout').dataset.activeTab")
+                    playwright.expect(page.locator("#gateway-startup-error")).to_be_in_viewport()
+                    page.evaluate("document.querySelector('perspective-panel').dispatchEvent(new CustomEvent('perspective-ready', {bubbles: true}))")
+                else:
+                    page.evaluate("document.querySelector('perspective-panel').dispatchEvent(new CustomEvent('perspective-ready', {bubbles: true}))")
+            if case in {"workspace", "error", "early-error"}:
+                if case != "early-error":
+                    playwright.expect(loader).to_be_visible()
                 if case == "error":
                     page.evaluate("document.dispatchEvent(new CustomEvent('perspective-error', {detail: new Error('Test failure')}))")
                     playwright.expect(page.get_by_role("link", name="Reload page")).to_be_visible()
