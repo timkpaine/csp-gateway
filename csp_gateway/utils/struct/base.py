@@ -696,7 +696,7 @@ def _build_list_serializer(cls: type[GatewayStruct], schema: dict) -> dict[bool,
 class _BoundSerializer:
     """A `SchemaSerializer` with ``by_alias`` fixed, so every call matches a per-record ``TypeAdapter``."""
 
-    __slots__ = ("_serializer", "_by_alias")
+    __slots__ = ("_by_alias", "_serializer")
 
     def __init__(self, serializer: SchemaSerializer, by_alias: bool) -> None:
         self._serializer = serializer
