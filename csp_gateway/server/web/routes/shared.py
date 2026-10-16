@@ -2,7 +2,7 @@ import asyncio
 from typing import Any, get_args, get_origin
 
 from fastapi.responses import Response
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel
 
 from csp_gateway.utils.struct.base import type_adapter_for
 
@@ -71,15 +71,10 @@ def prepare_response(
     return json_res_bytes.decode()
 
 
-_LIST_TYPE_ADAPTERS: dict[type, TypeAdapter] = {}
-
-
 def _dump_records(res: list) -> bytes:
-    """Serialize records to a JSON array, in one pydantic call when they share a type.
+    """Serialize records to a JSON array, byte-identical to dumping each with its own adapter.
 
-    A ``list[T]`` adapter serializes every element with ``T``'s schema, so it is
-    only used when every record is exactly ``T``; mixed subclasses go one record
-    at a time, each with its own adapter.
+    Records that are all exactly one `GatewayStruct` type go through its batched dump instead.
     """
     if not res:
         return b"[]"
@@ -87,10 +82,9 @@ def _dump_records(res: list) -> bytes:
     # Called even on the fast path: it is what rejects non-model records.
     type_adapter_for(res[0])
     if all(type(r) is cls for r in res):
-        list_adapter = _LIST_TYPE_ADAPTERS.get(cls)
-        if list_adapter is None:
-            list_adapter = _LIST_TYPE_ADAPTERS[cls] = TypeAdapter(list[cls])
-        return list_adapter.dump_json(res)
+        dump_json_list = getattr(cls, "_dump_json_list", None)
+        if dump_json_list is not None and (json_res_bytes := dump_json_list(res)) is not None:
+            return json_res_bytes
     return b"[" + b",".join(type_adapter_for(r).dump_json(r) for r in res) + b"]"
 
 
