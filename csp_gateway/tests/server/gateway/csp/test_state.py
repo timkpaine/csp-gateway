@@ -1,3 +1,4 @@
+import threading
 import time
 import typing
 from datetime import datetime, timedelta
@@ -594,3 +595,36 @@ def test_duckdb_schema_includes_pep604_optional_fields():
     assert schema.get("a") == "BIGINT"  # typing.Optional[int]
     assert schema.get("b") == "BIGINT"  # int | None
     assert schema.get("c") == "BIGINT"
+
+
+def test_duckdb_query_concurrent_with_buffered_inserts():
+    # REST queries now run in a threadpool while the engine thread keeps inserting; an insert that
+    # crosses the buffer threshold loads into DuckDB on the cursor a query is reading from.
+    enable_duckdb_state()
+    state_module.modify_buffer_threshold(50)
+    try:
+        s = State[CspStruct](keyby=("a",))
+        errors = []
+        done = threading.Event()
+
+        def insert_many():
+            try:
+                for i in range(5000):
+                    s.insert(CspStruct(a=i, b=f"v{i}"))
+            except Exception as err:  # noqa: BLE001
+                errors.append(err)
+            finally:
+                done.set()
+
+        writer = threading.Thread(target=insert_many)
+        writer.start()
+        sizes = []
+        while not done.is_set():
+            # Query the implementation directly: the State wrapper turns any error into an empty list.
+            sizes.append(len(s._state_impl.query()))
+        writer.join()
+        assert not errors
+        assert sizes == sorted(sizes)
+        assert len(s._state_impl.query()) == 5000
+    finally:
+        state_module.restore_buffer_threshold()
