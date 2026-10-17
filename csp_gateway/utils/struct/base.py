@@ -1,8 +1,9 @@
+import inspect
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Annotated, Any, ClassVar, Literal, Optional, Self, TypeVar
 
-from pydantic import BaseModel, ConfigDict, ValidationInfo, field_serializer, model_serializer, model_validator
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationInfo, field_serializer, model_serializer, model_validator
 from pydantic_core import SchemaSerializer, core_schema
 
 from ..id_generator import get_counter
@@ -644,11 +645,13 @@ def _build_list_serializer(cls: type[GatewayStruct], schema: dict) -> dict[bool,
     """Serializers for `GatewayStruct._dump_json_list`, or ``None`` where it could change the output.
 
     Excluding unset fields natively differs from `_drop_implicitly_unset`'s popping when a serializer
-    would see an unset field's ``None``, when two fields share an output key, or when extra fields
-    can share one; and stripping `_drop_implicitly_unset` is only sound when it is the struct's own.
+    would see an unset field's ``None``, when two fields or a computed field share an output key, or
+    when extra fields can share one; and stripping `_drop_implicitly_unset` is only sound when it is
+    the struct's own. A struct with its own ``type_adapter`` may serialize differently altogether.
     Any shape this does not recognise also yields ``None``.
     """
-    if cls._implicitly_unset is not GatewayStruct._implicitly_unset:
+    own_adapter = getattr(cls.type_adapter, "__func__", None) is not GatewayStruct.type_adapter.__func__
+    if cls._implicitly_unset is not GatewayStruct._implicitly_unset or own_adapter:
         return None
     root, definitions = (schema["schema"], schema["definitions"]) if schema.get("type") == "definitions" else (schema, None)
     definitions_by_ref = {d["ref"]: d for d in definitions or ()}
@@ -662,6 +665,10 @@ def _build_list_serializer(cls: type[GatewayStruct], schema: dict) -> dict[bool,
         return None
     by_alias = bool(cls.model_config.get("serialize_by_alias", False))
     keys = [(field.get("serialization_alias") or name) if by_alias else name for name, field in fields.items()]
+    keys += [
+        (computed.get("alias") or computed["property_name"]) if by_alias else computed["property_name"]
+        for computed in model_fields.get("computed_fields") or ()
+    ]
     if len(set(keys)) != len(keys):
         return None
     for name in cls._maybe_unset_fields():
@@ -676,8 +683,7 @@ def _build_list_serializer(cls: type[GatewayStruct], schema: dict) -> dict[bool,
         if definitions is not None:
             list_schema = core_schema.definitions_schema(list_schema, definitions)
         serializer = SchemaSerializer(list_schema, config)
-        # Pass by_alias explicitly: older pydantic-core defaults it to True, where TypeAdapter does not.
-        return _BoundSerializer(serializer, by_alias)
+        return _BoundSerializer(serializer, _BY_ALIAS_UNSET)
 
     serializers = {False: build(root)}
     if "timestamp" in fields and _is_plain_timestamp(fields["timestamp"]) and (config or {}).get("ser_json_temporal", "iso8601") == "iso8601":
@@ -693,12 +699,18 @@ def _build_list_serializer(cls: type[GatewayStruct], schema: dict) -> dict[bool,
     return serializers
 
 
+#: What ``TypeAdapter.dump_json`` passes for ``by_alias`` when the caller does not: ``None`` lets each
+#: model, nested ones included, apply its own ``serialize_by_alias``. pydantic-core before 2.33 takes
+#: only a bool there, and defaults it to True where ``TypeAdapter`` passed False.
+_BY_ALIAS_UNSET = inspect.signature(TypeAdapter.dump_json).parameters["by_alias"].default
+
+
 class _BoundSerializer:
     """A `SchemaSerializer` with ``by_alias`` fixed, so every call matches a per-record ``TypeAdapter``."""
 
     __slots__ = ("_by_alias", "_serializer")
 
-    def __init__(self, serializer: SchemaSerializer, by_alias: bool) -> None:
+    def __init__(self, serializer: SchemaSerializer, by_alias: bool | None) -> None:
         self._serializer = serializer
         self._by_alias = by_alias
 

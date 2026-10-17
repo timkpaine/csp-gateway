@@ -7,7 +7,7 @@ from typing import Annotated, Any
 
 import pytest
 import starlette.responses
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, TypeAdapter, computed_field, field_serializer
 from pydantic_core import PydanticSerializationError, SchemaSerializer
 
 from csp_gateway import GatewayStruct
@@ -359,6 +359,93 @@ def test_list_fast_path_ignores_core_by_alias_default(monkeypatch):
     res = [_Renamed(a=1)]
     assert _Renamed._dump_json_list(res) == _old_dump(res)
     assert b"renamed" not in _old_dump(res)
+
+
+class _RedactingAdapter(TypeAdapter):
+    def dump_json(self, instance, **kwargs):
+        return super().dump_json(instance, exclude={"secret"}, **kwargs)
+
+
+class _OwnAdapter(GatewayStruct):
+    public: str = "visible"
+    secret: str = "private"
+
+    @classmethod
+    def type_adapter(cls):
+        return _RedactingAdapter(cls)
+
+
+def test_list_fast_path_keeps_model_owned_adapter():
+    # A struct's own `type_adapter` is what per-record dumping uses, so the batch must not bypass it.
+    res = [_OwnAdapter.from_field_values()]
+    assert _OwnAdapter._list_serializers() is None
+    assert prepare_response(res=res, is_list_model=True).body == _old_dump(res) == b'[{"public":"visible"}]'
+
+
+class _AliasedChild(GatewayStruct):
+    model_config = ConfigDict(serialize_by_alias=True)
+    value: int = Field(default=1, serialization_alias="renamed")
+
+
+class _UnaliasedChild(GatewayStruct):
+    value: int = Field(default=1, serialization_alias="renamed")
+
+
+class _AliasedParent(GatewayStruct):
+    model_config = ConfigDict(serialize_by_alias=True)
+    child: _UnaliasedChild
+    value: int = Field(default=1, serialization_alias="mine")
+
+
+class _ParentOfAliased(GatewayStruct):
+    child: _AliasedChild
+
+
+@pytest.mark.parametrize(
+    "res",
+    [
+        pytest.param([_ParentOfAliased.from_field_values(child=_AliasedChild.from_field_values())], id="child_by_alias"),
+        pytest.param([_AliasedParent.from_field_values(child=_UnaliasedChild.from_field_values())], id="parent_by_alias"),
+    ],
+)
+def test_list_fast_path_keeps_nested_alias_config(res):
+    # Each model applies its own `serialize_by_alias`; the parent's must not be forced onto its children.
+    assert _list_serializers_of(res) is not None
+    assert prepare_response(res=res, is_list_model=True).body == _old_dump(res)
+
+
+class _ComputedSharesKey(GatewayStruct):
+    model_config = ConfigDict(serialize_by_alias=True)
+    value: int
+
+    @computed_field(alias="value")
+    @property
+    def computed(self) -> int:
+        return 42
+
+
+class _ComputedOwnKey(GatewayStruct):
+    value: int
+
+    @computed_field
+    @property
+    def computed(self) -> int:
+        return 42
+
+
+def test_list_fast_path_guards_computed_field_keys():
+    # Popping an unset field's key also drops a computed field emitted under that key; excluding it does not.
+    res = [_ComputedSharesKey.from_field_values()]
+    assert _ComputedSharesKey._list_serializers() is None
+    assert prepare_response(res=res, is_list_model=True).body == _old_dump(res) == b"[{}]"
+    # A computed field under its own key keeps the fast path.
+    res = [_ComputedOwnKey.from_field_values(), _ComputedOwnKey(value=1)]
+    assert _ComputedOwnKey._list_serializers() is not None
+    assert prepare_response(res=res, is_list_model=True).body == _old_dump(res)
+
+
+def _list_serializers_of(res):
+    return type(res[0])._list_serializers()
 
 
 def test_list_fast_path_shared_unset_scales_linearly():
