@@ -3,6 +3,7 @@ import time
 import typing
 from datetime import datetime, timedelta
 from enum import Enum
+from unittest.mock import Mock
 
 import pytest
 
@@ -597,53 +598,78 @@ def test_duckdb_schema_includes_pep604_optional_fields():
     assert schema.get("c") == "BIGINT"
 
 
-def test_duckdb_query_concurrent_with_buffered_inserts():
-    # REST queries now run in a threadpool while the engine thread keeps inserting; an insert that
-    # crosses the buffer threshold loads into DuckDB on the cursor a query is reading from.
+def test_duckdb_query_concurrent_with_buffered_inserts(monkeypatch):
     enable_duckdb_state()
-    state_module.modify_buffer_threshold(50)
+    state_module.modify_buffer_threshold(1)
     try:
-        s = State[CspStruct](keyby=("a",))
-        impl = s._state_impl
-        errors = []
-        overlapping_queries = 0
-        # The writer parks inside its first buffered load until a query has started, so the two contend
-        # on the shared cursor no matter how the threads are scheduled.
-        writer_loading = threading.Event()
+        state = State[CspStruct](keyby=("a",))
+        impl = state._state_impl
+        original = CspStruct(a=1, b="old")
+        replacement = CspStruct(a=1, b="new")
+        impl.insert(original)
+
         query_started = threading.Event()
-        writer_done = threading.Event()
-        load_data = impl.load_data
+        writer_blocked = threading.Event()
+        errors = []
+        database_lock = impl._db_lock
 
-        def parked_load_data():
-            if threading.current_thread() is writer and not writer_loading.is_set():
-                writer_loading.set()
-                assert query_started.wait(timeout=10), "no query started while the writer was loading"
-            load_data()
+        class ObservedLock:
+            owner = None
 
-        def insert_many():
-            try:
-                for i in range(5000):
-                    s.insert(CspStruct(a=i, b=f"v{i}"))
-            except Exception as err:  # noqa: BLE001
-                errors.append(err)
-            finally:
-                writer_done.set()
+            def __enter__(self):
+                if threading.current_thread() is writer:
+                    acquired = database_lock.acquire(blocking=False)
+                    if acquired:
+                        database_lock.release()
+                    assert not acquired, "writer did not contend with the query"
+                    writer_blocked.set()
+                assert database_lock.acquire(timeout=10), "database lock timed out"
+                self.owner = threading.get_ident()
+                return self
 
-        impl.load_data = parked_load_data
-        writer = threading.Thread(target=insert_many)
-        writer.start()
-        assert writer_loading.wait(timeout=10), "writer never reached a buffered load"
-        sizes = []
-        while not writer_done.is_set():
+            def __exit__(self, *exc):
+                self.owner = None
+                database_lock.release()
+
+        observed_lock = ObservedLock()
+        sql = impl._con.sql
+
+        def checked_sql(query):
+            assert observed_lock.owner == threading.get_ident(), "SELECT is not protected"
+            result = sql(query)
             query_started.set()
-            # Query the implementation directly: the State wrapper turns any error into an empty list.
-            sizes.append(len(impl.query()))
-            overlapping_queries += not writer_done.is_set()
-        writer.join(timeout=30)
+            assert writer_blocked.wait(timeout=10), "writer did not attempt the database lock"
+            return result
+
+        class CheckedStore(dict):
+            def __getitem__(self, key):
+                assert observed_lock.owner == threading.get_ident(), "object lookup is not protected"
+                return super().__getitem__(key)
+
+        connection = Mock(wraps=impl._con)
+        connection.sql.side_effect = checked_sql
+        monkeypatch.setattr(impl, "_con", connection)
+        monkeypatch.setattr(impl, "_db_lock", observed_lock)
+        monkeypatch.setattr(impl, "_obj_store", CheckedStore(impl._obj_store))
+
+        def insert_replacement():
+            try:
+                assert query_started.wait(timeout=10), "query never reached SELECT"
+                impl.insert(replacement)
+            except Exception as error:  # noqa: BLE001
+                errors.append(error)
+
+        writer = threading.Thread(target=insert_replacement, daemon=True)
+        writer.start()
+        try:
+            query = Query(filters=[Filter(attr="b", by=FilterCondition(value="old", where="=="))])
+            result = impl.query(query)
+        finally:
+            query_started.set()
+            writer.join(timeout=10)
         assert not writer.is_alive()
         assert not errors
-        assert overlapping_queries > 0, "no query ran while the writer was inserting"
-        assert sizes == sorted(sizes)
-        assert len(impl.query()) == 5000
+        assert result == [original]
+        assert impl.query() == [replacement]
     finally:
         state_module.restore_buffer_threshold()

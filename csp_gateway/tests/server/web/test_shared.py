@@ -7,7 +7,7 @@ from typing import Annotated, Any
 
 import pytest
 import starlette.responses
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, TypeAdapter, computed_field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, TypeAdapter, computed_field, field_serializer, field_validator
 from pydantic_core import PydanticSerializationError, SchemaSerializer
 
 from csp_gateway import GatewayStruct
@@ -380,6 +380,23 @@ def test_list_fast_path_keeps_model_owned_adapter():
     res = [_OwnAdapter.from_field_values()]
     assert _OwnAdapter._list_serializers() is None
     assert prepare_response(res=res, is_list_model=True).body == _old_dump(res) == b'[{"public":"visible"}]'
+
+
+@pytest.mark.parametrize("wrap_in_response", [False, True])
+def test_prepare_response_plain_field_validator(wrap_in_response):
+    class Record(GatewayStruct):
+        value: int
+
+        @field_validator("value", mode="plain")
+        @classmethod
+        def parse_value(cls, value):
+            return int(value)
+
+    records = [Record.from_field_values(value="3"), Record.from_field_values()]
+    expected = _old_dump(records)
+    response = prepare_response(records, is_list_model=True, wrap_in_response=wrap_in_response)
+    actual = response.body if wrap_in_response else response.encode()
+    assert actual == expected == b'[{"value":3},{}]'
 
 
 class _AliasedChild(GatewayStruct):

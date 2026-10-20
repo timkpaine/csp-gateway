@@ -620,7 +620,7 @@ def _serializers_reached_by_none(schema: dict, definitions: dict) -> list:
         kind = schema.get("type", "")
         if kind == "definition-ref":
             schema = definitions[schema["schema_ref"]]
-        elif kind == "default" or kind.startswith("function-"):
+        elif kind in ("default", "function-before", "function-after", "function-wrap"):
             schema = schema["schema"]
         else:
             # ``nullable`` writes the None itself, and anything else (a model included) stops here.
