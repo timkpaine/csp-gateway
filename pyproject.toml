@@ -117,10 +117,10 @@ client = [
 ]
 
 [project.scripts]
-cspgateway-start = "csp_gateway.server.cli:main"
-cspgateway_start = "csp_gateway.server.cli:main"
 csp-gateway-start = "csp_gateway.server.cli:main"
 csp_gateway_start = "csp_gateway.server.cli:main"
+csp-gateway-client = "csp_gateway.client.cli:main"
+csp_gateway_client = "csp_gateway.client.cli:main"
 
 [project.urls]
 Repository = "https://github.com/Point72/csp-gateway"
