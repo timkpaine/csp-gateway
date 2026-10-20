@@ -24,6 +24,7 @@ Notes for editors:
 - [Staging](Staging)
 - [UI](UI)
 - [Client](Client)
+  - [Command line](Client#Command-line)
 - [CSP Notes](CSP-Notes)
 
 **For Developers**
