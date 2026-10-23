@@ -1,5 +1,5 @@
 from .channels_graph import MountChannelsGraph
-from .config import MountConfig
+from .config_viewer import MountConfig
 from .mount import MountRestRoutes
 from .mount_fields import MountFieldRestRoutes
 from .outputs import MountOutputsFolder
